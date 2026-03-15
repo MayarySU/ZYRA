@@ -4,10 +4,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
     
-    // Función robusta para verificar rol de administrador
     function isAdmin() { 
       return isSignedIn() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin'; 
     }
 
@@ -17,12 +15,10 @@ service cloud.firestore {
     }
 
     match /notifications/{notifId} {
-      // Permitir lectura si el documento pertenece al usuario o si es admin
-      // La regla 'read' cubre tanto 'get' como 'list'
-      allow read: if isSignedIn() && (
-        isAdmin() || 
-        (resource != null && resource.data.userId == request.auth.uid)
-      );
+      // Separamos get y list para mejorar la evaluación de consultas filtradas
+      allow get: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.userId);
+      
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn();
       allow delete: if isAdmin();
@@ -39,7 +35,6 @@ service cloud.firestore {
     }
 
     match /teams/{teamId} {
-      // Los empleados pueden leer equipos si son miembros
       allow read: if isSignedIn() && (
         isAdmin() || 
         (resource != null && request.auth.uid in resource.data.members)
@@ -48,16 +43,11 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      // Los empleados ven sus propios reportes, el admin ve todos
-      allow read: if isSignedIn() && (
-        isAdmin() || 
-        (resource != null && resource.data.employeeId == request.auth.uid)
-      );
+      allow get: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.employeeId);
+      
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        isAdmin() || 
-        (resource != null && resource.data.employeeId == request.auth.uid)
-      );
+      allow update: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid);
       allow delete: if isAdmin();
     }
     
