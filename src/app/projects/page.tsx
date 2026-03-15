@@ -104,10 +104,10 @@ export default function ProjectsPage() {
 
   const { data: myTeams } = useCollection(userTeamsQuery);
 
-  const clientsQuery = useMemoFirebase(() => db ? collection(db, "clientes") : null, [db]);
+  const clientsQuery = useMemoFirebase(() => (db && profile) ? collection(db, "clientes") : null, [db, profile]);
   const { data: clients } = useCollection(clientsQuery);
 
-  const teamsQuery = useMemoFirebase(() => db ? collection(db, "teams") : null, [db]);
+  const teamsQuery = useMemoFirebase(() => (db && profile) ? collection(db, "teams") : null, [db, profile]);
   const { data: teams } = useCollection(teamsQuery);
 
   const projectsQuery = useMemoFirebase(() => {

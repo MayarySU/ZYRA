@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -74,7 +75,7 @@ export default function MaterialsPage() {
   const isAdmin = profile?.rol === 'admin';
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -89,16 +90,16 @@ export default function MaterialsPage() {
     Mat_Stock_Disponible: 0,
   });
 
-  // Queries
+  // Queries - Solo permitir si el perfil está cargado (requiere isSignedIn())
   const materialsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !profile) return null;
     return collection(db, "materiales");
-  }, [db]);
+  }, [db, profile]);
 
   const checklistsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !profile) return null;
     return collection(db, "checklist_servicio");
-  }, [db]);
+  }, [db, profile]);
 
   const { data: materials, isLoading: materialsLoading } = useCollection(materialsQuery);
   const { data: checklists } = useCollection(checklistsQuery);
@@ -120,7 +121,6 @@ export default function MaterialsPage() {
     addDoc(colRef, data)
       .then(() => {
         toast({ title: t.common.success, description: t.common.success });
-        setIsCreateDialogOpen(false);
         setNewMaterial({ Mat_Nombre: "", Mat_Stock_Disponible: 0 });
       })
       .catch((e) => {
@@ -209,7 +209,7 @@ export default function MaterialsPage() {
             </h2>
             <p className="text-muted-foreground">{t.materials.subtitle}</p>
           </div>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog>
             <DialogTrigger asChild>
               <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2">
                 <Plus className="h-4 w-4" /> {t.materials.new_item}

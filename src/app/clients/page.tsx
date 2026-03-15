@@ -74,19 +74,19 @@ export default function ClientsPage() {
     Cl_Telefono: ""
   });
 
-  // Query de clientes
+  // Query de clientes - Esperar a que isAdmin esté confirmado
   const clientsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !isAdmin) return null;
     return collection(db, "clientes");
-  }, [db]);
+  }, [db, isAdmin]);
 
   const { data: clients, isLoading: clientsLoading } = useCollection(clientsQuery);
 
   // Query de proyectos vinculados al cliente seleccionado
   const clientProjectsQuery = useMemoFirebase(() => {
-    if (!db || !selectedClient) return null;
+    if (!db || !selectedClient || !isAdmin) return null;
     return query(collection(db, "proyectos"), where("clientId", "==", selectedClient.id));
-  }, [db, selectedClient]);
+  }, [db, selectedClient, isAdmin]);
 
   const { data: clientProjects, isLoading: projectsLoading } = useCollection(clientProjectsQuery);
 

@@ -74,9 +74,10 @@ export default function EmployeesPage() {
   });
 
   const employeesQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    // Solo permitir la consulta si el usuario es administrador y el perfil ha cargado
+    if (!db || !isAdmin) return null;
     return collection(db, "users");
-  }, [db]);
+  }, [db, isAdmin]);
 
   const { data: employees, isLoading: employeesLoading } = useCollection(employeesQuery);
 
@@ -185,12 +186,10 @@ export default function EmployeesPage() {
     
     setLoading(true);
     try {
-      // 1. Disparamos el correo oficial de Firebase (contiene el enlace real)
       if (auth) {
         await sendPasswordResetEmail(auth, emp.emailPersonal);
       }
 
-      // 2. Enviamos el correo de notificación profesional con tu diseño HTML
       const emailResult = await sendResetNotificationAction(emp.emailPersonal, emp.nombre || emp.Emp_Nombre);
       
       if (emailResult.success) {
@@ -199,7 +198,6 @@ export default function EmployeesPage() {
           description: `Se ha enviado el enlace de seguridad y la notificación profesional a: ${emp.emailPersonal}` 
         });
       } else {
-        // Si el SMTP falla, avisamos pero el de Firebase probablemente sí salió
         toast({ 
           title: "Aviso", 
           description: "Se disparó el enlace oficial, pero el correo de diseño requiere configuración SMTP en el servidor." 
