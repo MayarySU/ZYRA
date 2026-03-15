@@ -27,6 +27,22 @@
       },
       "required": ["uid", "nombre", "rol"]
     },
+    "Project": {
+      "title": "Project Details",
+      "description": "Información general de una obra o proyecto solar.",
+      "type": "object",
+      "properties": {
+        "nombre": { "type": "string" },
+        "cliente": { "type": "string" },
+        "estado": { "type": "string", "enum": ["ejecucion", "validacion", "finalizado"] },
+        "descripcion": { "type": "string" },
+        "ubicacion": { "type": "string" },
+        "progreso": { "type": "number" },
+        "miembros": { "type": "array", "items": { "type": "string" } },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["nombre", "cliente", "estado"]
+    },
     "ProjectMaterial": {
       "title": "Assigned Material",
       "description": "Material asignado a un proyecto para verificación del empleado.",
@@ -88,6 +104,10 @@
     "/users/{userId}": {
       "schema": "User",
       "description": "Colección de perfiles de usuario."
+    },
+    "/proyectos/{projectId}": {
+      "schema": "Project",
+      "description": "Documento principal del proyecto."
     },
     "/proyectos/{projectId}/checklist_inicial/{checklistId}": {
       "schema": "ProjectChecklist",
