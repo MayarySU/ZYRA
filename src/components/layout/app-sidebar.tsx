@@ -65,7 +65,7 @@ export function AppSidebar() {
             <Zap className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight text-white group-data-[collapsible=icon]:hidden">
-            ZYRA<span className="text-accent">COMMAND</span>
+            ZYRA <span className="text-accent">{isAdmin ? "COMMAND" : "OPERATIVO"}</span>
           </span>
         </div>
       </SidebarHeader>
