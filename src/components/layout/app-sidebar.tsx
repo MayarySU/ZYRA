@@ -53,7 +53,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 border-b border-border">
         <div className="flex items-center gap-3 px-1">
           <ZyraLogo className="h-9 w-9 shrink-0" />
-          <div className="flex flex-col group-data-[collapsible=icon]:hidden overflow-hidden">
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden overflow-hidden transition-all duration-300">
             <span className="text-xl font-black tracking-tighter text-foreground leading-none">
               ZYRA
             </span>
@@ -65,7 +65,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground font-bold uppercase text-[10px] tracking-widest">
+          <SidebarGroupLabel className="text-muted-foreground font-bold uppercase text-[10px] tracking-widest group-data-[collapsible=icon]:hidden">
             {isAdmin ? t.nav.admin_panel : t.nav.general}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -80,7 +80,9 @@ export function AppSidebar() {
                   >
                     <a href={item.href} className="flex items-center gap-3">
                       <item.icon className={pathname === item.href ? "text-accent" : "text-muted-foreground"} />
-                      <span className="font-medium text-foreground">{item.title}</span>
+                      <span className="font-medium text-foreground group-data-[collapsible=icon]:hidden">
+                        {item.title}
+                      </span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
