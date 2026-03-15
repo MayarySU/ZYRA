@@ -158,7 +158,10 @@ export default function MaterialsPage() {
   };
 
   const handleSaveTemplate = async () => {
-    if (!db || !editingTemplate) return;
+    if (!db || !editingTemplate) {
+      console.error("Firestore no inicializado o plantilla no seleccionada");
+      return;
+    }
     setLoading(true);
     try {
       const templateRef = doc(db, "checklist_servicio", editingTemplate.type);
@@ -172,6 +175,7 @@ export default function MaterialsPage() {
       });
       setIsEditDialogOpen(false);
     } catch (e: any) {
+      console.error("Error al guardar plantilla:", e);
       toast({ 
         variant: "destructive", 
         title: "Error al guardar", 
