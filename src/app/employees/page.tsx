@@ -465,22 +465,6 @@ export default function EmployeesPage() {
                         <Mail className="h-4 w-4 text-accent" /> 
                         <span className="font-medium truncate">{selectedEmployee.emailAcceso || selectedEmployee.email || "N/A"}</span>
                       </div>
-                      {selectedEmployee.emailAcceso && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-accent hover:bg-accent/10"
-                          asChild
-                        >
-                          <a 
-                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${selectedEmployee.emailAcceso}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Mail className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
                     </div>
                   </div>
                   <div className="space-y-1">
