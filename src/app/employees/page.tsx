@@ -5,7 +5,7 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useFirestore, useCollection, useUser, useMemoFirebase, useAuth } from "@/firebase";
 import { firebaseConfig } from "@/firebase/config";
-import { initializeApp, deleteApp } from "firebase/app";
+import { initializeApp, deleteApp, getApp, getApps } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { collection, setDoc, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { 
@@ -31,7 +31,7 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogFooter,
+  DialogFooter, 
   DialogTrigger
 } from "@/components/ui/dialog";
 import {
@@ -74,7 +74,6 @@ export default function EmployeesPage() {
   });
 
   const employeesQuery = useMemoFirebase(() => {
-    // Solo permitir la consulta si el usuario es administrador y el perfil ha cargado
     if (!db || !isAdmin) return null;
     return collection(db, "users");
   }, [db, isAdmin]);
@@ -93,6 +92,7 @@ export default function EmployeesPage() {
     if (!db || !newEmployee.Emp_Nombre || !newEmployee.Emp_CorreoPersonal) return;
     setLoading(true);
     
+    // Generación de credenciales corporativas
     const cleanInput = newEmployee.Emp_Nombre.trim().toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
@@ -106,25 +106,29 @@ export default function EmployeesPage() {
 
     let secondaryApp;
     try {
-      secondaryApp = initializeApp(firebaseConfig, "secondary-registration");
+      // Inicialización segura de la app secundaria
+      const appName = `secondary-reg-${Date.now()}`;
+      secondaryApp = initializeApp(firebaseConfig, appName);
       const secondaryAuth = getAuth(secondaryApp);
       
+      // 1. Crear usuario en Firebase Auth usando el correo personal
       const userCredential = await createUserWithEmailAndPassword(
         secondaryAuth, 
-        newEmployee.Emp_CorreoPersonal, 
+        newEmployee.Emp_CorreoPersonal.trim(), 
         generatedPassword
       );
       
       const uid = userCredential.user.uid;
 
+      // 2. Guardar perfil extendido en Firestore (usando la instancia de DB principal)
       const userRef = doc(db, "users", uid);
       await setDoc(userRef, {
         uid: uid,
-        nombre: newEmployee.Emp_Nombre,
-        emailPersonal: newEmployee.Emp_CorreoPersonal,
+        nombre: newEmployee.Emp_Nombre.trim(),
+        emailPersonal: newEmployee.Emp_CorreoPersonal.trim(),
         emailAcceso: generatedZyraEmail,
-        email: newEmployee.Emp_CorreoPersonal,
-        telefono: newEmployee.Emp_Telefono,
+        email: newEmployee.Emp_CorreoPersonal.trim(),
+        telefono: newEmployee.Emp_Telefono.trim(),
         rol: "employee",
         nivel: 1,
         puntos: 0,
@@ -142,7 +146,7 @@ export default function EmployeesPage() {
       
       toast({ 
         title: t.common.success, 
-        description: t.projects.create_success
+        description: "Empleado registrado con éxito en el sistema."
       });
 
       setNewEmployee({
@@ -151,14 +155,26 @@ export default function EmployeesPage() {
         Emp_Telefono: "",
       });
     } catch (e: any) {
+      console.error("Error en registro de empleado:", e);
+      let errorMsg = e.message;
+      if (e.code === 'auth/email-already-in-use') {
+        errorMsg = "Este correo personal ya está registrado en la base de datos.";
+      } else if (e.code === 'permission-denied') {
+        errorMsg = "No tienes permisos suficientes para crear usuarios.";
+      }
+      
       toast({ 
         variant: "destructive", 
         title: t.common.error, 
-        description: e.message
+        description: errorMsg
       });
     } finally {
       if (secondaryApp) {
-        await deleteApp(secondaryApp);
+        try {
+          await deleteApp(secondaryApp);
+        } catch (delError) {
+          console.error("Error al limpiar app secundaria:", delError);
+        }
       }
       setLoading(false);
     }
@@ -200,7 +216,7 @@ export default function EmployeesPage() {
       } else {
         toast({ 
           title: "Aviso", 
-          description: "Se disparó el enlace oficial, pero el correo de diseño requiere configuración SMTP en el servidor." 
+          description: "Se disparó el enlace oficial, pero el correo de diseño requiere configuración SMTP." 
         });
       }
     } catch (e: any) {
@@ -221,7 +237,7 @@ export default function EmployeesPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ description: t.common.success });
+    toast({ description: "Copiado al portapapeles" });
   };
 
   if (userLoading) {
@@ -242,7 +258,7 @@ export default function EmployeesPage() {
             <Users className="h-12 w-12 text-destructive" />
           </div>
           <h2 className="text-2xl font-bold text-foreground">{t.common.error}</h2>
-          <p className="text-muted-foreground max-w-md">{t.employees.subtitle}</p>
+          <p className="text-muted-foreground max-w-md">Acceso restringido: Solo administradores pueden gestionar el personal.</p>
         </div>
       </DashboardLayout>
     );
@@ -273,14 +289,14 @@ export default function EmployeesPage() {
                 <>
                   <DialogHeader>
                     <DialogTitle className="text-accent">{t.employees.register}</DialogTitle>
-                    <CardDescription className="text-muted-foreground">{t.employees.subtitle}</CardDescription>
+                    <CardDescription className="text-muted-foreground">Registra un nuevo técnico para acceso al sistema ZYRA.</CardDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">{t.employees.full_name}</Label>
                       <Input 
                         id="name" 
-                        placeholder="Nombre completo del empleado" 
+                        placeholder="Nombre completo" 
                         className="bg-muted/50 border-border text-foreground"
                         value={newEmployee.Emp_Nombre || ""}
                         onChange={(e) => setNewEmployee({...newEmployee, Emp_Nombre: e.target.value})}
@@ -300,7 +316,7 @@ export default function EmployeesPage() {
                       <div className="space-y-2">
                         <Label className="text-xs uppercase font-bold text-muted-foreground">{t.employees.phone}</Label>
                         <Input 
-                          placeholder="+52 000 000 0000" 
+                          placeholder="+52 ..." 
                           className="bg-muted/50 border-border text-foreground"
                           value={newEmployee.Emp_Telefono || ""}
                           onChange={(e) => setNewEmployee({...newEmployee, Emp_Telefono: e.target.value})}
@@ -314,7 +330,7 @@ export default function EmployeesPage() {
                       disabled={!newEmployee.Emp_Nombre || !newEmployee.Emp_CorreoPersonal || loading}
                       onClick={handleCreateEmployee}
                     >
-                      {loading ? t.common.loading : t.common.save}
+                      {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : t.common.save}
                     </Button>
                   </DialogFooter>
                 </>
@@ -322,7 +338,7 @@ export default function EmployeesPage() {
                 <>
                   <DialogHeader>
                     <DialogTitle className="text-emerald-500 flex items-center gap-2">
-                      <ShieldCheck className="h-6 w-6" /> {t.common.success}
+                      <ShieldCheck className="h-6 w-6" /> Registro Exitoso
                     </DialogTitle>
                   </DialogHeader>
                   <div className="py-6 space-y-4">
@@ -332,7 +348,6 @@ export default function EmployeesPage() {
                         <Input readOnly value={generatedCreds.zyraEmail || ""} className="bg-muted/50 border-border font-mono text-sm text-foreground" />
                         <Button variant="outline" size="icon" className="border-border hover:bg-muted" onClick={() => copyToClipboard(generatedCreds.zyraEmail)}><Copy className="h-4 w-4" /></Button>
                       </div>
-                      <p className="text-[9px] text-muted-foreground">Nota: Este es el identificador corporativo del empleado en el sistema.</p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">PASSWORD TEMPORAL</Label>
@@ -343,13 +358,13 @@ export default function EmployeesPage() {
                     </div>
                     <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-md">
                       <p className="text-[10px] text-yellow-500 uppercase font-bold tracking-tighter flex items-center gap-2">
-                        <Lock className="h-3 w-3" /> SEGURIDAD: COPIE ESTOS DATOS AHORA
+                        <Lock className="h-3 w-3" /> COPIE ESTAS CREDENCIALES AHORA
                       </p>
                     </div>
                   </div>
                   <DialogFooter>
                     <Button className="w-full font-bold bg-accent hover:bg-accent/90 text-white" onClick={() => setIsCreateDialogOpen(false)}>
-                      {t.common.understood}
+                      Cerrar y Continuar
                     </Button>
                   </DialogFooter>
                 </>
@@ -389,11 +404,11 @@ export default function EmployeesPage() {
                       <TableCell className="py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-full bg-accent/10 flex items-center justify-center border border-accent/20">
-                            <span className="text-xs font-bold text-accent">{(emp.Emp_Nombre || emp.nombre || "?").substring(0,2).toUpperCase()}</span>
+                            <span className="text-xs font-bold text-accent">{(emp.nombre || emp.Emp_Nombre || "?").substring(0,2).toUpperCase()}</span>
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-foreground">{emp.Emp_Nombre || emp.nombre}</p>
-                            <p className="text-[10px] text-muted-foreground uppercase">ID: {emp.id.substring(0,8)}</p>
+                            <p className="text-sm font-bold text-foreground">{emp.nombre || emp.Emp_Nombre}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase">Técnico Operativo</p>
                           </div>
                         </div>
                       </TableCell>
@@ -402,7 +417,7 @@ export default function EmployeesPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-4">
-                          <span className="text-xs font-bold text-foreground">{t.dashboard.level} {emp.nivel || 1}</span>
+                          <span className="text-xs font-bold text-foreground">NV {emp.nivel || 1}</span>
                           <div className="flex items-center gap-1"><Star className="h-3 w-3 text-yellow-500 fill-yellow-500" /><span className="text-xs text-muted-foreground">{emp.puntos || 0} pts</span></div>
                         </div>
                       </TableCell>
@@ -426,7 +441,7 @@ export default function EmployeesPage() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>{t.common.confirm}</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  {t.common.delete}: {emp.Emp_Nombre || emp.nombre}?
+                                  ¿Eliminar permanentemente el acceso de {emp.nombre || emp.Emp_Nombre}? Esta acción no se puede deshacer.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -449,7 +464,7 @@ export default function EmployeesPage() {
             ) : (
               <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                 <Users className="h-8 w-8 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-bold text-foreground uppercase tracking-tighter">{t.common.no_results}</h3>
+                <h3 className="text-lg font-bold text-foreground uppercase tracking-tighter">No hay técnicos registrados</h3>
               </div>
             )}
           </CardContent>
@@ -460,7 +475,7 @@ export default function EmployeesPage() {
           <DialogContent className="bg-card border-border sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-accent flex items-center gap-2">
-                <UserCircle className="h-5 w-5" /> {t.employees.view_profile}
+                <UserCircle className="h-5 w-5" /> Perfil del Técnico
               </DialogTitle>
             </DialogHeader>
             {selectedEmployee && (
@@ -468,49 +483,39 @@ export default function EmployeesPage() {
                 <div className="flex flex-col items-center gap-4 border-b border-border pb-6">
                   <div className="h-20 w-20 rounded-full bg-accent/10 border-2 border-accent/20 flex items-center justify-center">
                     <span className="text-2xl font-black text-accent">
-                      {(selectedEmployee.Emp_Nombre || selectedEmployee.nombre || "?").substring(0,2).toUpperCase()}
+                      {(selectedEmployee.nombre || selectedEmployee.Emp_Nombre || "?").substring(0,2).toUpperCase()}
                     </span>
                   </div>
                   <div className="text-center">
-                    <h3 className="text-xl font-bold text-foreground">{selectedEmployee.Emp_Nombre || selectedEmployee.nombre}</h3>
-                    <p className="text-[10px] text-accent font-black uppercase tracking-[0.2em] mt-1">Técnico Operativo</p>
+                    <h3 className="text-xl font-bold text-foreground">{selectedEmployee.nombre || selectedEmployee.Emp_Nombre}</h3>
+                    <p className="text-[10px] text-accent font-black uppercase tracking-[0.2em] mt-1">Operaciones de Campo</p>
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-muted/30 p-3 rounded-xl border border-border">
-                    <Label className="text-[9px] uppercase font-bold text-muted-foreground block mb-1">Nivel Actual</Label>
-                    <div className="flex items-center gap-2 text-sm font-black text-foreground">
+                  <div className="bg-muted/30 p-3 rounded-xl border border-border text-center">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground block mb-1">Nivel</Label>
+                    <div className="flex items-center justify-center gap-2 text-sm font-black text-foreground">
                       <Zap className="h-4 w-4 text-accent" /> {selectedEmployee.nivel || 1}
                     </div>
                   </div>
-                  <div className="bg-muted/30 p-3 rounded-xl border border-border">
-                    <Label className="text-[9px] uppercase font-bold text-muted-foreground block mb-1">Puntos Totales</Label>
-                    <div className="flex items-center gap-2 text-sm font-black text-foreground">
-                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /> {selectedEmployee.puntos || 0} pts
+                  <div className="bg-muted/30 p-3 rounded-xl border border-border text-center">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground block mb-1">Puntos</Label>
+                    <div className="flex items-center justify-center gap-2 text-sm font-black text-foreground">
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" /> {selectedEmployee.puntos || 0}
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email de Acceso ZYRA</Label>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email ZYRA</Label>
                     <div className="flex items-center justify-between gap-3 text-sm text-foreground bg-muted/20 p-3 rounded-xl border border-border/50">
                       <div className="flex items-center gap-3 truncate">
                         <Mail className="h-4 w-4 text-accent" /> 
                         <span className="font-medium truncate">{selectedEmployee.emailAcceso || "N/A"}</span>
                       </div>
                     </div>
-                    {selectedEmployee.emailPersonal && (
-                      <button 
-                        className="text-[9px] text-accent font-bold uppercase tracking-tighter ml-1 mt-1 hover:underline flex items-center gap-1"
-                        onClick={() => handleResetPassword(selectedEmployee)}
-                        disabled={loading}
-                      >
-                        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                        Enviar enlace de restablecimiento
-                      </button>
-                    )}
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email Personal</Label>
@@ -519,61 +524,15 @@ export default function EmployeesPage() {
                         <Mail className="h-4 w-4 text-muted-foreground" /> 
                         <span className="font-medium truncate">{selectedEmployee.emailPersonal || "N/A"}</span>
                       </div>
-                      {selectedEmployee.emailPersonal && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-accent hover:bg-accent/10"
-                          asChild
-                        >
-                          <a 
-                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${selectedEmployee.emailPersonal}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Mail className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Teléfono de Contacto</Label>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Contacto</Label>
                     <div className="flex items-center justify-between gap-3 text-sm text-foreground bg-muted/20 p-3 rounded-xl border border-border/50">
                       <div className="flex items-center gap-3 truncate">
                         <Phone className="h-4 w-4 text-accent" /> 
                         <span className="font-medium truncate">{selectedEmployee.telefono || "N/A"}</span>
                       </div>
-                      {selectedEmployee.telefono && (
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-emerald-500 hover:bg-emerald-500/10"
-                            title="WhatsApp"
-                            asChild
-                          >
-                            <a 
-                              href={`https://wa.me/${selectedEmployee.telefono.replace(/\D/g, '')}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </a>
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-accent hover:bg-accent/10"
-                            title="Llamar"
-                            asChild
-                          >
-                            <a href={`tel:${selectedEmployee.telefono.replace(/\D/g, '')}`}>
-                              <Phone className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -581,7 +540,7 @@ export default function EmployeesPage() {
             )}
             <DialogFooter>
               <Button className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-12" onClick={() => setIsViewDialogOpen(false)}>
-                {t.common.back}
+                Cerrar Perfil
               </Button>
             </DialogFooter>
           </DialogContent>
