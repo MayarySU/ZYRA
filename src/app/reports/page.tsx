@@ -110,7 +110,7 @@ export default function ReportsPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4">
           <Tabs value={activeFilter} onValueChange={setActiveFilter} className="w-full lg:w-auto">
             <TabsList className="bg-white/5 border border-white/10 p-1">
-              {["Todos", "Pendiente", "Aprobado", "Rechazado", "Guardado local"].map((tab) => (
+              {["Todos", "Pendiente", "Aprobado", "Rechazado"].map((tab) => (
                 <TabsTrigger 
                   key={tab} 
                   value={tab}
