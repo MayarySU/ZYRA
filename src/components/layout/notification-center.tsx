@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Bell, Check, Info, Zap, Briefcase, Users } from "lucide-react";
@@ -21,7 +20,6 @@ export function NotificationCenter() {
 
   const notificationsQuery = useMemoFirebase(() => {
     if (!db || !user?.uid) return null;
-    // La consulta debe alinearse con las reglas de seguridad simplificadas
     return query(
       collection(db, "notifications"),
       where("userId", "==", user.uid),
@@ -52,9 +50,8 @@ export function NotificationCenter() {
   const formatNotifDate = (dateStr: string | undefined) => {
     if (!dateStr) return "Recientemente";
     const date = new Date(dateStr);
-    return isValid(date) 
-      ? format(date, "d 'de' MMMM, HH:mm", { locale: es }) 
-      : "Hace un momento";
+    if (!isValid(date)) return "Recientemente";
+    return format(date, "d 'de' MMMM, HH:mm", { locale: es });
   };
 
   return (

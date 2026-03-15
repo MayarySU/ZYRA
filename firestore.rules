@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -8,9 +7,9 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
       return isSignedIn() && (
-        (exists(userPath) && get(userPath).data.rol == 'admin') ||
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin' ||
         request.auth.token.email == 'admin@zyra.com'
       );
     }
@@ -23,11 +22,9 @@ service cloud.firestore {
 
     // Reglas para Notificaciones
     match /notifications/{notifId} {
-      // Regla de lectura individual
-      allow get: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
-      // Regla de listado: Fundamental para que el motor de consultas valide el filtro por userId
-      allow list: if isSignedIn() && (isAdmin() || (request.query.limit <= 50));
-      
+      // Permitir lectura si el usuario es admin o si el documento le pertenece
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      // Permitir creación si el usuario es admin o si se asigna a sí mismo (para logs operativos)
       allow create: if isSignedIn() && (isAdmin() || request.resource.data.userId == request.auth.uid);
       allow update: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();

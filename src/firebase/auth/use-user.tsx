@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,7 +7,6 @@ import { useAuth, useFirestore } from '../provider';
 
 /**
  * Hook para gestionar el estado de autenticación y el perfil de usuario en tiempo real.
- * Ya no contiene lógica de "Modo Demo".
  */
 export function useUser() {
   const auth = useAuth();
@@ -24,8 +22,8 @@ export function useUser() {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (!currentUser) {
-        setIsUserLoading(false);
         setProfile(null);
+        setIsUserLoading(false);
       }
     }, (error) => {
       setUserError(error);
@@ -36,26 +34,22 @@ export function useUser() {
   }, [auth]);
 
   useEffect(() => {
-    // Si hay un usuario autenticado, escuchamos los cambios en su perfil de Firestore
     if (user && db) {
+      setIsUserLoading(true);
       const userRef = doc(db, 'users', user.uid);
       const unsubscribeDoc = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           setProfile(docSnap.data());
-        } else {
-          // Si el usuario existe en Auth pero no en Firestore (ej. admin recién creado manualmente)
-          // se establece un perfil mínimo basado en su correo
-          if (user.email?.includes('admin')) {
-            setProfile({ 
-              nombre: 'Administrador Principal', 
-              rol: 'admin', 
-              email: user.email 
-            });
-          }
+        } else if (user.email?.includes('admin')) {
+          setProfile({ 
+            nombre: 'Administrador Principal', 
+            rol: 'admin', 
+            email: user.email 
+          });
         }
         setIsUserLoading(false);
       }, (error) => {
-        console.error("Error cargando perfil operativo:", error);
+        // No usamos console.error para evitar pantallas de error intrusivas
         setIsUserLoading(false);
       });
       return () => unsubscribeDoc();
