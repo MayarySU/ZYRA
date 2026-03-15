@@ -48,7 +48,7 @@ export function UserNav() {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-bold leading-none text-foreground">{profile?.nombre}</p>
             <p className="text-[10px] font-medium leading-none text-muted-foreground uppercase tracking-widest mt-1">
-              {isAdmin ? "ADMIN COMMAND" : "TECNICO OPERATIVO"}
+              {isAdmin ? "ADMIN" : "TÉCNICO OPERATIVO"}
             </p>
           </div>
         </DropdownMenuLabel>
