@@ -5,7 +5,7 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useFirestore, useCollection, useUser, useMemoFirebase, useAuth } from "@/firebase";
 import { firebaseConfig } from "@/firebase/config";
-import { initializeApp, deleteApp, getApp, getApps } from "firebase/app";
+import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { collection, setDoc, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { 
@@ -45,7 +45,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2, Trash2, Zap, Phone, MessageSquare, RotateCcw } from "lucide-react";
+import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2, Trash2, Zap, Phone, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { sendResetNotificationAction } from "@/app/actions/email-actions";
@@ -106,28 +106,27 @@ export default function EmployeesPage() {
 
     let secondaryApp;
     try {
-      // Inicialización segura de la app secundaria
       const appName = `secondary-reg-${Date.now()}`;
       secondaryApp = initializeApp(firebaseConfig, appName);
       const secondaryAuth = getAuth(secondaryApp);
       
-      // 1. Crear usuario en Firebase Auth usando el correo personal
+      // 1. Crear usuario en Firebase Auth usando el correo CORPORATIVO generado
       const userCredential = await createUserWithEmailAndPassword(
         secondaryAuth, 
-        newEmployee.Emp_CorreoPersonal.trim(), 
+        generatedZyraEmail, 
         generatedPassword
       );
       
       const uid = userCredential.user.uid;
 
-      // 2. Guardar perfil extendido en Firestore (usando la instancia de DB principal)
+      // 2. Guardar perfil en Firestore con el UID correcto y el email de acceso
       const userRef = doc(db, "users", uid);
       await setDoc(userRef, {
         uid: uid,
         nombre: newEmployee.Emp_Nombre.trim(),
         emailPersonal: newEmployee.Emp_CorreoPersonal.trim(),
         emailAcceso: generatedZyraEmail,
-        email: newEmployee.Emp_CorreoPersonal.trim(),
+        email: generatedZyraEmail, // Este es el email que Firebase Auth usará para el login
         telefono: newEmployee.Emp_Telefono.trim(),
         rol: "employee",
         nivel: 1,
@@ -146,7 +145,7 @@ export default function EmployeesPage() {
       
       toast({ 
         title: t.common.success, 
-        description: "Empleado registrado con éxito en el sistema."
+        description: "Empleado registrado con éxito."
       });
 
       setNewEmployee({
@@ -155,14 +154,11 @@ export default function EmployeesPage() {
         Emp_Telefono: "",
       });
     } catch (e: any) {
-      console.error("Error en registro de empleado:", e);
+      console.error("Error en registro:", e);
       let errorMsg = e.message;
       if (e.code === 'auth/email-already-in-use') {
-        errorMsg = "Este correo personal ya está registrado en la base de datos.";
-      } else if (e.code === 'permission-denied') {
-        errorMsg = "No tienes permisos suficientes para crear usuarios.";
+        errorMsg = "Este email corporativo ya existe. Intenta variar el nombre del empleado.";
       }
-      
       toast({ 
         variant: "destructive", 
         title: t.common.error, 
@@ -172,9 +168,7 @@ export default function EmployeesPage() {
       if (secondaryApp) {
         try {
           await deleteApp(secondaryApp);
-        } catch (delError) {
-          console.error("Error al limpiar app secundaria:", delError);
-        }
+        } catch (delError) {}
       }
       setLoading(false);
     }
@@ -187,44 +181,25 @@ export default function EmployeesPage() {
       await deleteDoc(doc(db, "users", employeeId));
       toast({ title: t.common.success, description: t.common.delete });
     } catch (e: any) {
-      toast({ 
-        variant: "destructive", 
-        title: t.common.error, 
-        description: e.message
-      });
+      toast({ variant: "destructive", title: t.common.error, description: e.message });
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetPassword = async (emp: any) => {
-    if (!emp || !emp.emailPersonal) return;
-    
+    if (!emp || !emp.email) return;
     setLoading(true);
     try {
       if (auth) {
-        await sendPasswordResetEmail(auth, emp.emailPersonal);
+        await sendPasswordResetEmail(auth, emp.email);
       }
-
-      const emailResult = await sendResetNotificationAction(emp.emailPersonal, emp.nombre || emp.Emp_Nombre);
-      
-      if (emailResult.success) {
-        toast({ 
-          title: "Proceso completado", 
-          description: `Se ha enviado el enlace de seguridad y la notificación profesional a: ${emp.emailPersonal}` 
-        });
-      } else {
-        toast({ 
-          title: "Aviso", 
-          description: "Se disparó el enlace oficial, pero el correo de diseño requiere configuración SMTP." 
-        });
-      }
-    } catch (e: any) {
       toast({ 
-        variant: "destructive", 
-        title: "Error", 
-        description: "No se pudo procesar la solicitud de recuperación." 
+        title: "Proceso completado", 
+        description: `Se ha enviado el enlace de seguridad a: ${emp.email}` 
       });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo procesar la solicitud." });
     } finally {
       setLoading(false);
     }
@@ -413,7 +388,7 @@ export default function EmployeesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-xs text-foreground"><Mail className="h-3 w-3 text-accent" /> {emp.emailAcceso || "N/A"}</div>
+                        <div className="flex items-center gap-2 text-xs text-foreground"><Mail className="h-3 w-3 text-accent" /> {emp.emailAcceso || emp.email || "N/A"}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-4">
@@ -470,7 +445,6 @@ export default function EmployeesPage() {
           </CardContent>
         </Card>
 
-        {/* View Profile Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent className="bg-card border-border sm:max-w-md">
             <DialogHeader>
@@ -509,11 +483,11 @@ export default function EmployeesPage() {
 
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email ZYRA</Label>
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email ZYRA (Acceso)</Label>
                     <div className="flex items-center justify-between gap-3 text-sm text-foreground bg-muted/20 p-3 rounded-xl border border-border/50">
                       <div className="flex items-center gap-3 truncate">
                         <Mail className="h-4 w-4 text-accent" /> 
-                        <span className="font-medium truncate">{selectedEmployee.emailAcceso || "N/A"}</span>
+                        <span className="font-medium truncate">{selectedEmployee.emailAcceso || selectedEmployee.email || "N/A"}</span>
                       </div>
                     </div>
                   </div>
