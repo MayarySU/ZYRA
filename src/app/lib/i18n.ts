@@ -27,7 +27,8 @@ export const translations = {
       details: "Ver Detalles",
       no_results: "Sin resultados",
       required: "Requerido",
-      optional: "Opcional"
+      optional: "Opcional",
+      reset: "Restablecer Predeterminados"
     },
     nav: {
       dashboard: "Dashboard",
@@ -212,7 +213,8 @@ export const translations = {
       details: "View Details",
       no_results: "No results",
       required: "Required",
-      optional: "Optional"
+      optional: "Optional",
+      reset: "Reset Defaults"
     },
     nav: {
       dashboard: "Dashboard",
@@ -397,7 +399,8 @@ export const translations = {
       details: "查看详情",
       no_results: "无结果",
       required: "必填",
-      optional: "可选"
+      optional: "可选",
+      reset: "重置默认值"
     },
     nav: {
       dashboard: "控制面板",
@@ -556,7 +559,7 @@ export const translations = {
       acc_desc: "调整元素大小以获得更好的阅读效果。",
       font_size: "基础字体大小",
       preview: "文本预览：",
-      preview_txt: "这是 ZYRA 运营面板中文字显示效果的示例。"
+      preview_txt: "这是 ZYRA 运营面板中文字显示效果 de 示例。"
     }
   }
 };

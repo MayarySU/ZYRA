@@ -23,7 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, Moon, Sun, Languages, Type, Palette, Save, Globe } from "lucide-react";
+import { Settings, Moon, Sun, Languages, Type, Palette, Save, Globe, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -79,6 +79,18 @@ export default function SettingsPage() {
     }, 800);
   };
 
+  const handleResetDefaults = () => {
+    // Apply default values visually (previsualization)
+    setDarkMode(true);
+    setThemeColor("zyra");
+    setFontSize(14);
+    setLanguage("es");
+    
+    toast({
+      description: t.common.reset,
+    });
+  };
+
   const handleCancel = () => {
     setDarkMode(initialSettings.current.darkMode);
     setThemeColor(initialSettings.current.themeColor);
@@ -91,11 +103,22 @@ export default function SettingsPage() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-8 font-body">
-        <div className="flex flex-col gap-2">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Settings className="h-8 w-8 text-accent" /> {t.settings.title}
-          </h2>
-          <p className="text-muted-foreground">{t.settings.subtitle}</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <Settings className="h-8 w-8 text-accent" /> {t.settings.title}
+            </h2>
+            <p className="text-muted-foreground">{t.settings.subtitle}</p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="text-[10px] font-bold border-border gap-2 h-9 px-4 hover:bg-muted"
+            onClick={handleResetDefaults}
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+            {t.common.reset}
+          </Button>
         </div>
 
         <Tabs defaultValue="appearance" className="w-full">
