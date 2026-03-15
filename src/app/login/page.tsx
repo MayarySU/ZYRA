@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -40,11 +41,11 @@ export default function LoginPage() {
         
         {/* Lado Izquierdo: Branding (Logo y Eslogan) */}
         <div className="relative flex-1 flex items-center justify-center p-12 overflow-hidden border-b lg:border-b-0 lg:border-r border-white/5 bg-[#0a0514]">
-          {/* Resplandor púrpura de fondo más intenso */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-accent/30 via-accent/5 to-transparent opacity-100" />
+          {/* Resplandor radial púrpura profundo y elegante */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-accent/25 via-accent/5 to-transparent opacity-100" />
           
           <div className="relative z-10 text-center">
-            <h1 className="text-7xl md:text-8xl font-black tracking-tighter text-accent leading-none mb-2 drop-shadow-[0_0_20px_rgba(138,43,226,0.4)]">
+            <h1 className="text-7xl md:text-8xl font-black tracking-tighter text-accent leading-none mb-2 drop-shadow-[0_0_25px_rgba(138,43,226,0.5)]">
               ZYRA
             </h1>
             <p className="text-[10px] md:text-xs font-medium tracking-[0.8em] text-zinc-400 uppercase ml-2">
