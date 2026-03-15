@@ -1,0 +1,48 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Información de perfil del empleado y datos de gamificación.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "nombre": { "type": "string" },
+        "rol": { "type": "string", "enum": ["admin", "employee"] },
+        "nivel": { "type": "number" },
+        "puntos": { "type": "number" },
+        "racha": { "type": "number" },
+        "logros": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["uid", "nombre", "rol"]
+    },
+    "Report": {
+      "title": "Operational Report",
+      "description": "Reportes diarios generados por los empleados.",
+      "type": "object",
+      "properties": {
+        "fecha": { "type": "string", "format": "date-time" },
+        "empleadoID": { "type": "string" },
+        "contenido": { "type": "string" },
+        "highlights": { "type": "array", "items": { "type": "string" } },
+        "imageUrl": { "type": "string" },
+        "puntosOtorgados": { "type": "number" },
+        "proyectoID": { "type": "string" }
+      },
+      "required": ["fecha", "empleadoID", "contenido"]
+    }
+  },
+  "auth": {
+    "providers": ["password"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Colección de perfiles de usuario."
+    },
+    "/reportes/{reportId}": {
+      "schema": "Report",
+      "description": "Colección de reportes operacionales."
+    }
+  }
+}

@@ -1,13 +1,14 @@
+
 "use client";
 
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { AuthProvider, useAuth } from "@/lib/firebase/auth-context";
+import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, profile, loading } = useUser();
   const router = useRouter();
 
   useEffect(() => {
@@ -38,13 +39,5 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </main>
       </SidebarInset>
     </SidebarProvider>
-  );
-}
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
-    </AuthProvider>
   );
 }
