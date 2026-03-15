@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -25,25 +24,27 @@ import {
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
 import { useUser } from "@/firebase";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { profile } = useUser();
+  const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
   const navItems = isAdmin ? [
-    { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-    { title: "Proyectos", icon: Briefcase, href: "/projects" },
-    { title: "Clientes", icon: Building2, href: "/clients" },
-    { title: "Equipos", icon: Users, href: "/team" },
-    { title: "Empleados", icon: UserCircle, href: "/employees" },
-    { title: "Reportes", icon: ClipboardList, href: "/reports" },
-    { title: "Materiales", icon: Package, href: "/materials" },
+    { title: t.nav.dashboard, icon: LayoutDashboard, href: "/dashboard" },
+    { title: t.nav.projects, icon: Briefcase, href: "/projects" },
+    { title: t.nav.clients, icon: Building2, href: "/clients" },
+    { title: t.nav.teams, icon: Users, href: "/team" },
+    { title: t.nav.employees, icon: UserCircle, href: "/employees" },
+    { title: t.nav.reports, icon: ClipboardList, href: "/reports" },
+    { title: t.nav.materials, icon: Package, href: "/materials" },
   ] : [
-    { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-    { title: "Proyectos", icon: Briefcase, href: "/projects" },
-    { title: "Equipo", icon: Users, href: "/team" },
-    { title: "Reportes", icon: ClipboardList, href: "/reports" },
+    { title: t.nav.dashboard, icon: LayoutDashboard, href: "/dashboard" },
+    { title: t.nav.projects, icon: Briefcase, href: "/projects" },
+    { title: t.nav.teams, icon: Users, href: "/team" },
+    { title: t.nav.reports, icon: ClipboardList, href: "/reports" },
   ];
 
   return (
@@ -61,7 +62,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-muted-foreground">
-            {isAdmin ? "Panel de Administración" : "General"}
+            {isAdmin ? t.nav.admin_panel : t.nav.general}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

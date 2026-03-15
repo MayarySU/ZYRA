@@ -6,25 +6,25 @@ import {
   LayoutDashboard, 
   Briefcase, 
   Users, 
-  ClipboardList,
-  UserCircle
+  ClipboardList
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/firebase";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export function BottomNav() {
   const pathname = usePathname();
   const { profile } = useUser();
+  const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
-  // Si es admin, no mostramos la barra inferior para mantener el diseño original de escritorio
   if (isAdmin) return null;
 
   const navItems = [
-    { title: "Inicio", icon: LayoutDashboard, href: "/dashboard" },
-    { title: "Proyectos", icon: Briefcase, href: "/projects" },
-    { title: "Equipo", icon: Users, href: "/team" },
-    { title: "Reportes", icon: ClipboardList, href: "/reports" },
+    { title: t.nav.dashboard, icon: LayoutDashboard, href: "/dashboard" },
+    { title: t.nav.projects, icon: Briefcase, href: "/projects" },
+    { title: t.nav.teams, icon: Users, href: "/team" },
+    { title: t.nav.reports, icon: ClipboardList, href: "/reports" },
   ];
 
   return (
@@ -34,7 +34,7 @@ export function BottomNav() {
           const isActive = pathname === item.href;
           return (
             <Link 
-              key={item.title} 
+              key={item.href} 
               href={item.href}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 w-full h-full transition-all",

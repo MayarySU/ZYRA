@@ -16,11 +16,13 @@ import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { Settings, LogOut, User, Zap, Trophy } from "lucide-react";
 import Link from "next/link";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export function UserNav() {
   const { profile } = useUser();
   const auth = useAuth();
   const router = useRouter();
+  const { t } = useI18n();
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -54,25 +56,25 @@ export function UserNav() {
           <DropdownMenuItem asChild>
             <Link href="/profile" className="focus:bg-white/5 cursor-pointer py-2 flex items-center w-full">
               <User className="mr-2 h-4 w-4 text-accent" />
-              <span className="text-xs font-bold">Mi Perfil</span>
+              <span className="text-xs font-bold">{t.nav.profile}</span>
             </Link>
           </DropdownMenuItem>
           {!isAdmin && (
             <>
               <DropdownMenuItem className="focus:bg-white/5 cursor-pointer py-2">
                 <Zap className="mr-2 h-4 w-4 text-accent" />
-                <span className="text-xs font-bold">Nivel {profile?.nivel || 1}</span>
+                <span className="text-xs font-bold">{t.dashboard.level} {profile?.nivel || 1}</span>
               </DropdownMenuItem>
               <DropdownMenuItem className="focus:bg-white/5 cursor-pointer py-2">
                 <Trophy className="mr-2 h-4 w-4 text-accent" />
-                <span className="text-xs font-bold">{profile?.puntos || 0} Puntos</span>
+                <span className="text-xs font-bold">{profile?.puntos || 0} {t.dashboard.points}</span>
               </DropdownMenuItem>
             </>
           )}
           <DropdownMenuItem asChild>
             <Link href="/settings" className="focus:bg-white/5 cursor-pointer py-2 flex items-center w-full">
               <Settings className="mr-2 h-4 w-4 text-accent" />
-              <span className="text-xs font-bold">Configuración</span>
+              <span className="text-xs font-bold">{t.nav.settings}</span>
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -82,7 +84,7 @@ export function UserNav() {
           className="focus:bg-destructive/10 text-destructive cursor-pointer py-2 font-bold"
         >
           <LogOut className="mr-2 h-4 w-4" />
-          <span className="text-xs">Cerrar Sesión</span>
+          <span className="text-xs">{t.nav.logout}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
