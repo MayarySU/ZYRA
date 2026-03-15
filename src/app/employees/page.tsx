@@ -33,7 +33,6 @@ import {
 import { Users, Plus, Search, Mail, Phone, ShieldCheck, UserCircle, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function EmployeesPage() {
   const { profile } = useUser();
@@ -78,7 +77,7 @@ export default function EmployeesPage() {
       // Para efectos de gestión administrativa en esta demo, registramos el perfil en la colección users.
       await addDoc(collection(db, "users"), {
         ...newEmployee,
-        rol: newEmployee.Rol_ID === 1 ? 'admin' : 'employee',
+        rol: 'employee', // Por defecto todos los nuevos registros son empleados
         createdAt: serverTimestamp(),
       });
       toast({ title: "Empleado registrado", description: "El perfil operativo se creó correctamente." });
@@ -136,7 +135,7 @@ export default function EmployeesPage() {
               <DialogHeader>
                 <DialogTitle className="text-accent">Nuevo Perfil de Empleado</DialogTitle>
                 <CardDescription>
-                  Capture los datos personales y asigne un rol operativo (EMP).
+                  Capture los datos personales para el seguimiento operativo (EMP).
                 </CardDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -170,18 +169,6 @@ export default function EmployeesPage() {
                       onChange={(e) => setNewEmployee({...newEmployee, Emp_Telefono: e.target.value})}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase font-bold text-muted-foreground">Rol de Acceso (ROL)</Label>
-                  <Select onValueChange={(val) => setNewEmployee({...newEmployee, Rol_ID: parseInt(val)})}>
-                    <SelectTrigger className="bg-white/5 border-white/10">
-                      <SelectValue placeholder="Seleccionar Rol" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-card border-white/10 text-white">
-                      <SelectItem value="2">Empleado Operativo</SelectItem>
-                      <SelectItem value="1">Administrador de Sistema</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
               <DialogFooter>
