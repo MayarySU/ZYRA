@@ -65,7 +65,6 @@ export default function ProjectsPage() {
   const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   
-  // Estado para nuevo proyecto con los nuevos requisitos
   const [newProject, setNewProject] = useState({
     Pry_Nombre_Proyecto: "",
     clientId: "",
@@ -85,7 +84,6 @@ export default function ProjectsPage() {
     seguridad_area: false
   });
 
-  // Consultas
   const userTeamsQuery = useMemoFirebase(() => {
     if (!db || !user || isAdmin) return null;
     return query(collection(db, "teams"), where("members", "array-contains", user.uid));
@@ -111,7 +109,6 @@ export default function ProjectsPage() {
 
   const { data: firestoreProjects, isLoading: projectsLoading } = useCollection(projectsQuery);
 
-  // Lógica para crear proyecto con los nuevos campos
   const handleCreateProject = () => {
     if (!db) return;
     setLoading(true);
@@ -137,8 +134,27 @@ export default function ProjectsPage() {
     };
 
     addDoc(colRef, data)
-      .then(() => {
+      .then(async (docRef) => {
         toast({ title: t.common.success, description: t.projects.create_success });
+        
+        // Enviar notificaciones a los miembros del equipo
+        if (newProject.assignedTeamId !== "no-team") {
+          const assignedTeam = teams?.find(t => t.id === newProject.assignedTeamId);
+          if (assignedTeam?.members && assignedTeam.members.length > 0) {
+            const notifCol = collection(db, "notifications");
+            assignedTeam.members.forEach((memberId: string) => {
+              addDoc(notifCol, {
+                userId: memberId,
+                title: "Nuevo Proyecto Asignado",
+                message: `Has sido asignado al proyecto: ${newProject.Pry_Nombre_Proyecto}`,
+                type: "project",
+                createdAt: new Date().toISOString(),
+                read: false
+              });
+            });
+          }
+        }
+
         setIsCreateDialogOpen(false);
         setNewProject({
           Pry_Nombre_Proyecto: "",
