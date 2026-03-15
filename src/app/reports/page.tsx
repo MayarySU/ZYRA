@@ -3,26 +3,19 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { 
-  Clock,
   FileText,
   Search,
-  ImageIcon,
-  Upload,
-  User,
-  Filter
 } from "lucide-react";
 import DashboardLayout from "../dashboard/layout";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Image from "next/image";
 import { useUser } from "@/firebase";
 import { cn } from "@/lib/utils";
 
-// Mock data based on the provided screenshot
+// Mock data based on the provided screenshot for Admin view
 const ADMIN_REPORTS_MOCK = [
   { 
     id: "1", 
@@ -111,9 +104,6 @@ export default function ReportsPage() {
               Revise, apruebe o rechace los reportes subidos por empleados.
             </p>
           </div>
-          <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2 self-start md:self-center">
-            <Upload className="h-4 w-4" /> Subir Reporte
-          </Button>
         </div>
 
         {/* Filters and Search */}
@@ -212,4 +202,3 @@ export default function ReportsPage() {
     </DashboardLayout>
   );
 }
-
