@@ -36,8 +36,7 @@ import {
   Briefcase,
   TrendingUp,
   Settings2,
-  Trash2,
-  MoreVertical
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -87,7 +86,10 @@ export default function TeamPage() {
 
   const displayTeams = useMemo(() => {
     const base = (teams && teams.length > 0) ? teams : FALLBACK_TEAMS;
-    return base.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    return base.filter(t => {
+      const teamName = t.name || "Equipo sin nombre";
+      return teamName.toLowerCase().includes(searchTerm.toLowerCase());
+    });
   }, [teams, searchTerm]);
 
   const handleCreateTeam = async () => {
@@ -125,7 +127,6 @@ export default function TeamPage() {
       leaderName: leader?.Emp_Nombre || leader?.nombre || "Técnico Zyra"
     };
 
-    // Usamos setDoc con merge para asegurar que funcione incluso si el equipo es demo (no existe en Firestore)
     setDoc(teamRef, updateData, { merge: true })
       .then(() => {
         toast({ title: "Líder Reasignado", description: "El equipo ahora tiene un nuevo supervisor." });
@@ -147,7 +148,6 @@ export default function TeamPage() {
     const newStatus = team.status === "Activo" ? "Disponible" : "Activo";
     const updateData = { status: newStatus };
     
-    // Usamos setDoc con merge para asegurar que funcione incluso si el equipo es demo
     setDoc(teamRef, updateData, { merge: true })
       .then(() => {
         toast({ title: "Estado Actualizado", description: `El equipo ${team.name} ahora está ${newStatus.toLowerCase()}.` });
