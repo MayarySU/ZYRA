@@ -1,10 +1,9 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -126,7 +125,8 @@ export default function TeamPage() {
       leaderName: leader?.Emp_Nombre || leader?.nombre || "Técnico Zyra"
     };
 
-    updateDoc(teamRef, updateData)
+    // Usamos setDoc con merge para asegurar que funcione incluso si el equipo es demo (no existe en Firestore)
+    setDoc(teamRef, updateData, { merge: true })
       .then(() => {
         toast({ title: "Líder Reasignado", description: "El equipo ahora tiene un nuevo supervisor." });
         setIsReassignDialogOpen(false);
@@ -145,8 +145,10 @@ export default function TeamPage() {
     if (!db) return;
     const teamRef = doc(db, "teams", team.id);
     const newStatus = team.status === "Activo" ? "Disponible" : "Activo";
+    const updateData = { status: newStatus };
     
-    updateDoc(teamRef, { status: newStatus })
+    // Usamos setDoc con merge para asegurar que funcione incluso si el equipo es demo
+    setDoc(teamRef, updateData, { merge: true })
       .then(() => {
         toast({ title: "Estado Actualizado", description: `El equipo ${team.name} ahora está ${newStatus.toLowerCase()}.` });
       })
@@ -154,7 +156,7 @@ export default function TeamPage() {
         const permissionError = new FirestorePermissionError({
           path: teamRef.path,
           operation: 'update',
-          requestResourceData: { status: newStatus },
+          requestResourceData: updateData,
         });
         errorEmitter.emit('permission-error', permissionError);
       });
@@ -494,4 +496,3 @@ export default function TeamPage() {
     </DashboardLayout>
   );
 }
-

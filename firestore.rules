@@ -1,41 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     // Permitir acceso total para el prototipado y modo demo
     // En producción, estas reglas deben ser restringidas a usuarios autenticados y roles específicos.
-    
-    match /userProfiles/{userProfileId} {
-      allow read, write: if true;
-    }
-
-    match /users/{userId} {
-      allow read, write: if true;
-    }
-
-    match /proyectos/{projectId} {
-      allow read, write: if true;
-    }
-
-    match /materiales/{materialId} {
-      allow read, write: if true;
-    }
-
-    match /checklist_servicio/{serviceId} {
-      allow read, write: if true;
-    }
-
-    match /clientes/{clienteId} {
-      allow read, write: if true;
-    }
-
-    match /teams/{teamId} {
-      allow read, write: if true;
-    }
-
-    match /reports/{reportId} {
-      allow read, write: if true;
-    }
     
     match /{document=**} {
       allow read, write: if true;
