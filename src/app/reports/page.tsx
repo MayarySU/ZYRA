@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,19 +35,25 @@ export default function ReportsPage() {
   const [draftedContent, setDraftedContent] = useState("");
   const [highlights, setHighlights] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Mock de reportes enviados por este empleado (Demo)
+  // Usamos fechas estáticas para evitar errores de hidratación
   const [myReports, setMyReports] = useState([
     { 
       id: "1", 
-      fecha: new Date(Date.now() - 86400000).toISOString(), 
+      fecha: "2024-03-20T14:30:00Z", 
       contenido: "Finalizada la conexión de los inversores en el bloque B. Se realizaron pruebas de tensión satisfactorias.", 
       proyecto: "Residencial Las Palmas",
       highlights: ["Inversores conectados", "Pruebas de tensión OK"]
     },
     { 
       id: "2", 
-      fecha: new Date(Date.now() - 172800000).toISOString(), 
+      fecha: "2024-03-19T10:15:00Z", 
       contenido: "Montaje de estructura de soporte para paneles en techumbre norte completado al 100%.", 
       proyecto: "Residencial Las Palmas",
       highlights: ["Estructura completada", "Fase 1 terminada"]
@@ -216,7 +222,11 @@ export default function ReportsPage() {
                             </p>
                             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                               <Clock className="h-3 w-3" />
-                              {format(new Date(report.fecha), "PPP 'a las' p", { locale: es })}
+                              {isMounted ? (
+                                format(new Date(report.fecha), "PPP 'a las' p", { locale: es })
+                              ) : (
+                                "Cargando fecha..."
+                              )}
                             </div>
                           </div>
                           <Badge className="bg-green-500/10 text-green-500 border-green-500/20 text-[9px]">ENVIADO</Badge>
