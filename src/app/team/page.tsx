@@ -52,7 +52,7 @@ export default function TeamPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -71,6 +71,8 @@ export default function TeamPage() {
     type: "Instalación",
     status: "Disponible"
   });
+
+  const [editTeamData, setEditTeamData] = useState<any>(null);
 
   const teamsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -129,25 +131,52 @@ export default function TeamPage() {
     }));
   };
 
-  const handleReassignLeader = async (teamId: string, newLeaderId: string) => {
-    if (!db) return;
-    const teamRef = doc(db, "teams", teamId);
-    const leader = employees?.find(e => e.id === newLeaderId);
+  const openEditDialog = (team: any) => {
+    setSelectedTeam(team);
+    setEditTeamData({
+      name: team.name || "",
+      leaderId: team.leaderId || "",
+      leaderName: team.leaderName || "",
+      members: team.members || [],
+      type: team.type || "Instalación",
+      status: team.status || "Disponible"
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleToggleEditMember = (empId: string) => {
+    setEditTeamData((prev: any) => ({
+      ...prev,
+      members: prev.members.includes(empId)
+        ? prev.members.filter((id: string) => id !== empId)
+        : [...prev.members, empId]
+    }));
+  };
+
+  const handleUpdateTeam = async () => {
+    if (!db || !selectedTeam || !editTeamData) return;
+    setLoading(true);
+    
+    const teamRef = doc(db, "teams", selectedTeam.id);
+    const leader = employees?.find(e => e.id === editTeamData.leaderId);
+    
     const updateData = {
-      leaderId: newLeaderId,
-      leaderName: leader?.nombre || "Técnico Zyra"
+      ...editTeamData,
+      leaderName: leader?.nombre || editTeamData.leaderName
     };
 
     try {
       await setDoc(teamRef, updateData, { merge: true });
-      toast({ title: t.common.success, description: t.common.success });
-      setIsReassignDialogOpen(false);
+      toast({ title: t.common.success });
+      setIsEditDialogOpen(false);
     } catch (err: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: teamRef.path,
         operation: 'update',
         requestResourceData: updateData,
       }));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -264,8 +293,8 @@ export default function TeamPage() {
                 </CardContent>
                 {isAdmin && (
                   <div className="p-4 bg-white/2 border-t border-white/5">
-                    <Button variant="outline" className="w-full text-[10px] font-bold border-accent/30 text-accent uppercase" onClick={() => { setSelectedTeam(team); setIsReassignDialogOpen(true); }}>
-                      {t.teams.manage_leader}
+                    <Button variant="outline" className="w-full text-[10px] font-bold border-accent/30 text-accent uppercase" onClick={() => openEditDialog(team)}>
+                      Gestionar Equipo
                     </Button>
                   </div>
                 )}
@@ -279,21 +308,74 @@ export default function TeamPage() {
           )}
         </div>
 
-        <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
-          <DialogContent className="bg-card border-white/10 text-white sm:max-w-md">
+        {/* Edit Team Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="bg-card border-white/10 text-white sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle className="text-accent flex items-center gap-2"><Settings2 className="h-5 w-5" /> {t.teams.manage_leader}</DialogTitle>
+              <DialogTitle className="text-accent flex items-center gap-2">
+                <Settings2 className="h-5 w-5" /> Gestionar Equipo - {selectedTeam?.name}
+              </DialogTitle>
+              <DialogDescription>Edita los detalles del equipo, añade/elimina integrantes o cambia el líder.</DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-              <Select onValueChange={(val) => handleReassignLeader(selectedTeam.id, val)}>
-                <SelectTrigger className="bg-white/5 border-white/10 h-12"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-white/10 text-white">
-                  {employees?.filter(e => e.rol !== 'admin').map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid md:grid-cols-2 gap-6 py-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.team_name}</Label>
+                  <Input 
+                    value={editTeamData?.name || ""} 
+                    onChange={(e) => setEditTeamData({...editTeamData, name: e.target.value})}
+                    className="bg-white/5 border-white/10 h-10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.team_type}</Label>
+                  <Select value={editTeamData?.type} onValueChange={(val: any) => setEditTeamData({...editTeamData, type: val})}>
+                    <SelectTrigger className="bg-white/5 border-white/10 h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-white/10 text-white">
+                      <SelectItem value="Instalación">{t.teams.installation}</SelectItem>
+                      <SelectItem value="Mantenimiento">{t.teams.maintenance}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.leader}</Label>
+                  <Select value={editTeamData?.leaderId} onValueChange={(val) => setEditTeamData({...editTeamData, leaderId: val})}>
+                    <SelectTrigger className="bg-white/5 border-white/10 h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-white/10 text-white">
+                      {employees?.filter(e => e.rol !== 'admin').map(emp => (
+                        <SelectItem key={emp.id} value={emp.id}>{emp.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2 flex flex-col h-full">
+                <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.members}</Label>
+                <ScrollArea className="flex-1 bg-white/5 border border-white/10 rounded-lg p-3 h-[200px]">
+                  <div className="space-y-3">
+                    {employees?.filter(e => e.rol !== 'admin').map(emp => (
+                      <div key={emp.id} className="flex items-center space-x-3">
+                        <Checkbox 
+                          id={`edit-emp-${emp.id}`} 
+                          checked={editTeamData?.members.includes(emp.id)} 
+                          onCheckedChange={() => handleToggleEditMember(emp.id)} 
+                        />
+                        <label htmlFor={`edit-emp-${emp.id}`} className="text-sm font-medium text-white/80 cursor-pointer">{emp.nombre}</label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
+            <DialogFooter>
+              <Button 
+                className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" 
+                onClick={handleUpdateTeam}
+                disabled={loading}
+              >
+                {loading ? t.common.loading : t.common.save}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
