@@ -8,7 +8,13 @@ import {
   Check,
   X,
   Clock,
-  AlertCircle
+  AlertCircle,
+  MapPin,
+  User,
+  Calendar,
+  Building2,
+  ExternalLink,
+  Hash
 } from "lucide-react";
 import DashboardLayout from "../dashboard/layout";
 import { format } from "date-fns";
@@ -23,14 +29,22 @@ import { doc, updateDoc, collection } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
-// Mock data normalized to Report entity schema for fallback/demo
+// Fallback data for demo
 const FALLBACK_REPORTS = [
   { 
     id: "demo-1", 
     timestamp: "2026-02-16T10:00:00Z", 
     content: "Fuga detectada en tubería de desagüe del sótano. Se requiere acción inmediata para evitar filtraciones mayores.", 
     projectName: "Residencial Las Palmas",
+    projectId: "PRY-PALMAS-001",
     authorName: "Mia Rodriguez",
     status: "Pendiente",
     imageUrl: "https://picsum.photos/seed/leak/800/600",
@@ -41,40 +55,11 @@ const FALLBACK_REPORTS = [
     timestamp: "2026-02-15T15:30:00Z", 
     content: "Instalación de cuadro eléctrico principal finalizada en planta 3. Todo según norma NCH4.", 
     projectName: "Parque Solar Atacama",
+    projectId: "PRY-ATACAMA-088",
     authorName: "Leo Martinez",
     status: "Aprobado",
     imageUrl: "https://picsum.photos/seed/electric/800/600",
     imageHint: "electrical panel"
-  },
-  { 
-    id: "demo-3", 
-    timestamp: "2026-02-14T09:15:00Z", 
-    content: "Paneles instalados y cableado final en unidad 12A. Pendiente validación de inversor.", 
-    projectName: "Residencial Las Palmas",
-    authorName: "Leo Martinez",
-    status: "Aprobado",
-    imageUrl: "https://picsum.photos/seed/panels/800/600",
-    imageHint: "solar panels"
-  },
-  { 
-    id: "demo-4", 
-    timestamp: "2026-02-12T11:00:00Z", 
-    content: "Revisión de unidad de aire acondicionado en azotea. Filtros limpios y carga de gas verificada.", 
-    projectName: "Planta Industrial BioBio",
-    authorName: "David Kim",
-    status: "Aprobado",
-    imageUrl: "https://picsum.photos/seed/hvac/800/600",
-    imageHint: "air conditioning"
-  },
-  { 
-    id: "demo-5", 
-    timestamp: "2026-02-10T08:00:00Z", 
-    content: "Mantenimiento preventivo bloqueado por falta de acceso a sala de máquinas.", 
-    projectName: "Edificio Horizonte",
-    authorName: "Mia Rodriguez",
-    status: "Rechazado",
-    imageUrl: "https://picsum.photos/seed/locked/800/600",
-    imageHint: "locked door"
   }
 ];
 
@@ -87,6 +72,7 @@ export default function ReportsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("Todos");
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   // Firestore connection
   const reportsQuery = useMemoFirebase(() => {
@@ -94,9 +80,14 @@ export default function ReportsPage() {
     return collection(db, "reports");
   }, [db]);
 
-  const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
+  const projectsQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return collection(db, "proyectos");
+  }, [db]);
 
-  // Merge real data with fallback data for demo completeness
+  const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
+  const { data: projects } = useCollection(projectsQuery);
+
   const reports = useMemo(() => {
     const realData = firestoreReports || [];
     if (realData.length === 0) return FALLBACK_REPORTS;
@@ -117,14 +108,23 @@ export default function ReportsPage() {
     });
   }, [reports, searchTerm, activeFilter]);
 
-  const handleUpdateStatus = (reportId: string, newStatus: "Aprobado" | "Rechazado") => {
+  const selectedReport = useMemo(() => {
+    return reports.find(r => r.id === selectedReportId);
+  }, [reports, selectedReportId]);
+
+  const linkedProject = useMemo(() => {
+    if (!selectedReport || !projects) return null;
+    return projects.find(p => p.id === selectedReport.projectId || p.Pry_Nombre_Proyecto === selectedReport.projectName);
+  }, [selectedReport, projects]);
+
+  const handleUpdateStatus = (reportId: string, newStatus: "Aprobado" | "Rechazado", e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!db) return;
     
-    // Prevent actions on demo/fallback data that isn't in Firestore
     if (reportId.startsWith('demo-')) {
       toast({
         title: "Modo Demo",
-        description: "Esta acción solo se puede realizar en reportes reales guardados en la base de datos.",
+        description: "Esta acción solo se puede realizar en reportes reales.",
         variant: "destructive"
       });
       return;
@@ -134,13 +134,13 @@ export default function ReportsPage() {
     const reportRef = doc(db, "reports", reportId);
     const updateData = { status: newStatus };
 
-    // Update document using the standard Firebase SDK
     updateDoc(reportRef, updateData)
       .then(() => {
         toast({ 
           title: `Reporte ${newStatus}`, 
-          description: `El registro ha sido movido a la sección de ${newStatus.toLowerCase()}.` 
+          description: `El registro ha sido actualizado.` 
         });
+        if (selectedReportId === reportId) setSelectedReportId(null);
       })
       .catch(async (error) => {
         const permissionError = new FirestorePermissionError({
@@ -162,7 +162,7 @@ export default function ReportsPage() {
           </div>
           <h2 className="text-2xl font-bold text-white uppercase tracking-tighter">Acceso Restringido</h2>
           <p className="text-muted-foreground max-w-md">
-            Solo el personal de supervisión técnica puede validar y auditar los reportes operativos de obra.
+            Solo el personal de supervisión técnica puede validar los reportes operativos.
           </p>
         </div>
       </DashboardLayout>
@@ -172,19 +172,17 @@ export default function ReportsPage() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-6 font-body">
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-4xl font-bold tracking-tight text-white font-headline">
               Auditoría de Reportes (REP)
             </h2>
             <p className="text-muted-foreground">
-              Supervisión de evidencias operativas y validación de protocolos de seguridad.
+              Validación de evidencias y protocolos de seguridad en obra.
             </p>
           </div>
         </div>
 
-        {/* Filters and Search */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4">
           <Tabs value={activeFilter} onValueChange={setActiveFilter} className="w-full lg:w-auto">
             <TabsList className="bg-white/5 border border-white/10 p-1">
@@ -203,7 +201,7 @@ export default function ReportsPage() {
           <div className="relative w-full lg:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Buscar por obra, técnico o contenido..." 
+              placeholder="Buscar por obra o técnico..." 
               className="pl-10 bg-white/5 border-white/10 focus:border-accent h-10 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -211,7 +209,6 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* Grid View */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-accent"></div>
@@ -220,77 +217,57 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
             {filteredReports.map((report) => {
               const currentStatus = report.status || "Pendiente";
-              const content = report.content || report.contenido;
-              const author = report.authorName || report.autor;
-              const project = report.projectName || report.proyecto;
-              const date = report.timestamp || report.fecha;
-
               return (
                 <div 
                   key={report.id} 
-                  className="bg-card/40 border border-white/10 rounded-2xl overflow-hidden group hover:border-accent/40 transition-all flex flex-col shadow-xl backdrop-blur-sm"
+                  onClick={() => setSelectedReportId(report.id)}
+                  className="bg-card/40 border border-white/10 rounded-2xl overflow-hidden group hover:border-accent/40 cursor-pointer transition-all flex flex-col shadow-xl backdrop-blur-sm"
                 >
-                  {/* Card Image and Status Badge */}
                   <div className="relative aspect-[4/3] w-full overflow-hidden">
                     <Image
                       src={report.imageUrl || "https://picsum.photos/seed/solar-report/800/600"}
-                      alt={content}
+                      alt={report.content || ""}
                       fill
                       className="object-cover transition-transform duration-500 group-hover:scale-110"
-                      data-ai-hint={report.imageHint || "construction report"}
                     />
                     <div className="absolute top-3 right-3">
-                      <Badge 
-                        className={cn(
-                          "font-bold text-[10px] px-2 py-0.5 border-none shadow-lg",
-                          currentStatus === "Pendiente" && "bg-yellow-500 text-white",
-                          currentStatus === "Aprobado" && "bg-emerald-500 text-white",
-                          currentStatus === "Rechazado" && "bg-red-500 text-white"
-                        )}
-                      >
+                      <Badge className={cn(
+                        "font-bold text-[10px] px-2 py-0.5 border-none shadow-lg",
+                        currentStatus === "Pendiente" && "bg-yellow-500 text-white",
+                        currentStatus === "Aprobado" && "bg-emerald-500 text-white",
+                        currentStatus === "Rechazado" && "bg-red-500 text-white"
+                      )}>
                         {currentStatus.toUpperCase()}
                       </Badge>
                     </div>
                   </div>
 
-                  {/* Card Content */}
                   <div className="p-5 flex flex-col flex-1 space-y-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-1.5 text-accent">
                         <Briefcase className="h-3.5 w-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">{project}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider truncate">{report.projectName}</span>
                       </div>
-                      <p className="text-sm font-semibold text-white leading-snug line-clamp-3">
-                        {content}
+                      <p className="text-sm font-semibold text-white leading-snug line-clamp-2">
+                        {report.content || report.contenido}
                       </p>
                     </div>
                     
                     <div className="space-y-3 border-t border-white/5 pt-4 mt-auto">
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span className="font-bold text-white/70">{author}</span>
-                        <span>{date ? format(new Date(date), "d/M/yyyy") : "N/A"}</span>
+                        <span className="font-bold text-white/70">{report.authorName || report.autor}</span>
+                        <span>{report.timestamp ? format(new Date(report.timestamp), "d/M/yyyy") : "N/A"}</span>
                       </div>
 
-                      {/* Action Buttons for Pending Reports */}
                       {currentStatus === "Pendiente" && (
                         <div className="flex gap-2 pt-2">
                           <Button 
                             variant="outline" 
                             size="sm" 
                             className="flex-1 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500 hover:text-white font-bold text-[10px] h-8 gap-1.5"
-                            disabled={processingId === report.id}
-                            onClick={() => handleUpdateStatus(report.id, "Aprobado")}
+                            onClick={(e) => handleUpdateStatus(report.id, "Aprobado", e)}
                           >
                             <Check className="h-3 w-3" /> APROBAR
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1 border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white font-bold text-[10px] h-8 gap-1.5"
-                            disabled={processingId === report.id}
-                            onClick={() => handleUpdateStatus(report.id, "Rechazado")}
-                          >
-                            <X className="h-3 w-3" /> RECHAZAR
                           </Button>
                         </div>
                       )}
@@ -302,16 +279,129 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* Empty State */}
+        {/* Detail Dialog */}
+        <Dialog open={!!selectedReportId} onOpenChange={(open) => !open && setSelectedReportId(null)}>
+          <DialogContent className="bg-card border-white/10 text-white sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            {selectedReport && (
+              <>
+                <DialogHeader className="relative pr-8">
+                  <div className="absolute top-0 right-0 flex items-center gap-1 text-[10px] font-mono text-muted-foreground bg-white/5 px-2 py-1 rounded">
+                    <Hash className="h-3 w-3" /> {selectedReport.id}
+                  </div>
+                  <DialogTitle className="text-2xl font-bold text-accent flex items-center gap-2">
+                    <Briefcase className="h-6 w-6" /> {selectedReport.projectName}
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
+                    Expediente detallado del reporte operativo y estado del proyecto.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                  <div className="space-y-4">
+                    <div className="relative aspect-video rounded-xl overflow-hidden border border-white/10">
+                      <Image
+                        src={selectedReport.imageUrl || "https://picsum.photos/seed/solar-report/800/600"}
+                        alt="Evidencia"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
+                      <h4 className="text-xs font-bold uppercase text-accent tracking-widest border-b border-white/5 pb-2">Datos del Proyecto</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2 text-xs">
+                          <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+                          <div>
+                            <p className="text-muted-foreground">Cliente</p>
+                            <p className="font-semibold">{linkedProject?.Cl_ID || "Inmobiliaria El Sol"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 text-xs">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+                          <div>
+                            <p className="text-muted-foreground">Dirección Operativa</p>
+                            <p className="font-semibold">{linkedProject?.ubicacion || "Av. Las Palmas 450, Santiago"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 text-xs">
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+                          <div>
+                            <p className="text-muted-foreground">Equipo Asignado</p>
+                            <p className="font-semibold">{linkedProject?.Eq_ID || "Equipo Alpha"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Badge className={cn(
+                          "font-bold px-3 py-1",
+                          selectedReport.status === "Pendiente" && "bg-yellow-500",
+                          selectedReport.status === "Aprobado" && "bg-emerald-500",
+                          selectedReport.status === "Rechazado" && "bg-red-500"
+                        )}>
+                          {selectedReport.status?.toUpperCase() || "PENDIENTE"}
+                        </Badge>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {selectedReport.timestamp ? format(new Date(selectedReport.timestamp), "PPP") : "Sin fecha"}
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                        <h4 className="text-xs font-bold uppercase text-accent tracking-widest mb-3">Descripción Operativa</h4>
+                        <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
+                          {selectedReport.content || selectedReport.contenido}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3 bg-white/2 rounded-lg">
+                        <div className="h-10 w-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
+                          {(selectedReport.authorName || "U").substring(0, 1)}
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">Emitido por</p>
+                          <p className="text-sm font-bold">{selectedReport.authorName || selectedReport.autor}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedReport.status === "Pendiente" && (
+                      <div className="flex gap-3 pt-4 border-t border-white/5">
+                        <Button 
+                          className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12"
+                          onClick={() => handleUpdateStatus(selectedReport.id, "Aprobado")}
+                          disabled={!!processingId}
+                        >
+                          <Check className="h-5 w-5 mr-2" /> APROBAR
+                        </Button>
+                        <Button 
+                          variant="destructive"
+                          className="flex-1 font-bold h-12"
+                          onClick={() => handleUpdateStatus(selectedReport.id, "Rechazado")}
+                          disabled={!!processingId}
+                        >
+                          <X className="h-5 w-5 mr-2" /> RECHAZAR
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
         {!isLoading && filteredReports.length === 0 && (
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center mb-6 border border-white/10">
               <Clock className="h-10 w-10 text-muted-foreground" />
             </div>
             <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Sin reportes en esta sección</h3>
-            <p className="text-sm text-muted-foreground mt-2 max-w-xs">
-              No se encontraron registros bajo el filtro "{activeFilter}" que coincidan con su búsqueda.
-            </p>
           </div>
         )}
       </div>
