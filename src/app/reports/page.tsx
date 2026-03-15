@@ -15,7 +15,11 @@ import {
   Calendar,
   Building2,
   ExternalLink,
-  Hash
+  Hash,
+  Plus,
+  Sparkles,
+  Camera,
+  Loader2
 } from "lucide-react";
 import DashboardLayout from "../dashboard/layout";
 import { format } from "date-fns";
@@ -26,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { cn } from "@/lib/utils";
-import { doc, updateDoc, collection } from "firebase/firestore";
+import { doc, updateDoc, collection, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -36,36 +40,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
-
-// Fallback data for demo
-const FALLBACK_REPORTS = [
-  { 
-    id: "demo-1", 
-    timestamp: "2026-02-16T10:00:00Z", 
-    content: "Fuga detectada en tubería de desagüe del sótano. Se requiere acción inmediata para evitar filtraciones mayores.", 
-    projectName: "Residencial Las Palmas",
-    projectId: "PRY-PALMAS-001",
-    authorName: "Mia Rodriguez",
-    status: "Pendiente",
-    imageUrl: "https://picsum.photos/seed/leak/800/600",
-    imageHint: "leak repair"
-  },
-  { 
-    id: "demo-2", 
-    timestamp: "2026-02-15T15:30:00Z", 
-    content: "Instalación de cuadro eléctrico principal finalizada en planta 3. Todo según norma NCH4.", 
-    projectName: "Parque Solar Atacama",
-    projectId: "PRY-ATACAMA-088",
-    authorName: "Leo Martinez",
-    status: "Aprobado",
-    imageUrl: "https://picsum.photos/seed/electric/800/600",
-    imageHint: "electrical panel"
-  }
-];
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { aiReportDraftingAssistant } from "@/ai/flows/ai-report-drafting-assistant-flow";
 
 export default function ReportsPage() {
-  const { profile } = useUser();
+  const { profile, user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
   const isAdmin = profile?.rol === 'admin';
@@ -74,6 +58,16 @@ export default function ReportsPage() {
   const [activeFilter, setActiveFilter] = useState("Todos");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  
+  // Create report states
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
+  const [newReport, setNewReport] = useState({
+    projectId: "",
+    projectName: "",
+    content: "",
+    imageUrl: "https://picsum.photos/seed/report-new/800/600",
+  });
 
   // Firestore connection
   const reportsQuery = useMemoFirebase(() => {
@@ -81,24 +75,28 @@ export default function ReportsPage() {
     if (isAdmin) {
       return collection(db, "reports");
     }
-    return null; // Restringimos la consulta solo a admins por ahora en esta vista de auditoría
+    // Employees see reports from their team
+    if (profile.teamId) {
+      return query(collection(db, "reports"), where("assignedTeamId", "==", profile.teamId));
+    }
+    // Or just their own reports if no team
+    return query(collection(db, "reports"), where("employeeId", "==", profile.uid));
   }, [db, isAdmin, profile]);
 
   const projectsQuery = useMemoFirebase(() => {
-    if (!db || !isAdmin) return null;
-    return collection(db, "proyectos");
-  }, [db, isAdmin]);
+    if (!db || !profile) return null;
+    if (isAdmin) return collection(db, "proyectos");
+    if (profile.teamId) {
+      return query(collection(db, "proyectos"), where("assignedTeamId", "==", profile.teamId));
+    }
+    return null;
+  }, [db, isAdmin, profile]);
 
   const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
   const { data: projects } = useCollection(projectsQuery);
 
-  const reports = useMemo(() => {
-    const realData = firestoreReports || [];
-    if (realData.length === 0) return FALLBACK_REPORTS;
-    return realData;
-  }, [firestoreReports]);
-
   const filteredReports = useMemo(() => {
+    const reports = firestoreReports || [];
     return reports.filter(report => {
       const matchesSearch = 
         (report.content || report.contenido || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -110,11 +108,11 @@ export default function ReportsPage() {
       
       return matchesSearch && matchesFilter;
     });
-  }, [reports, searchTerm, activeFilter]);
+  }, [firestoreReports, searchTerm, activeFilter]);
 
   const selectedReport = useMemo(() => {
-    return reports.find(r => r.id === selectedReportId);
-  }, [reports, selectedReportId]);
+    return firestoreReports?.find(r => r.id === selectedReportId);
+  }, [firestoreReports, selectedReportId]);
 
   const linkedProject = useMemo(() => {
     if (!selectedReport || !projects) return null;
@@ -123,7 +121,7 @@ export default function ReportsPage() {
 
   const handleUpdateStatus = (reportId: string, newStatus: "Aprobado" | "Rechazado", e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!db) return;
+    if (!db || !isAdmin) return;
     
     setProcessingId(reportId);
     const reportRef = doc(db, "reports", reportId);
@@ -148,21 +146,55 @@ export default function ReportsPage() {
       .finally(() => setProcessingId(null));
   };
 
-  if (!isAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
-          <div className="p-4 rounded-full bg-destructive/10">
-            <AlertCircle className="h-12 w-12 text-destructive" />
-          </div>
-          <h2 className="text-2xl font-bold text-white uppercase tracking-tighter">Acceso Restringido</h2>
-          <p className="text-muted-foreground max-w-md">
-            Solo el personal de supervisión técnica puede validar los reportes operativos.
-          </p>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  const handleCreateReport = async () => {
+    if (!db || !profile || !user) return;
+    setProcessingId("creating");
+    
+    const reportData = {
+      ...newReport,
+      employeeId: user.uid,
+      authorName: profile.nombre || "Técnico Zyra",
+      assignedTeamId: profile.teamId || "sin-equipo",
+      status: "Pendiente",
+      timestamp: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+    };
+
+    try {
+      await addDoc(collection(db, "reports"), reportData);
+      toast({ title: "Reporte Enviado", description: "Tu reporte ha sido registrado y está pendiente de validación." });
+      setIsCreateDialogOpen(false);
+      setNewReport({ projectId: "", projectName: "", content: "", imageUrl: "https://picsum.photos/seed/report-new/800/600" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el reporte." });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleAiDraft = async () => {
+    if (!newReport.content || !newReport.projectId) {
+      toast({ title: "Faltan datos", description: "Por favor selecciona un proyecto y escribe algunas notas básicas." });
+      return;
+    }
+
+    setIsAiDrafting(true);
+    try {
+      const selectedProj = projects?.find(p => p.id === newReport.projectId);
+      const result = await aiReportDraftingAssistant({
+        reportNotes: newReport.content,
+        projectName: selectedProj?.Pry_Nombre_Proyecto || "Proyecto Solar",
+        employeeName: profile?.nombre || "Técnico"
+      });
+
+      setNewReport(prev => ({ ...prev, content: result.draftedReportDescription }));
+      toast({ title: "Asistente AI", description: "El reporte ha sido estructurado profesionalmente." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error AI", description: "No se pudo conectar con el asistente de redacción." });
+    } finally {
+      setIsAiDrafting(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -170,12 +202,93 @@ export default function ReportsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-4xl font-bold tracking-tight text-white font-headline">
-              Auditoría de Reportes (REP)
+              {isAdmin ? "Auditoría de Reportes (REP)" : "Tus Reportes Operativos"}
             </h2>
             <p className="text-muted-foreground">
-              Validación de evidencias y protocolos de seguridad en obra.
+              {isAdmin 
+                ? "Validación de evidencias y protocolos de seguridad en obra." 
+                : "Registro de actividades y evidencias diarias en terreno."}
             </p>
           </div>
+
+          {!isAdmin && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2 h-12">
+                  <Plus className="h-5 w-5" /> Nuevo Reporte
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-white/10 text-white sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-accent flex items-center gap-2">
+                    <FileText className="h-6 w-6" /> Crear Reporte Diario
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
+                    Sube tu evidencia y describe las tareas realizadas hoy.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Proyecto Relacionado</Label>
+                    <Select 
+                      onValueChange={(val) => {
+                        const proj = projects?.find(p => p.id === val);
+                        setNewReport({...newReport, projectId: val, projectName: proj?.Pry_Nombre_Proyecto || ""});
+                      }}
+                    >
+                      <SelectTrigger className="bg-white/5 border-white/10">
+                        <SelectValue placeholder="Seleccionar proyecto activo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-white/10 text-white">
+                        {projects?.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.Pry_Nombre_Proyecto}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold uppercase text-muted-foreground">Descripción de Tareas</Label>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 text-[10px] text-accent font-bold gap-1 hover:bg-accent/10"
+                        onClick={handleAiDraft}
+                        disabled={isAiDrafting}
+                      >
+                        {isAiDrafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        ASISTENTE AI
+                      </Button>
+                    </div>
+                    <Textarea 
+                      placeholder="Escribe tus notas aquí..." 
+                      className="bg-white/5 border-white/10 min-h-[120px] text-sm"
+                      value={newReport.content}
+                      onChange={(e) => setNewReport({...newReport, content: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Evidencia Fotográfica</Label>
+                    <div className="aspect-video w-full rounded-lg bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 text-muted-foreground group hover:border-accent/40 transition-colors cursor-pointer">
+                      <Camera className="h-8 w-8" />
+                      <span className="text-xs">Tomar Foto o Subir Archivo</span>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-12"
+                    disabled={!newReport.projectId || !newReport.content || processingId === "creating"}
+                    onClick={handleCreateReport}
+                  >
+                    {processingId === "creating" ? "Enviando..." : "ENVIAR REPORTE PARA VALIDACIÓN"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4">
@@ -254,7 +367,7 @@ export default function ReportsPage() {
                         <span>{report.timestamp ? format(new Date(report.timestamp), "d/M/yyyy") : "N/A"}</span>
                       </div>
 
-                      {currentStatus === "Pendiente" && (
+                      {isAdmin && currentStatus === "Pendiente" && (
                         <div className="flex gap-2 pt-2">
                           <Button 
                             variant="outline" 
@@ -316,14 +429,7 @@ export default function ReportsPage() {
                           <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
                           <div>
                             <p className="text-muted-foreground">Dirección Operativa</p>
-                            <p className="font-semibold">{linkedProject?.ubicacion || "Av. Las Palmas 450, Santiago"}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2 text-xs">
-                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
-                          <div>
-                            <p className="text-muted-foreground">Equipo Asignado</p>
-                            <p className="font-semibold">{linkedProject?.Eq_ID || "Equipo Alpha"}</p>
+                            <p className="font-semibold">{linkedProject?.ubicacion || "Ubicación de Obra"}</p>
                           </div>
                         </div>
                       </div>
@@ -342,7 +448,7 @@ export default function ReportsPage() {
                           {selectedReport.status?.toUpperCase() || "PENDIENTE"}
                         </Badge>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Calendar className="h-3.5 w-3.5" />
+                          <Clock className="h-3.5 w-3.5" />
                           {selectedReport.timestamp ? format(new Date(selectedReport.timestamp), "PPP") : "Sin fecha"}
                         </div>
                       </div>
@@ -365,7 +471,7 @@ export default function ReportsPage() {
                       </div>
                     </div>
 
-                    {selectedReport.status === "Pendiente" && (
+                    {isAdmin && selectedReport.status === "Pendiente" && (
                       <div className="flex gap-3 pt-4 border-t border-white/5">
                         <Button 
                           className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12"
@@ -397,6 +503,11 @@ export default function ReportsPage() {
               <Clock className="h-10 w-10 text-muted-foreground" />
             </div>
             <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Sin reportes en esta sección</h3>
+            <p className="text-muted-foreground mt-2 max-w-xs">
+              {isAdmin 
+                ? "No hay reportes pendientes de validación." 
+                : "Aún no has subido reportes o no hay actividad en tus proyectos asignados."}
+            </p>
           </div>
         )}
       </div>
