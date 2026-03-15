@@ -9,17 +9,11 @@ import {
   Check,
   X,
   Clock,
-  AlertCircle,
   MapPin,
   User,
-  Calendar,
   Building2,
-  ExternalLink,
   Hash,
-  Plus,
-  Sparkles,
-  Camera,
-  Loader2
+  Plus
 } from "lucide-react";
 import DashboardLayout from "../dashboard/layout";
 import { format } from "date-fns";
@@ -30,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { cn } from "@/lib/utils";
-import { doc, updateDoc, collection, addDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -40,13 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { aiReportDraftingAssistant } from "@/ai/flows/ai-report-drafting-assistant-flow";
 
 export default function ReportsPage() {
   const { profile, user } = useUser();
@@ -58,16 +46,6 @@ export default function ReportsPage() {
   const [activeFilter, setActiveFilter] = useState("Todos");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  
-  // Create report states
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isAiDrafting, setIsAiDrafting] = useState(false);
-  const [newReport, setNewReport] = useState({
-    projectId: "",
-    projectName: "",
-    content: "",
-    imageUrl: "https://picsum.photos/seed/report-new/800/600",
-  });
 
   // Firestore connection
   const reportsQuery = useMemoFirebase(() => {
@@ -75,22 +53,17 @@ export default function ReportsPage() {
     if (isAdmin) {
       return collection(db, "reports");
     }
-    // Employees see reports from their team
+    // Employees see reports from their team or their own
     if (profile.teamId) {
       return query(collection(db, "reports"), where("assignedTeamId", "==", profile.teamId));
     }
-    // Or just their own reports if no team
-    return query(collection(db, "reports"), where("employeeId", "==", profile.uid));
+    return query(collection(db, "reports"), where("employeeId", "==", profile.uid || ""));
   }, [db, isAdmin, profile]);
 
   const projectsQuery = useMemoFirebase(() => {
     if (!db || !profile) return null;
-    if (isAdmin) return collection(db, "proyectos");
-    if (profile.teamId) {
-      return query(collection(db, "proyectos"), where("assignedTeamId", "==", profile.teamId));
-    }
-    return null;
-  }, [db, isAdmin, profile]);
+    return collection(db, "proyectos");
+  }, [db, profile]);
 
   const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
   const { data: projects } = useCollection(projectsQuery);
@@ -146,56 +119,6 @@ export default function ReportsPage() {
       .finally(() => setProcessingId(null));
   };
 
-  const handleCreateReport = async () => {
-    if (!db || !profile || !user) return;
-    setProcessingId("creating");
-    
-    const reportData = {
-      ...newReport,
-      employeeId: user.uid,
-      authorName: profile.nombre || "Técnico Zyra",
-      assignedTeamId: profile.teamId || "sin-equipo",
-      status: "Pendiente",
-      timestamp: new Date().toISOString(),
-      createdAt: serverTimestamp(),
-    };
-
-    try {
-      await addDoc(collection(db, "reports"), reportData);
-      toast({ title: "Reporte Enviado", description: "Tu reporte ha sido registrado y está pendiente de validación." });
-      setIsCreateDialogOpen(false);
-      setNewReport({ projectId: "", projectName: "", content: "", imageUrl: "https://picsum.photos/seed/report-new/800/600" });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el reporte." });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleAiDraft = async () => {
-    if (!newReport.content || !newReport.projectId) {
-      toast({ title: "Faltan datos", description: "Por favor selecciona un proyecto y escribe algunas notas básicas." });
-      return;
-    }
-
-    setIsAiDrafting(true);
-    try {
-      const selectedProj = projects?.find(p => p.id === newReport.projectId);
-      const result = await aiReportDraftingAssistant({
-        reportNotes: newReport.content,
-        projectName: selectedProj?.Pry_Nombre_Proyecto || "Proyecto Solar",
-        employeeName: profile?.nombre || "Técnico"
-      });
-
-      setNewReport(prev => ({ ...prev, content: result.draftedReportDescription }));
-      toast({ title: "Asistente AI", description: "El reporte ha sido estructurado profesionalmente." });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error AI", description: "No se pudo conectar con el asistente de redacción." });
-    } finally {
-      setIsAiDrafting(false);
-    }
-  };
-
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-6 font-body">
@@ -207,88 +130,9 @@ export default function ReportsPage() {
             <p className="text-muted-foreground">
               {isAdmin 
                 ? "Validación de evidencias y protocolos de seguridad en obra." 
-                : "Registro de actividades y evidencias diarias en terreno."}
+                : "Consulta los reportes generados al finalizar tus jornadas."}
             </p>
           </div>
-
-          {!isAdmin && (
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2 h-12">
-                  <Plus className="h-5 w-5" /> Nuevo Reporte
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-card border-white/10 text-white sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle className="text-accent flex items-center gap-2">
-                    <FileText className="h-6 w-6" /> Crear Reporte Diario
-                  </DialogTitle>
-                  <DialogDescription className="text-muted-foreground">
-                    Sube tu evidencia y describe las tareas realizadas hoy.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Proyecto Relacionado</Label>
-                    <Select 
-                      onValueChange={(val) => {
-                        const proj = projects?.find(p => p.id === val);
-                        setNewReport({...newReport, projectId: val, projectName: proj?.Pry_Nombre_Proyecto || ""});
-                      }}
-                    >
-                      <SelectTrigger className="bg-white/5 border-white/10">
-                        <SelectValue placeholder="Seleccionar proyecto activo" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-white/10 text-white">
-                        {projects?.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.Pry_Nombre_Proyecto}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold uppercase text-muted-foreground">Descripción de Tareas</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 text-[10px] text-accent font-bold gap-1 hover:bg-accent/10"
-                        onClick={handleAiDraft}
-                        disabled={isAiDrafting}
-                      >
-                        {isAiDrafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                        ASISTENTE AI
-                      </Button>
-                    </div>
-                    <Textarea 
-                      placeholder="Escribe tus notas aquí..." 
-                      className="bg-white/5 border-white/10 min-h-[120px] text-sm"
-                      value={newReport.content}
-                      onChange={(e) => setNewReport({...newReport, content: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Evidencia Fotográfica</Label>
-                    <div className="aspect-video w-full rounded-lg bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 text-muted-foreground group hover:border-accent/40 transition-colors cursor-pointer">
-                      <Camera className="h-8 w-8" />
-                      <span className="text-xs">Tomar Foto o Subir Archivo</span>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button 
-                    className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-12"
-                    disabled={!newReport.projectId || !newReport.content || processingId === "creating"}
-                    onClick={handleCreateReport}
-                  >
-                    {processingId === "creating" ? "Enviando..." : "ENVIAR REPORTE PARA VALIDACIÓN"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
         </div>
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4">
@@ -366,19 +210,6 @@ export default function ReportsPage() {
                         <span className="font-bold text-white/70">{report.authorName || report.autor}</span>
                         <span>{report.timestamp ? format(new Date(report.timestamp), "d/M/yyyy") : "N/A"}</span>
                       </div>
-
-                      {isAdmin && currentStatus === "Pendiente" && (
-                        <div className="flex gap-2 pt-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500 hover:text-white font-bold text-[10px] h-8 gap-1.5"
-                            onClick={(e) => handleUpdateStatus(report.id, "Aprobado", e)}
-                          >
-                            <Check className="h-3 w-3" /> APROBAR
-                          </Button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -506,7 +337,7 @@ export default function ReportsPage() {
             <p className="text-muted-foreground mt-2 max-w-xs">
               {isAdmin 
                 ? "No hay reportes pendientes de validación." 
-                : "Aún no has subido reportes o no hay actividad en tus proyectos asignados."}
+                : "Aún no has generado reportes. Recuerda reportar al finalizar tus obras en la sección de Proyectos."}
             </p>
           </div>
         )}

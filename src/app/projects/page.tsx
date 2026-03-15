@@ -10,7 +10,11 @@ import {
   ArrowRight, 
   Activity, 
   ShieldCheck, 
-  Plus
+  Plus,
+  Sparkles,
+  Camera,
+  Loader2,
+  FileText
 } from "lucide-react";
 import Image from "next/image";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -18,10 +22,11 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { doc, setDoc, collection, addDoc, query, where } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, query, where, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   Select, 
   SelectContent, 
@@ -38,6 +43,7 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
+import { aiReportDraftingAssistant } from "@/ai/flows/ai-report-drafting-assistant-flow";
 
 const FALLBACK_PROJECTS = [
   {
@@ -59,6 +65,7 @@ export default function ProjectsPage() {
   const isAdmin = profile?.rol === 'admin';
   
   const [loading, setLoading] = useState(false);
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newProject, setNewProject] = useState({
     Pry_Nombre_Proyecto: "",
@@ -68,6 +75,10 @@ export default function ProjectsPage() {
     ubicacion: "",
     imageUrl: "https://picsum.photos/seed/solar-default/800/450"
   });
+
+  // Report submission state
+  const [reportContent, setReportContent] = useState("");
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   // Checklist states
   const [checklist, setChecklist] = useState({
@@ -81,11 +92,9 @@ export default function ProjectsPage() {
     if (isAdmin) {
       return collection(db, "proyectos");
     }
-    // Si no es admin, filtramos proyectos por su equipo asignado si el perfil tiene uno
     if (profile.teamId) {
       return query(collection(db, "proyectos"), where("assignedTeamId", "==", profile.teamId));
     }
-    // Si no es admin y no tiene equipo asignado, retornamos null para evitar error de permisos al listar todo
     return null;
   }, [db, isAdmin, profile]);
 
@@ -98,9 +107,7 @@ export default function ProjectsPage() {
   const { data: teams } = useCollection(teamsQuery);
 
   const displayProjects = useMemo(() => {
-    const baseProjects = (firestoreProjects && firestoreProjects.length > 0) ? firestoreProjects : FALLBACK_PROJECTS;
-    if (isAdmin) return baseProjects;
-    return baseProjects;
+    return (firestoreProjects && firestoreProjects.length > 0) ? firestoreProjects : (isAdmin ? [] : FALLBACK_PROJECTS);
   }, [firestoreProjects, isAdmin]);
 
   const handleCreateProject = async () => {
@@ -111,6 +118,7 @@ export default function ProjectsPage() {
         ...newProject,
         Pry_Estado: "Pendiente",
         progreso: 0,
+        assignedTeamId: newProject.Eq_ID,
         fecha_creacion: new Date().toISOString(),
       });
       toast({ title: "¡Éxito!", description: "Proyecto creado correctamente." });
@@ -140,16 +148,88 @@ export default function ProjectsPage() {
           ...profile?.projectStatus,
           [project.id]: {
             checklist_completado: true,
-            timestamp_inicio: new Date().toISOString()
+            timestamp_inicio: new Date().toISOString(),
+            en_curso: true
           }
         }
       }, { merge: true });
 
       toast({ title: "Jornada Iniciada", description: "Protocolo de seguridad validado." });
+      setIsSheetOpen(false);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: "Error al iniciar jornada." });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFinishDayAndReport = async (project: any) => {
+    if (!user || !db || !profile) return;
+    if (!reportContent) {
+      toast({ variant: "destructive", title: "Reporte requerido", description: "Describe las tareas antes de finalizar." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Create the Report
+      await addDoc(collection(db, "reports"), {
+        projectId: project.id,
+        projectName: project.Pry_Nombre_Proyecto,
+        content: reportContent,
+        authorName: profile.nombre || "Técnico Zyra",
+        employeeId: user.uid,
+        assignedTeamId: profile.teamId || "sin-equipo",
+        status: "Pendiente",
+        timestamp: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        imageUrl: project.imageUrl || "https://picsum.photos/seed/report-final/800/600"
+      });
+
+      // 2. Update User Project Status
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, {
+        projectStatus: {
+          ...profile?.projectStatus,
+          [project.id]: {
+            checklist_completado: false,
+            en_curso: false,
+            ultimo_reporte: new Date().toISOString()
+          }
+        },
+        puntos: (profile?.puntos || 0) + 50 // Reward for reporting
+      }, { merge: true });
+
+      toast({ title: "Reporte Enviado", description: "Has finalizado tu jornada con éxito. +50 pts." });
+      setIsSheetOpen(false);
+      setReportContent("");
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el reporte." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAiDraft = async (projectName: string) => {
+    if (!reportContent) {
+      toast({ title: "Notas requeridas", description: "Escribe algunas notas básicas para que la IA pueda ayudarte." });
+      return;
+    }
+
+    setIsAiDrafting(true);
+    try {
+      const result = await aiReportDraftingAssistant({
+        reportNotes: reportContent,
+        projectName: projectName,
+        employeeName: profile?.nombre || "Técnico"
+      });
+
+      setReportContent(result.draftedReportDescription);
+      toast({ title: "Asistente AI", description: "Reporte estructurado profesionalmente." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error AI", description: "No se pudo conectar con el asistente." });
+    } finally {
+      setIsAiDrafting(false);
     }
   };
 
@@ -174,7 +254,7 @@ export default function ProjectsPage() {
             <p className="text-muted-foreground">
               {isAdmin 
                 ? "Panel de administración para la creación y asignación de obras." 
-                : "Frentes de trabajo activos donde eres miembro del equipo."}
+                : "Gestiona tus jornadas y envía reportes al finalizar."}
             </p>
           </div>
           
@@ -206,16 +286,12 @@ export default function ProjectsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-xs uppercase font-bold text-muted-foreground">Cliente (CL)</Label>
-                      <Select onValueChange={(val) => setNewProject({...newProject, Cl_ID: val})}>
-                        <SelectTrigger className="bg-white/5 border-white/10">
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-card border-white/10 text-white">
-                          <SelectItem value="cl-1">Inmobiliaria El Sol</SelectItem>
-                          <SelectItem value="cl-2">Logistix S.A.</SelectItem>
-                          <SelectItem value="cl-3">Minera Horizonte</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Input 
+                        placeholder="Nombre cliente" 
+                        className="bg-white/5 border-white/10"
+                        value={newProject.Cl_ID}
+                        onChange={(e) => setNewProject({...newProject, Cl_ID: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs uppercase font-bold text-muted-foreground">Equipo (EQ)</Label>
@@ -227,9 +303,6 @@ export default function ProjectsPage() {
                           {teams?.map((team) => (
                             <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
                           ))}
-                          {(!teams || teams.length === 0) && (
-                            <SelectItem value="none" disabled>No hay equipos creados</SelectItem>
-                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -260,7 +333,7 @@ export default function ProjectsPage() {
 
         <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {displayProjects.map((project: any) => {
-            const isCompletado = profile?.projectStatus?.[project.id]?.checklist_completado;
+            const isEnCurso = profile?.projectStatus?.[project.id]?.en_curso;
             const statusColor = project.Pry_Estado === 'EnProceso' ? 'bg-emerald-500' : project.Pry_Estado === 'Finalizado' ? 'bg-primary' : 'bg-yellow-500';
 
             return (
@@ -306,46 +379,97 @@ export default function ProjectsPage() {
                 <CardFooter className="pt-4 border-t border-white/5 mt-auto">
                   {isAdmin ? (
                     <div className="flex w-full gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 text-[10px] font-bold border-white/10 hover:bg-accent/10">GESTIONAR EQUIPO</Button>
+                      <Button variant="outline" size="sm" className="flex-1 text-[10px] font-bold border-white/10 hover:bg-accent/10">EQUIPO</Button>
                       <Button variant="outline" size="sm" className="flex-1 text-[10px] font-bold border-white/10 hover:bg-primary/10">REPORTES</Button>
                     </div>
                   ) : (
-                    <Sheet>
+                    <Sheet onOpenChange={(open) => {
+                      setIsSheetOpen(open);
+                      if (!open) setReportContent("");
+                    }}>
                       <SheetTrigger asChild>
-                        <button className="flex items-center gap-2 text-xs font-bold text-accent group-hover:translate-x-1 transition-transform uppercase tracking-widest w-full justify-between">
-                          {isCompletado ? "Ver Hoja de Ruta" : "Validar Salida"} <ArrowRight className="h-3 w-3" />
+                        <button className={cn(
+                          "flex items-center gap-2 text-xs font-bold group-hover:translate-x-1 transition-transform uppercase tracking-widest w-full justify-between",
+                          isEnCurso ? "text-emerald-500" : "text-accent"
+                        )}>
+                          {isEnCurso ? "Finalizar y Reportar" : "Iniciar Jornada"} <ArrowRight className="h-3 w-3" />
                         </button>
                       </SheetTrigger>
                       <SheetContent className="bg-card border-white/10 text-white sm:max-w-md w-full overflow-y-auto">
                         <SheetHeader className="mb-6">
                           <SheetTitle className="text-accent text-2xl font-bold">{project.Pry_Nombre_Proyecto}</SheetTitle>
                           <SheetDescription className="text-muted-foreground">
-                            Protocolo de verificación de seguridad y materiales.
+                            {isEnCurso ? "Completa el reporte diario para finalizar tu jornada." : "Protocolo de verificación de seguridad y materiales."}
                           </SheetDescription>
                         </SheetHeader>
+                        
                         <div className="space-y-8">
-                          <div className="bg-white/5 border border-white/10 p-5 rounded-xl space-y-4">
-                            <h4 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-tighter">
-                              <ShieldCheck className="h-5 w-5 text-[#8A2BE2]" /> Protocolo de Seguridad
-                            </h4>
-                            <div className="space-y-4">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold">EPP Completo</p>
-                                <Switch checked={checklist.epp_completo} onCheckedChange={(v) => setChecklist({...checklist, epp_completo: v})} />
+                          {!isEnCurso ? (
+                            <>
+                              <div className="bg-white/5 border border-white/10 p-5 rounded-xl space-y-4">
+                                <h4 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-tighter">
+                                  <ShieldCheck className="h-5 w-5 text-[#8A2BE2]" /> Protocolo de Seguridad
+                                </h4>
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold">EPP Completo</p>
+                                    <Switch checked={checklist.epp_completo} onCheckedChange={(v) => setChecklist({...checklist, epp_completo: v})} />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold">Área Segura</p>
+                                    <Switch checked={checklist.seguridad_area} onCheckedChange={(v) => setChecklist({...checklist, seguridad_area: v})} />
+                                  </div>
+                                </div>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold">Área Segura</p>
-                                <Switch checked={checklist.seguridad_area} onCheckedChange={(v) => setChecklist({...checklist, seguridad_area: v})} />
+                              <Button 
+                                className="w-full bg-[#8A2BE2] hover:bg-[#8A2BE2]/90 text-white font-bold h-12"
+                                disabled={!checklist.epp_completo || !checklist.seguridad_area || loading}
+                                onClick={() => handleStartDay(project)}
+                              >
+                                {loading ? "Validando..." : "INICIAR JORNADA"}
+                              </Button>
+                            </>
+                          ) : (
+                            <div className="space-y-6">
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs font-bold uppercase text-muted-foreground">Descripción de Tareas</Label>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-7 text-[10px] text-accent font-bold gap-1 hover:bg-accent/10"
+                                    onClick={() => handleAiDraft(project.Pry_Nombre_Proyecto)}
+                                    disabled={isAiDrafting}
+                                  >
+                                    {isAiDrafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                    ASISTENTE AI
+                                  </Button>
+                                </div>
+                                <Textarea 
+                                  placeholder="Escribe tus notas del día aquí..." 
+                                  className="bg-white/5 border-white/10 min-h-[150px] text-sm"
+                                  value={reportContent}
+                                  onChange={(e) => setReportContent(e.target.value)}
+                                />
+                                
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-bold uppercase text-muted-foreground">Evidencia Fotográfica</Label>
+                                  <div className="aspect-video w-full rounded-lg bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-accent/40 transition-colors cursor-pointer">
+                                    <Camera className="h-8 w-8" />
+                                    <span className="text-xs">Subir evidencia de obra</span>
+                                  </div>
+                                </div>
                               </div>
+
+                              <Button 
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12"
+                                disabled={!reportContent || loading}
+                                onClick={() => handleFinishDayAndReport(project)}
+                              >
+                                {loading ? "Procesando..." : "FINALIZAR Y ENVIAR REPORTE"}
+                              </Button>
                             </div>
-                          </div>
-                          <Button 
-                            className="w-full bg-[#8A2BE2] hover:bg-[#8A2BE2]/90 text-white font-bold h-12"
-                            disabled={!checklist.epp_completo || !checklist.seguridad_area || loading}
-                            onClick={() => handleStartDay(project)}
-                          >
-                            {loading ? "Validando..." : "INICIAR JORNADA"}
-                          </Button>
+                          )}
                         </div>
                       </SheetContent>
                     </Sheet>
