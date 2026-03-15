@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -44,6 +43,14 @@ service cloud.firestore {
       allow create: if isSignedIn() && (isAdmin() || request.resource.data.employeeId == request.auth.uid);
       allow update: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid);
       allow delete: if isAdmin();
+    }
+
+    // Reglas para Notificaciones
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     // Reglas para catálogos
