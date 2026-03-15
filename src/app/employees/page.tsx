@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
-import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebase";
+import { useFirestore, useCollection, useUser, useMemoFirebase, useAuth } from "@/firebase";
 import { firebaseConfig } from "@/firebase/config";
 import { initializeApp, deleteApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { collection, setDoc, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { 
   Card, 
@@ -45,13 +45,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2, Trash2, Zap, Phone, MessageSquare } from "lucide-react";
+import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2, Trash2, Zap, Phone, MessageSquare, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/components/providers/i18n-provider";
 
 export default function EmployeesPage() {
   const { profile, loading: userLoading } = useUser();
   const db = useFirestore();
+  const auth = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
@@ -177,6 +178,23 @@ export default function EmployeesPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (email: string) => {
+    if (!email || !auth) return;
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast({ 
+        title: t.common.success, 
+        description: "Se ha enviado un correo para restablecer la contraseña a: " + email
+      });
+    } catch (e: any) {
+      toast({ 
+        variant: "destructive", 
+        title: t.common.error, 
+        description: e.message
+      });
     }
   };
 
@@ -466,6 +484,14 @@ export default function EmployeesPage() {
                         <span className="font-medium truncate">{selectedEmployee.emailAcceso || selectedEmployee.email || "N/A"}</span>
                       </div>
                     </div>
+                    {selectedEmployee.emailAcceso && (
+                      <button 
+                        className="text-[9px] text-accent font-bold uppercase tracking-tighter ml-1 mt-1 hover:underline flex items-center gap-1"
+                        onClick={() => handleResetPassword(selectedEmployee.emailAcceso)}
+                      >
+                        <RotateCcw className="h-3 w-3" /> Restablecer contraseña
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email Personal</Label>
