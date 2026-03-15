@@ -12,9 +12,34 @@
         "nivel": { "type": "number" },
         "puntos": { "type": "number" },
         "racha": { "type": "number" },
-        "logros": { "type": "array", "items": { "type": "string" } }
+        "logros": { "type": "array", "items": { "type": "string" } },
+        "projectStatus": {
+          "type": "object",
+          "description": "Estado del checklist por proyecto.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "checklist_completado": { "type": "boolean" },
+              "timestamp_inicio": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
       },
       "required": ["uid", "nombre", "rol"]
+    },
+    "ProjectChecklist": {
+      "title": "Initial Checklist",
+      "description": "Validación de seguridad y herramientas antes de iniciar la jornada.",
+      "type": "object",
+      "properties": {
+        "epp_completo": { "type": "boolean" },
+        "herramientas_listas": { "type": "boolean" },
+        "seguridad_area": { "type": "boolean" },
+        "foto_evidencia_inicio": { "type": "string" },
+        "empleadoID": { "type": "string" },
+        "fecha": { "type": "string", "format": "date-time" }
+      },
+      "required": ["epp_completo", "herramientas_listas", "seguridad_area", "empleadoID"]
     },
     "Report": {
       "title": "Operational Report",
@@ -39,6 +64,10 @@
     "/users/{userId}": {
       "schema": "User",
       "description": "Colección de perfiles de usuario."
+    },
+    "/proyectos/{projectId}/checklist_inicial/{checklistId}": {
+      "schema": "ProjectChecklist",
+      "description": "Subcolección de validaciones iniciales por jornada."
     },
     "/reportes/{reportId}": {
       "schema": "Report",
