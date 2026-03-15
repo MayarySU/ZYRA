@@ -6,7 +6,7 @@ import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebas
 import { firebaseConfig } from "@/firebase/config";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, setDoc, doc, serverTimestamp } from "firebase/firestore";
+import { collection, setDoc, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { 
   Card, 
   CardHeader, 
@@ -33,7 +33,18 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -77,20 +88,17 @@ export default function EmployeesPage() {
     if (!db || !newEmployee.Emp_Nombre) return;
     setLoading(true);
     
-    // Nueva lógica de generación de email: primera letra del nombre + primer apellido @zyra.com
     const cleanInput = newEmployee.Emp_Nombre.trim().toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, ""); // Quitar acentos
+      .replace(/[\u0300-\u036f]/g, "");
     
     const parts = cleanInput.split(/\s+/);
     const firstInitial = parts[0].charAt(0);
     
     let lastName = "";
     if (parts.length >= 4) {
-      // Caso: José Luis Valdez Soto -> "j" + "valdez"
       lastName = parts[2];
     } else if (parts.length >= 2) {
-      // Caso: José Valdez -> "j" + "valdez" o José Valdez Soto -> "j" + "valdez"
       lastName = parts[1];
     } else {
       lastName = parts[0];
@@ -151,6 +159,23 @@ export default function EmployeesPage() {
       if (secondaryApp) {
         await deleteApp(secondaryApp);
       }
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteEmployee = async (employeeId: string) => {
+    if (!db || !isAdmin) return;
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, "users", employeeId));
+      toast({ title: t.common.success, description: t.common.delete });
+    } catch (e: any) {
+      toast({ 
+        variant: "destructive", 
+        title: t.common.error, 
+        description: e.message
+      });
+    } finally {
       setLoading(false);
     }
   };
@@ -348,7 +373,33 @@ export default function EmployeesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="text-accent hover:bg-accent/10 font-bold text-[10px]">{t.employees.view_profile}</Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" className="text-accent hover:bg-accent/10 font-bold text-[10px]">{t.employees.view_profile}</Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="bg-card border-border">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>{t.common.confirm}</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {t.common.delete}: {emp.Emp_Nombre || emp.nombre}?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="bg-muted">{t.common.cancel}</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDeleteEmployee(emp.id)}
+                                  className="bg-destructive hover:bg-destructive/90 text-white"
+                                >
+                                  {t.common.delete}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
