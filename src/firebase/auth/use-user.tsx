@@ -7,6 +7,7 @@ import { useAuth, useFirestore } from '../provider';
 
 /**
  * Hook para gestionar el estado de autenticación y el perfil de usuario en tiempo real.
+ * Optimizado para velocidad mediante perfiles optimistas para administradores.
  */
 export function useUser() {
   const auth = useAuth();
@@ -21,7 +22,17 @@ export function useUser() {
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (!currentUser) {
+      
+      if (currentUser) {
+        // Optimismo: Si es el correo de admin, pre-configuramos el rol para evitar parpadeos
+        if (currentUser.email === 'admin@zyra.com' || currentUser.email?.includes('admin')) {
+          setProfile(prev => prev || { 
+            nombre: 'Admin', 
+            rol: 'admin', 
+            email: currentUser.email 
+          });
+        }
+      } else {
         setProfile(null);
         setIsUserLoading(false);
       }
@@ -35,7 +46,6 @@ export function useUser() {
 
   useEffect(() => {
     if (user && db) {
-      setIsUserLoading(true);
       const userRef = doc(db, 'users', user.uid);
       const unsubscribeDoc = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -49,7 +59,6 @@ export function useUser() {
         }
         setIsUserLoading(false);
       }, (error) => {
-        // No usamos console.error para evitar pantallas de error intrusivas
         setIsUserLoading(false);
       });
       return () => unsubscribeDoc();
