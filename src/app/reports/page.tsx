@@ -121,15 +121,6 @@ export default function ReportsPage() {
     if (e) e.stopPropagation();
     if (!db) return;
     
-    if (reportId.startsWith('demo-')) {
-      toast({
-        title: "Modo Demo",
-        description: "Esta acción solo se puede realizar en reportes reales.",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setProcessingId(reportId);
     const reportRef = doc(db, "reports", reportId);
     const updateData = { status: newStatus };
