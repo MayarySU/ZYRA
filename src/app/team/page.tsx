@@ -1,10 +1,9 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, query, where } from "firebase/firestore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,20 +40,16 @@ import {
   Settings2,
   Trash2,
   Wrench,
-  UserCheck
+  UserCheck,
+  Clock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
-const FALLBACK_TEAMS = [
-  { id: "team-1", name: "Equipo Alpha Operativo", leaderName: "Carlos Rivera", leaderId: "l1", members: ["l1", "m1", "m2"], type: "Instalación", status: "Activo" },
-  { id: "team-2", name: "Cuadrilla Solar Sur", leaderName: "Andrea Soto", leaderId: "l2", members: ["l2", "m3"], type: "Mantenimiento", status: "Disponible" },
-];
-
 export default function TeamPage() {
-  const { profile } = useUser();
+  const { profile, user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
   const isAdmin = profile?.rol === 'admin';
@@ -82,13 +77,13 @@ export default function TeamPage() {
   });
 
   const teamsQuery = useMemoFirebase(() => {
-    if (!db || !profile) return null;
-    // Solo permitimos la consulta de equipos para administradores en esta vista de gestión
+    if (!db || !user) return null;
     if (isAdmin) {
       return collection(db, "teams");
     }
-    return null;
-  }, [db, isAdmin, profile]);
+    // Consulta dinámica: Solo equipos donde el empleado es miembro
+    return query(collection(db, "teams"), where("members", "array-contains", user.uid));
+  }, [db, isAdmin, user]);
 
   const employeesQuery = useMemoFirebase(() => {
     if (!db || !isAdmin) return null;
@@ -98,12 +93,11 @@ export default function TeamPage() {
   const { data: teams, isLoading: teamsLoading } = useCollection(teamsQuery);
   const { data: employees } = useCollection(employeesQuery);
 
-  const displayTeams = useMemo(() => {
-    const base = (teams && teams.length > 0) ? teams : FALLBACK_TEAMS;
-    return base.filter(t => {
-      const teamName = t.name || "Equipo sin nombre";
-      return teamName.toLowerCase().includes(searchTerm.toLowerCase());
-    });
+  const filteredTeams = useMemo(() => {
+    if (!teams) return [];
+    return teams.filter(t => 
+      (t.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+    );
   }, [teams, searchTerm]);
 
   const handleCreateTeam = () => {
@@ -149,7 +143,7 @@ export default function TeamPage() {
     const leader = employees?.find(e => e.id === newLeaderId);
     const updateData = {
       leaderId: newLeaderId,
-      leaderName: leader?.Emp_Nombre || leader?.nombre || "Técnico Zyra"
+      leaderName: leader?.nombre || "Técnico Zyra"
     };
 
     setDoc(teamRef, updateData, { merge: true })
@@ -190,7 +184,6 @@ export default function TeamPage() {
   const handleDeleteTeam = (teamId: string) => {
     if (!db) return;
     const teamRef = doc(db, "teams", teamId);
-    
     deleteDoc(teamRef)
       .then(() => {
         toast({ title: "Equipo Disuelto", description: "La cuadrilla ha sido eliminada del sistema." });
@@ -204,175 +197,117 @@ export default function TeamPage() {
       });
   };
 
-  if (!isAdmin) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-7xl mx-auto space-y-8 font-body">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-accent/20 flex items-center justify-center text-accent shadow-[0_0_15px_rgba(138,43,226,0.3)]">
-              <UsersIcon className="h-7 w-7" />
-            </div>
-            <div>
-              <h2 className="text-3xl font-bold tracking-tight text-white">Mi Equipo Operativo</h2>
-              <p className="text-muted-foreground uppercase text-[10px] font-bold tracking-widest mt-1">Sincronizado con Central Zyra</p>
-            </div>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <Card className="bg-card border-white/5 overflow-hidden relative border-l-4 border-l-yellow-500">
-              <div className="absolute top-4 right-4">
-                <Crown className="h-5 w-5 text-yellow-500" />
-              </div>
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <Avatar className="h-20 w-20 border-4 border-white/5 ring-2 ring-accent">
-                    <AvatarImage src={`https://picsum.photos/seed/leader/200`} />
-                    <AvatarFallback>LD</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Líder de Cuadrilla</h3>
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mt-1">Supervisor de Obra</p>
-                  </div>
-                  <div className="bg-white/5 rounded-lg p-3 w-full text-center">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Estado</p>
-                    <p className="text-sm font-bold text-accent">EN OPERACIÓN</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card border-white/5 overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <Avatar className="h-20 w-20 border-4 border-white/5 ring-2 ring-primary">
-                    <AvatarImage src={`https://picsum.photos/seed/${profile?.nombre}/200`} />
-                    <AvatarFallback>TU</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">{profile?.nombre}</h3>
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mt-1">Técnico Instalador</p>
-                  </div>
-                  <div className="bg-white/5 rounded-lg p-3 w-full text-center">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Nivel</p>
-                    <p className="text-sm font-bold text-primary">{profile?.nivel || 1}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-8 font-body">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-2">
             <h2 className="text-4xl font-bold tracking-tight text-white font-headline flex items-center gap-3">
-              <UsersIcon className="h-10 w-10 text-accent" /> Gestión de Equipos (EQ)
+              <UsersIcon className="h-10 w-10 text-accent" /> {isAdmin ? "Gestión de Equipos (EQ)" : "Mis Equipos Operativos"}
             </h2>
-            <p className="text-muted-foreground">Configuración de cuadrillas especializadas y miembros.</p>
+            <p className="text-muted-foreground">
+              {isAdmin 
+                ? "Configuración de cuadrillas especializadas y miembros." 
+                : "Equipos de trabajo a los que has sido asignado por administración."}
+            </p>
           </div>
           
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2 h-12 px-6">
-                <Plus className="h-5 w-5" /> Nueva Cuadrilla (EQ)
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-card border-white/10 text-white sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle className="text-accent text-2xl font-bold">Configurar Equipo de Trabajo</DialogTitle>
-                <DialogDescription className="text-muted-foreground">
-                  Nombre, tipo de servicio e integrantes de la nueva cuadrilla.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid md:grid-cols-2 gap-6 py-4">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="teamName" className="text-xs uppercase font-bold text-muted-foreground">Nombre del Equipo</Label>
-                    <Input 
-                      id="teamName" 
-                      placeholder="Ej: Cuadrilla Alpha" 
-                      className="bg-white/5 border-white/10 h-10"
-                      value={newTeam.name}
-                      onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">Tipo de Equipo</Label>
-                    <Select value={newTeam.type} onValueChange={(val: any) => setNewTeam({...newTeam, type: val})}>
-                      <SelectTrigger className="bg-white/5 border-white/10 h-10">
-                        <SelectValue placeholder="Seleccionar tipo" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-white/10 text-white">
-                        <SelectItem value="Instalación">Instalación Fotovoltaica</SelectItem>
-                        <SelectItem value="Mantenimiento">Mantenimiento Preventivo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">Líder del Equipo</Label>
-                    <Select value={newTeam.leaderId} onValueChange={(val) => {
-                      const emp = employees?.find(e => e.id === val);
-                      setNewTeam({
-                        ...newTeam, 
-                        leaderId: val, 
-                        leaderName: emp?.Emp_Nombre || emp?.nombre || "Técnico Zyra"
-                      });
-                    }}>
-                      <SelectTrigger className="bg-white/5 border-white/10 h-10">
-                        <SelectValue placeholder="Seleccionar líder" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-white/10 text-white">
-                        {employees?.filter(e => e.rol !== 'admin').map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>{emp.Emp_Nombre || emp.nombre}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2 flex flex-col h-full">
-                  <Label className="text-xs uppercase font-bold text-muted-foreground">Integrantes del Equipo</Label>
-                  <ScrollArea className="flex-1 bg-white/5 border border-white/10 rounded-lg p-3 h-[200px]">
-                    <div className="space-y-3">
-                      {employees?.filter(e => e.rol !== 'admin').map(emp => (
-                        <div key={emp.id} className="flex items-center space-x-3 group">
-                          <Checkbox 
-                            id={`emp-${emp.id}`} 
-                            checked={newTeam.members.includes(emp.id)}
-                            onCheckedChange={() => handleToggleMember(emp.id)}
-                            className="border-white/20 data-[state=checked]:bg-accent"
-                          />
-                          <label 
-                            htmlFor={`emp-${emp.id}`}
-                            className="text-sm font-medium text-white/80 group-hover:text-white cursor-pointer select-none"
-                          >
-                            {emp.Emp_Nombre || emp.nombre}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                  <p className="text-[10px] text-muted-foreground mt-2 italic">
-                    * Los empleados pueden pertenecer a múltiples cuadrillas.
-                  </p>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button 
-                  className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold text-lg"
-                  disabled={!newTeam.name || !newTeam.leaderId || newTeam.members.length === 0 || loading}
-                  onClick={handleCreateTeam}
-                >
-                  {loading ? "Registrando..." : "Confirmar Equipo (EQ)"}
+          {isAdmin && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2 h-12 px-6">
+                  <Plus className="h-5 w-5" /> Nueva Cuadrilla (EQ)
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="bg-card border-white/10 text-white sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle className="text-accent text-2xl font-bold">Configurar Equipo de Trabajo</DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
+                    Nombre, tipo de servicio e integrantes de la nueva cuadrilla.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid md:grid-cols-2 gap-6 py-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="teamName" className="text-xs uppercase font-bold text-muted-foreground">Nombre del Equipo</Label>
+                      <Input 
+                        id="teamName" 
+                        placeholder="Ej: Cuadrilla Alpha" 
+                        className="bg-white/5 border-white/10 h-10"
+                        value={newTeam.name}
+                        onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase font-bold text-muted-foreground">Tipo de Equipo</Label>
+                      <Select value={newTeam.type} onValueChange={(val: any) => setNewTeam({...newTeam, type: val})}>
+                        <SelectTrigger className="bg-white/5 border-white/10 h-10">
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-white/10 text-white">
+                          <SelectItem value="Instalación">Instalación Fotovoltaica</SelectItem>
+                          <SelectItem value="Mantenimiento">Mantenimiento Preventivo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase font-bold text-muted-foreground">Líder del Equipo</Label>
+                      <Select value={newTeam.leaderId} onValueChange={(val) => {
+                        const emp = employees?.find(e => e.id === val);
+                        setNewTeam({
+                          ...newTeam, 
+                          leaderId: val, 
+                          leaderName: emp?.nombre || "Técnico Zyra"
+                        });
+                      }}>
+                        <SelectTrigger className="bg-white/5 border-white/10 h-10">
+                          <SelectValue placeholder="Seleccionar líder" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-white/10 text-white">
+                          {employees?.filter(e => e.rol !== 'admin').map(emp => (
+                            <SelectItem key={emp.id} value={emp.id}>{emp.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 flex flex-col h-full">
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">Integrantes del Equipo</Label>
+                    <ScrollArea className="flex-1 bg-white/5 border border-white/10 rounded-lg p-3 h-[200px]">
+                      <div className="space-y-3">
+                        {employees?.filter(e => e.rol !== 'admin').map(emp => (
+                          <div key={emp.id} className="flex items-center space-x-3 group">
+                            <Checkbox 
+                              id={`emp-${emp.id}`} 
+                              checked={newTeam.members.includes(emp.id)}
+                              onCheckedChange={() => handleToggleMember(emp.id)}
+                              className="border-white/20 data-[state=checked]:bg-accent"
+                            />
+                            <label 
+                              htmlFor={`emp-${emp.id}`}
+                              className="text-sm font-medium text-white/80 group-hover:text-white cursor-pointer select-none"
+                            >
+                              {emp.nombre}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button 
+                    className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold text-lg"
+                    disabled={!newTeam.name || !newTeam.leaderId || newTeam.members.length === 0 || loading}
+                    onClick={handleCreateTeam}
+                  >
+                    {loading ? "Registrando..." : "Confirmar Equipo (EQ)"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         <div className="flex items-center gap-4 bg-white/2 p-4 rounded-xl border border-white/5">
@@ -385,7 +320,7 @@ export default function TeamPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Badge className="bg-accent text-white font-bold h-11 px-4">{displayTeams.length} Equipos</Badge>
+          <Badge className="bg-accent text-white font-bold h-11 px-4">{filteredTeams.length} Equipos</Badge>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
@@ -393,82 +328,84 @@ export default function TeamPage() {
             <div className="col-span-full flex justify-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-accent"></div>
             </div>
-          ) : displayTeams.map((team) => (
-            <Card key={team.id} className="bg-card border-white/10 hover:border-accent/40 transition-all group overflow-hidden shadow-2xl relative">
-              <div className="absolute top-2 right-2">
-                 <Button 
-                   variant="ghost" 
-                   size="icon" 
-                   className="text-muted-foreground hover:text-red-500"
-                   onClick={() => handleDeleteTeam(team.id)}
-                 >
-                   <Trash2 className="h-4 w-4" />
-                 </Button>
-              </div>
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className="p-3 rounded-xl bg-accent/20 text-accent group-hover:scale-110 transition-transform">
-                    {team.type === 'Mantenimiento' ? <Wrench className="h-6 w-6" /> : <UsersIcon className="h-6 w-6" />}
+          ) : filteredTeams.length > 0 ? (
+            filteredTeams.map((team) => (
+              <Card key={team.id} className="bg-card border-white/10 hover:border-accent/40 transition-all group overflow-hidden shadow-2xl relative">
+                {isAdmin && (
+                  <div className="absolute top-2 right-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-red-500"
+                      onClick={() => handleDeleteTeam(team.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Badge 
-                    onClick={() => handleToggleStatus(team)}
-                    className={cn(
-                      "font-bold text-[10px] uppercase cursor-pointer hover:opacity-80 transition-opacity",
-                      team.status === "Activo" ? "bg-primary text-background" : "bg-emerald-500 text-white"
-                    )}
-                  >
-                    {team.status || "DISPONIBLE"}
-                  </Badge>
-                </div>
-                <CardTitle className="text-xl font-bold text-white mt-4 group-hover:text-accent transition-colors">
-                  {team.name}
-                </CardTitle>
-                <div className="flex flex-col gap-1 mt-1">
-                  <p className="text-[10px] text-accent font-bold uppercase tracking-widest">{team.type || "Instalación"}</p>
-                  <CardDescription className="text-muted-foreground flex items-center gap-2 text-xs">
-                    <Crown className="h-3 w-3 text-yellow-500" /> Líder: {team.leaderName}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+                )}
+                <CardHeader className="pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 rounded-xl bg-accent/20 text-accent group-hover:scale-110 transition-transform">
+                      {team.type === 'Mantenimiento' ? <Wrench className="h-6 w-6" /> : <UsersIcon className="h-6 w-6" />}
+                    </div>
+                    <Badge 
+                      onClick={() => isAdmin && handleToggleStatus(team)}
+                      className={cn(
+                        "font-bold text-[10px] uppercase",
+                        isAdmin && "cursor-pointer hover:opacity-80 transition-opacity",
+                        team.status === "Activo" ? "bg-primary text-background" : "bg-emerald-500 text-white"
+                      )}
+                    >
+                      {team.status || "DISPONIBLE"}
+                    </Badge>
+                  </div>
+                  <CardTitle className="text-xl font-bold text-white mt-4 group-hover:text-accent transition-colors">
+                    {team.name}
+                  </CardTitle>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <p className="text-[10px] text-accent font-bold uppercase tracking-widest">{team.type || "Instalación"}</p>
+                    <CardDescription className="text-muted-foreground flex items-center gap-2 text-xs">
+                      <Crown className="h-3 w-3 text-yellow-500" /> Líder: {team.leaderName}
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Integrantes</p>
-                    <p className="text-lg font-bold text-white flex items-center justify-center gap-1">
-                      {team.members?.length || team.memberCount || 0} <UserCheck className="h-3.5 w-3.5 text-accent" />
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Integrantes de Cuadrilla</p>
+                    <p className="text-lg font-bold text-white flex items-center justify-center gap-2">
+                      {team.members?.length || 0} <UserCheck className="h-4 w-4 text-accent" />
                     </p>
                   </div>
-                  <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Efectividad</p>
-                    <p className="text-lg font-bold text-emerald-500 flex items-center justify-center gap-1">
-                      98% <TrendingUp className="h-3.5 w-3.5" />
-                    </p>
+                </CardContent>
+                {isAdmin && (
+                  <div className="p-4 bg-white/2 border-t border-white/5 flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="w-full text-[10px] font-bold border-accent/30 text-accent hover:bg-accent/10 uppercase"
+                      onClick={() => {
+                        setSelectedTeam(team);
+                        setIsReassignDialogOpen(true);
+                      }}
+                    >
+                      Gestionar Líder
+                    </Button>
                   </div>
-                </div>
-              </CardContent>
-              <div className="p-4 bg-white/2 border-t border-white/5 flex gap-2">
-                <Button 
-                  variant="ghost" 
-                  className="flex-1 text-[10px] font-bold text-muted-foreground hover:text-white uppercase"
-                  onClick={() => {
-                    toast({ title: "Histórico de Cuadrilla", description: `Consultando registros para ${team.name}...` });
-                  }}
-                >
-                  Detalles
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1 text-[10px] font-bold border-accent/30 text-accent hover:bg-accent/10 uppercase"
-                  onClick={() => {
-                    setSelectedTeam(team);
-                    setIsReassignDialogOpen(true);
-                  }}
-                >
-                  Reasignar
-                </Button>
+                )}
+              </Card>
+            ))
+          ) : (
+            <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+              <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center mb-6 border border-white/10">
+                <UsersIcon className="h-10 w-10 text-muted-foreground" />
               </div>
-            </Card>
-          ))}
+              <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Sin equipos asignados</h3>
+              <p className="text-muted-foreground mt-2 max-w-xs">
+                {isAdmin 
+                  ? "Aún no has creado ninguna cuadrilla de trabajo." 
+                  : "No perteneces a ningún equipo operativo actualmente."}
+              </p>
+            </div>
+          )}
         </div>
 
         <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
@@ -490,17 +427,12 @@ export default function TeamPage() {
                   </SelectTrigger>
                   <SelectContent className="bg-card border-white/10 text-white">
                     {employees?.filter(e => e.rol !== 'admin' && e.id !== selectedTeam?.leaderId).map(emp => (
-                      <SelectItem key={emp.id} value={emp.id}>{emp.Emp_Nombre || emp.nombre}</SelectItem>
+                      <SelectItem key={emp.id} value={emp.id}>{emp.nombre}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => setIsReassignDialogOpen(false)}>
-                Cancelar
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
