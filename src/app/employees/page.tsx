@@ -460,9 +460,27 @@ export default function EmployeesPage() {
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Email de Acceso ZYRA</Label>
-                    <div className="flex items-center gap-3 text-sm text-foreground bg-muted/20 p-3 rounded-xl border border-border/50">
-                      <Mail className="h-4 w-4 text-accent" /> 
-                      <span className="font-medium truncate">{selectedEmployee.emailAcceso || selectedEmployee.email || "N/A"}</span>
+                    <div className="flex items-center justify-between gap-3 text-sm text-foreground bg-muted/20 p-3 rounded-xl border border-border/50">
+                      <div className="flex items-center gap-3 truncate">
+                        <Mail className="h-4 w-4 text-accent" /> 
+                        <span className="font-medium truncate">{selectedEmployee.emailAcceso || selectedEmployee.email || "N/A"}</span>
+                      </div>
+                      {selectedEmployee.emailAcceso && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-accent hover:bg-accent/10"
+                          asChild
+                        >
+                          <a 
+                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${selectedEmployee.emailAcceso}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Mail className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -479,7 +497,11 @@ export default function EmployeesPage() {
                           className="h-8 w-8 text-accent hover:bg-accent/10"
                           asChild
                         >
-                          <a href={`mailto:${selectedEmployee.emailPersonal}`}>
+                          <a 
+                            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${selectedEmployee.emailPersonal}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             <Mail className="h-4 w-4" />
                           </a>
                         </Button>
