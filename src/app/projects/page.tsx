@@ -1,3 +1,4 @@
+
 "use client";
 
 import DashboardLayout from "../dashboard/layout";
@@ -16,7 +17,8 @@ import {
   ClipboardList,
   Building2,
   Zap,
-  Wrench
+  Wrench,
+  Trash2
 } from "lucide-react";
 import Image from "next/image";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -24,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { doc, collection, addDoc, query, where, serverTimestamp, updateDoc } from "firebase/firestore";
+import { doc, collection, addDoc, query, where, serverTimestamp, updateDoc, deleteDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,6 +46,17 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { aiReportDraftingAssistant } from "@/ai/flows/ai-report-drafting-assistant-flow";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -155,6 +168,22 @@ export default function ProjectsPage() {
         }));
       })
       .finally(() => setLoading(false));
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!db || !isAdmin) return;
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, "proyectos", projectId));
+      toast({ title: t.common.success, description: t.common.delete });
+    } catch (e: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `proyectos/${projectId}`,
+        operation: 'delete'
+      }));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdateProjectTeam = (projectId: string, teamId: string) => {
@@ -389,6 +418,7 @@ export default function ProjectsPage() {
                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Dirección del Proyecto</Label>
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] uppercase font-bold text-muted-foreground">Usar la del Cliente</span>
+                        <span className="sr-only">Cambiar tipo de dirección</span>
                         <Switch 
                           checked={newProject.addressType === 'custom'} 
                           onCheckedChange={(checked) => setNewProject({...newProject, addressType: checked ? 'custom' : 'client'})} 
@@ -452,6 +482,33 @@ export default function ProjectsPage() {
                         {project.serviceType === 'Mantenimiento' ? <Wrench className="h-2.5 w-2.5" /> : <Zap className="h-2.5 w-2.5" />}
                         {project.serviceType?.toUpperCase()}
                       </Badge>
+                      
+                      {isAdmin && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-card border-border">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{t.common.confirm}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                ¿Estás seguro de que deseas eliminar el proyecto "{project.Pry_Nombre_Proyecto}"? Esta acción no se puede deshacer.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="bg-muted">{t.common.cancel}</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDeleteProject(project.id)}
+                                className="bg-destructive hover:bg-destructive/90 text-white"
+                              >
+                                {t.common.delete}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                   </div>
                   

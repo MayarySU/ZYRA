@@ -92,10 +92,6 @@ export default function LoginPage() {
             >
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
-            
-            <p className="text-center text-xs text-muted-foreground mt-4">
-              Sistema de Gestión Operativa ZYRA v1.0
-            </p>
           </form>
         </div>
       </div>
