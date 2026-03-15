@@ -1,21 +1,22 @@
 "use client";
 
-import { useUser } from "@/firebase";
+import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { 
   Trophy, 
   Flame, 
   Star, 
   Zap, 
-  TrendingUp,
   Briefcase,
   Camera,
-  Users
+  Users,
+  Loader2
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useMemo } from "react";
 import { 
   BarChart, 
   Bar, 
@@ -30,28 +31,87 @@ import {
 } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useI18n } from "@/components/providers/i18n-provider";
-
-const weeklyData = [
-  { name: 'Sem 16/02', total: 1 },
-  { name: 'Sem 23/02', total: 0 },
-  { name: 'Sem 02/03', total: 0 },
-  { name: 'Sem 09/03', total: 0 },
-];
-
-const projectProgressData = [
-  { name: 'Finalizado', value: 1, color: '#8A2BE2' },
-  { name: 'En progreso', value: 4, color: '#63D9F0' },
-];
+import { collection, query, where } from "firebase/firestore";
+import { startOfDay, subWeeks, isAfter, format, startOfWeek } from "date-fns";
+import { es } from "date-fns/locale";
 
 export default function DashboardPage() {
-  const { profile, loading } = useUser();
+  const { profile, loading: userLoading } = useUser();
+  const db = useFirestore();
   const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
-  if (loading) {
+  // Admin Queries
+  const projectsQuery = useMemoFirebase(() => db ? collection(db, "proyectos") : null, [db]);
+  const reportsQuery = useMemoFirebase(() => db ? collection(db, "reports") : null, [db]);
+  const usersQuery = useMemoFirebase(() => db ? collection(db, "users") : null, [db]);
+
+  const { data: projects, isLoading: projectsLoading } = useCollection(projectsQuery);
+  const { data: reports, isLoading: reportsLoading } = useCollection(reportsQuery);
+  const { data: allUsers, isLoading: usersLoading } = useCollection(usersQuery);
+
+  // Statistics Calculation
+  const stats = useMemo(() => {
+    if (!projects || !reports || !allUsers) return { activeProjects: 0, dailyReports: 0, activeEmployees: 0 };
+    
+    const activeProjects = projects.filter(p => p.Pry_Estado !== 'Finalizado').length;
+    
+    const today = startOfDay(new Date());
+    const dailyReports = reports.filter(r => {
+      const reportDate = r.timestamp ? new Date(r.timestamp) : null;
+      return reportDate && isAfter(reportDate, today);
+    }).length;
+
+    const activeEmployees = allUsers.filter(u => u.rol === 'employee').length;
+
+    return { 
+      activeProjects, 
+      dailyReports, 
+      activeEmployees,
+      totalProjects: projects.length,
+      totalEmployees: allUsers.length
+    };
+  }, [projects, reports, allUsers]);
+
+  // Project Progress Data (Pie Chart)
+  const projectProgressData = useMemo(() => {
+    if (!projects) return [];
+    const finished = projects.filter(p => p.Pry_Estado === 'Finalizado').length;
+    const inProgress = projects.length - finished;
+    return [
+      { name: t.reports.approved, value: finished, color: 'hsl(var(--primary))' },
+      { name: t.reports.pending, value: inProgress, color: 'hsl(var(--secondary))' },
+    ];
+  }, [projects, t]);
+
+  // Weekly Reports Data (Bar Chart)
+  const weeklyData = useMemo(() => {
+    if (!reports) return [];
+    const weeks = [3, 2, 1, 0].map(offset => {
+      const date = subWeeks(new Date(), offset);
+      const start = startOfWeek(date, { weekStartsOn: 1 });
+      const label = `Sem ${format(start, "dd/MM")}`;
+      return { name: label, total: 0, start };
+    });
+
+    reports.forEach(r => {
+      const reportDate = r.timestamp ? new Date(r.timestamp) : null;
+      if (reportDate) {
+        const weekIndex = weeks.findIndex((w, i) => {
+          const nextWeek = i < 3 ? weeks[i+1].start : new Date();
+          return isAfter(reportDate, w.start) && (i === 3 || !isAfter(reportDate, nextWeek));
+        });
+        if (weekIndex !== -1) weeks[weekIndex].total++;
+      }
+    });
+
+    return weeks;
+  }, [reports]);
+
+  if (userLoading || projectsLoading || reportsLoading || usersLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-accent"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -69,26 +129,26 @@ export default function DashboardPage() {
         <div className="grid gap-6 md:grid-cols-3">
           <StatCard
             title={t.dashboard.active_projects}
-            value="3"
+            value={stats.activeProjects}
             icon={Briefcase}
-            description={`de 5 ${t.dashboard.total}`}
+            description={`${t.dashboard.of} ${stats.totalProjects} ${t.dashboard.total}`}
           />
           <StatCard
             title={t.dashboard.daily_reports}
-            value="+0"
+            value={`+${stats.dailyReports}`}
             icon={Camera}
-            description={`5 en ${t.dashboard.total}`}
+            description={`${reports?.length || 0} en ${t.dashboard.total}`}
           />
           <StatCard
             title={t.dashboard.active_employees}
-            value="6"
+            value={stats.activeEmployees}
             icon={Users}
-            description={`7 miembros en ${t.dashboard.total}`}
+            description={`${stats.totalEmployees} miembros en ${t.dashboard.total}`}
           />
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-2 border-border">
             <CardHeader>
               <CardTitle className="text-foreground text-lg">{t.dashboard.weekly_reports}</CardTitle>
             </CardHeader>
@@ -101,14 +161,14 @@ export default function DashboardPage() {
                       dataKey="name" 
                       stroke="currentColor" 
                       opacity={0.5}
-                      fontSize={12} 
+                      fontSize={10} 
                       tickLine={false} 
                       axisLine={false} 
                     />
                     <YAxis 
                       stroke="currentColor"
                       opacity={0.5}
-                      fontSize={12} 
+                      fontSize={10} 
                       tickLine={false} 
                       axisLine={false} 
                     />
@@ -125,7 +185,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-foreground text-lg">{t.dashboard.work_progress}</CardTitle>
             </CardHeader>
@@ -151,11 +211,14 @@ export default function DashboardPage() {
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="flex justify-center gap-6 mt-4">
+              <div className="flex flex-col gap-2 mt-4 w-full">
                 {projectProgressData.map((entry, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="text-xs text-muted-foreground">{entry.name}: {entry.value}</span>
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground">{entry.name}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-foreground">{entry.value}</span>
                   </div>
                 ))}
               </div>
@@ -170,8 +233,9 @@ export default function DashboardPage() {
   const puntos = profile?.puntos || 0;
   const nivel = profile?.nivel || 1;
   const racha = profile?.racha || 0;
-  const progressPercentage = (puntos / (nivel * 200)) * 100;
-  const logrosMock = profile?.logros || [];
+  const targetPoints = nivel * 200;
+  const progressPercentage = (puntos / targetPoints) * 100;
+  const logros = profile?.logros || [];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-body">
@@ -183,7 +247,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden relative">
+        <Card className="overflow-hidden relative border-border">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2 rounded-lg bg-accent/20">
@@ -194,7 +258,7 @@ export default function DashboardPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-end">
                 <h3 className="text-2xl font-bold text-foreground">{Math.floor(progressPercentage)}%</h3>
-                <span className="text-[10px] text-muted-foreground font-bold">{t.dashboard.points}: {puntos} / {nivel * 200}</span>
+                <span className="text-[10px] text-muted-foreground font-bold">{t.dashboard.points}: {puntos} / {targetPoints}</span>
               </div>
               <Progress value={progressPercentage} className="h-1.5" />
             </div>
@@ -202,19 +266,19 @@ export default function DashboardPage() {
         </Card>
 
         <div className="grid grid-cols-2 gap-4 md:contents">
-          <Card className="flex flex-col items-center justify-center p-4">
-            <div className="h-10 w-10 rounded-full bg-[#FF4500]/10 flex items-center justify-center mb-2 shadow-[0_0_10px_rgba(255,69,0,0.2)]">
-              <Flame className="h-5 w-5 text-[#FF4500]" />
+          <Card className="flex flex-col items-center justify-center p-4 border-border">
+            <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center mb-2 shadow-[0_0_10px_rgba(249,115,22,0.1)]">
+              <Flame className="h-5 w-5 text-orange-500" />
             </div>
             <h3 className="text-xl font-bold text-foreground">{racha}</h3>
-            <p className="text-[9px] font-bold text-[#FF4500] uppercase tracking-tighter">{t.dashboard.streak}</p>
+            <p className="text-[9px] font-bold text-orange-500 uppercase tracking-tighter">{t.dashboard.streak}</p>
           </Card>
 
-          <Card className="flex flex-col items-center justify-center p-4">
+          <Card className="flex flex-col items-center justify-center p-4 border-border">
             <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center mb-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
             </div>
-            <h3 className="text-xl font-bold text-foreground">{logrosMock.filter((l: any) => l.completado).length}</h3>
+            <h3 className="text-xl font-bold text-foreground">{logros.filter((l: any) => l.completado).length}</h3>
             <p className="text-[9px] font-bold text-yellow-500 uppercase tracking-tighter">{t.dashboard.achievements}</p>
           </Card>
         </div>
@@ -224,8 +288,8 @@ export default function DashboardPage() {
         <h3 className="text-sm font-bold text-foreground uppercase tracking-widest flex items-center gap-2">
           <Star className="h-4 w-4 text-accent" /> {t.dashboard.badges}
         </h3>
-        <div className="grid grid-cols-2 gap-3">
-          {logrosMock.length > 0 ? logrosMock.map((logro: any) => (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {logros.length > 0 ? logros.map((logro: any) => (
             <div 
               key={logro.id}
               className={cn(
@@ -244,8 +308,9 @@ export default function DashboardPage() {
               <span className="font-bold text-[10px] truncate">{logro.nombre}</span>
             </div>
           )) : (
-            <div className="col-span-2 py-8 text-center bg-muted/20 border border-dashed border-border rounded-2xl">
-              <p className="text-xs text-muted-foreground">{t.dashboard.op_subtitle}</p>
+            <div className="col-span-full py-12 text-center bg-muted/20 border border-dashed border-border rounded-2xl flex flex-col items-center">
+              <Trophy className="h-8 w-8 text-muted-foreground opacity-20 mb-2" />
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t.dashboard.op_subtitle}</p>
             </div>
           )}
         </div>
