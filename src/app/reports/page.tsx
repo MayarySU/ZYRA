@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -76,14 +77,17 @@ export default function ReportsPage() {
 
   // Firestore connection
   const reportsQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return collection(db, "reports");
-  }, [db]);
+    if (!db || !profile) return null;
+    if (isAdmin) {
+      return collection(db, "reports");
+    }
+    return null; // Restringimos la consulta solo a admins por ahora en esta vista de auditoría
+  }, [db, isAdmin, profile]);
 
   const projectsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !isAdmin) return null;
     return collection(db, "proyectos");
-  }, [db]);
+  }, [db, isAdmin]);
 
   const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
   const { data: projects } = useCollection(projectsQuery);

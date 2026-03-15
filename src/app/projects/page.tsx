@@ -1,3 +1,4 @@
+
 "use client";
 
 import DashboardLayout from "../dashboard/layout";
@@ -17,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { doc, setDoc, collection, addDoc } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, query, where } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,14 +77,22 @@ export default function ProjectsPage() {
   });
 
   const projectsQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return collection(db, "proyectos");
-  }, [db]);
+    if (!db || !profile) return null;
+    if (isAdmin) {
+      return collection(db, "proyectos");
+    }
+    // Si no es admin, filtramos proyectos por su equipo asignado si el perfil tiene uno
+    if (profile.teamId) {
+      return query(collection(db, "proyectos"), where("assignedTeamId", "==", profile.teamId));
+    }
+    // Si no es admin y no tiene equipo asignado, retornamos null para evitar error de permisos al listar todo
+    return null;
+  }, [db, isAdmin, profile]);
 
   const teamsQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !isAdmin) return null;
     return collection(db, "teams");
-  }, [db]);
+  }, [db, isAdmin]);
 
   const { data: firestoreProjects, isLoading: projectsLoading } = useCollection(projectsQuery);
   const { data: teams } = useCollection(teamsQuery);
@@ -91,8 +100,8 @@ export default function ProjectsPage() {
   const displayProjects = useMemo(() => {
     const baseProjects = (firestoreProjects && firestoreProjects.length > 0) ? firestoreProjects : FALLBACK_PROJECTS;
     if (isAdmin) return baseProjects;
-    return baseProjects.filter((p: any) => p.Eq_ID === "Equipo Alpha" || p.miembros?.includes(profile?.nombre));
-  }, [firestoreProjects, isAdmin, profile?.nombre]);
+    return baseProjects;
+  }, [firestoreProjects, isAdmin]);
 
   const handleCreateProject = async () => {
     if (!db) return;
@@ -144,7 +153,7 @@ export default function ProjectsPage() {
     }
   };
 
-  if (isUserLoading || projectsLoading) {
+  if (isUserLoading || (isAdmin && projectsLoading)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">

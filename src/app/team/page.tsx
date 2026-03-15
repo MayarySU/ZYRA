@@ -82,14 +82,18 @@ export default function TeamPage() {
   });
 
   const teamsQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return collection(db, "teams");
-  }, [db]);
+    if (!db || !profile) return null;
+    // Solo permitimos la consulta de equipos para administradores en esta vista de gestión
+    if (isAdmin) {
+      return collection(db, "teams");
+    }
+    return null;
+  }, [db, isAdmin, profile]);
 
   const employeesQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !isAdmin) return null;
     return collection(db, "users");
-  }, [db]);
+  }, [db, isAdmin]);
 
   const { data: teams, isLoading: teamsLoading } = useCollection(teamsQuery);
   const { data: employees } = useCollection(employeesQuery);
