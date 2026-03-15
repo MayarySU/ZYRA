@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { 
   Card, 
   CardHeader, 
@@ -28,11 +29,29 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogTrigger
+  DialogTrigger,
+  DialogDescription
 } from "@/components/ui/dialog";
-import { Building2, Plus, Search, Mail, Phone, MapPin, User, Loader2 } from "lucide-react";
+import { 
+  Building2, 
+  Plus, 
+  Search, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  User, 
+  Loader2, 
+  Briefcase,
+  ExternalLink,
+  ChevronRight,
+  Zap,
+  Wrench
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/components/providers/i18n-provider";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 export default function ClientsPage() {
   const { profile, loading: userLoading } = useUser();
@@ -43,6 +62,8 @@ export default function ClientsPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const [newClient, setNewClient] = useState({
@@ -53,12 +74,21 @@ export default function ClientsPage() {
     Cl_Telefono: ""
   });
 
+  // Query de clientes
   const clientsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return collection(db, "clientes");
   }, [db]);
 
   const { data: clients, isLoading: clientsLoading } = useCollection(clientsQuery);
+
+  // Query de proyectos vinculados al cliente seleccionado
+  const clientProjectsQuery = useMemoFirebase(() => {
+    if (!db || !selectedClient) return null;
+    return query(collection(db, "proyectos"), where("clientId", "==", selectedClient.id));
+  }, [db, selectedClient]);
+
+  const { data: clientProjects, isLoading: projectsLoading } = useCollection(clientProjectsQuery);
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
@@ -86,10 +116,15 @@ export default function ClientsPage() {
         Cl_Telefono: ""
       });
     } catch (e: any) {
-      toast({ variant: "destructive", title: t.common.error, description: "Error" });
+      toast({ variant: "destructive", title: t.common.error, description: "Error al registrar cliente" });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewProjects = (client: any) => {
+    setSelectedClient(client);
+    setIsProjectsDialogOpen(true);
   };
 
   if (userLoading) {
@@ -111,7 +146,7 @@ export default function ClientsPage() {
           </div>
           <h2 className="text-2xl font-bold text-foreground">{t.common.error}</h2>
           <p className="text-muted-foreground max-w-md">
-            {t.employees.subtitle}
+            No tienes permisos para gestionar el catálogo de clientes.
           </p>
         </div>
       </DashboardLayout>
@@ -138,9 +173,9 @@ export default function ClientsPage() {
             <DialogContent className="sm:max-w-lg bg-card border-border">
               <DialogHeader>
                 <DialogTitle className="text-accent">{t.clients.register}</DialogTitle>
-                <CardDescription>
-                  {t.clients.subtitle}
-                </CardDescription>
+                <DialogDescription>
+                  Completa los datos fiscales y de contacto del nuevo cliente.
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -275,8 +310,13 @@ export default function ClientsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="text-accent hover:bg-accent/10 font-bold text-[10px]">
-                          {t.clients.view_projects}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-accent hover:bg-accent/10 font-bold text-[10px] gap-2"
+                          onClick={() => handleViewProjects(client)}
+                        >
+                          {t.clients.view_projects} <ChevronRight className="h-3 w-3" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -293,6 +333,89 @@ export default function ClientsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Dialog de Proyectos por Cliente */}
+        <Dialog open={isProjectsDialogOpen} onOpenChange={setIsProjectsDialogOpen}>
+          <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader className="border-b border-border pb-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-accent/10">
+                  <Briefcase className="h-6 w-6 text-accent" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-bold text-foreground">Proyectos de Propiedad</DialogTitle>
+                  <DialogDescription className="text-accent font-bold text-xs uppercase tracking-widest">
+                    {selectedClient?.Cl_Nombre}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto py-6">
+              {projectsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-accent mb-4" />
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-tighter">Sincronizando expediente...</p>
+                </div>
+              ) : clientProjects && clientProjects.length > 0 ? (
+                <div className="grid gap-4">
+                  {clientProjects.map((project) => (
+                    <div 
+                      key={project.id} 
+                      className="group p-4 rounded-2xl bg-muted/20 border border-border hover:border-accent/40 transition-all flex flex-col gap-4"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                            {project.Pry_Nombre_Proyecto}
+                            <Badge variant="outline" className="text-[8px] font-black uppercase border-accent/30 text-accent h-4">
+                              {project.serviceType === 'Mantenimiento' ? <Wrench className="h-2 w-2 mr-1" /> : <Zap className="h-2 w-2 mr-1" />}
+                              {project.serviceType}
+                            </Badge>
+                          </h4>
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase">
+                            <MapPin className="h-3 w-3 text-accent" />
+                            <span className="truncate max-w-[250px]">{project.ubicacion}</span>
+                          </div>
+                        </div>
+                        <Badge 
+                          className={cn(
+                            "text-[9px] font-black uppercase px-2 py-0.5 border-none",
+                            project.Pry_Estado === 'Finalizado' ? 'bg-emerald-500' : 'bg-yellow-500'
+                          )}
+                        >
+                          {project.Pry_Estado || 'PENDIENTE'}
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[9px] font-black text-muted-foreground uppercase tracking-widest">
+                          <span>Progreso de Obra</span>
+                          <span className="text-accent">{project.progreso || 0}%</span>
+                        </div>
+                        <Progress value={project.progreso || 0} className="h-1.5" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="h-12 w-12 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                    <ExternalLink className="h-6 w-6 text-muted-foreground/40" />
+                  </div>
+                  <h4 className="text-sm font-bold text-foreground uppercase tracking-widest">Sin obras registradas</h4>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-[250px]">Este cliente aún no tiene proyectos de propiedad asignados en el sistema.</p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="border-t border-border pt-4">
+              <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-bold" onClick={() => setIsProjectsDialogOpen(false)}>
+                CERRAR EXPEDIENTE
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
