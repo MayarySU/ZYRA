@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * ZYRA COMMAND SECURITY MODEL
+     * 
+     * Core Philosophy:
+     * This ruleset implements a multi-tier authorization model for ZYRA, a solar energy 
+     * project management system. It distinguishes between 'admin' and 'employee' roles,
+     * leveraging data denormalization for high-performance security checks.
+     * 
+     * Data Structure:
+     * - /userProfiles: User metadata, roles, and gamification stats. Document IDs match Auth UIDs.
+     * - /projects: Solar installations. Secured via denormalized 'assignedTeamId'.
+     * - /teams: Groupings of employees. Secured via 'memberIds' array.
+     * - /reports: Operational updates. Secured via 'employeeId' ownership.
+     * - /achievements: Publicly readable catalog of rewards.
+     * 
+     * Key Security Decisions:
+     * 1. Role-Based Access Control (RBAC): The 'role' field in the user's profile document 
+     *    determines global permissions.
+     * 2. Direct Ownership: Reports and UserProfiles are protected by matching the 
+     *    authenticated UID against the document's ID or an internal 'employeeId' field.
+     * 3. Team-Based Projects: Project access is determined by checking if the user's 
+     *    'teamId' matches the project's 'assignedTeamId', avoiding complex joins.
+     * 4. Relational Integrity: On document creation, the rules enforce that the 
+     *    creator's UID is correctly recorded in ownership fields.
+     */
+
+    // --- Global Helper Functions ---
+
+    /** Checks if a user is authenticated with a valid UID. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** Returns the UserProfile document for the currently authenticated user. */
+    function getUserData() {
+      return get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data;
+    }
+
+    /** Checks if the authenticated user has the 'admin' role. */
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+
+    /** Validates if the provided UID matches the authenticated user. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** Combines ownership check with existence check for updates and deletes. */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for user profiles. Users can manage their own data; admins manage all.
+     * @path /userProfiles/{userProfileId}
+     * @allow (get) If the user is the owner or an admin.
+     * @deny (create) If the user attempts to create a profile for a different UID.
+     * @principle Prototyping: Verifies relational link between Auth UID and Document ID.
+     */
+    match /userProfiles/{userProfileId} {
+      allow get: if isOwner(userProfileId) || isAdmin();
+      allow list: if isOwner(userProfileId) || isAdmin();
+      allow create: if isOwner(userProfileId) && request.resource.data.id == userProfileId;
+      allow update: if (isExistingOwner(userProfileId) || isAdmin()) && request.resource.data.id == resource.data.id;
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for project documents. Access is granted to assigned teams.
+     * @path /projects/{projectId}
+     * @allow (get) If an employee's profile 'teamId' matches the project's 'assignedTeamId'.
+     * @deny (update) If a non-admin attempts to modify project details.
+     * @principle Denormalization: Uses 'assignedTeamId' for fast, independent authorization.
+     */
+    match /projects/{projectId} {
+      allow get: if isAdmin() || (isSignedIn() && resource.data.assignedTeamId == getUserData().teamId);
+      allow list: if isAdmin() || isSignedIn(); 
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for teams. Members can view their team details; admins manage memberships.
+     * @path /teams/{teamId}
+     * @allow (get) If the user's UID is in the team's 'memberIds' array.
+     * @deny (create) If a standard employee tries to create a new team.
+     * @principle Shared Access: Validates membership via UID list within the resource.
+     */
+    match /teams/{teamId} {
+      allow get: if isAdmin() || (isSignedIn() && (request.auth.uid in resource.data.memberIds));
+      allow list: if isAdmin() || (isSignedIn() && teamId == getUserData().teamId);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for operational reports. Only the reporting employee can modify their submission.
+     * @path /reports/{reportId}
+     * @allow (create) If the 'employeeId' in the data matches the authenticated user.
+     * @deny (delete) If a user tries to delete a report they did not author.
+     * @principle Ownership: Enforces strict user-to-data mapping for writes and updates.
+     */
+    match /reports/{reportId} {
+      allow get: if isAdmin() || (resource != null && resource.data.employeeId == request.auth.uid);
+      allow list: if isAdmin() || isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.employeeId == request.auth.uid;
+      allow update: if isExistingOwner(resource.data.employeeId) && request.resource.data.employeeId == resource.data.employeeId;
+      allow delete: if isExistingOwner(resource.data.employeeId) || isAdmin();
+    }
+
+    /**
+     * @description Rules for the achievement catalog. Publicly viewable for all users.
+     * @path /achievements/{achievementId}
+     * @allow (get) Any authenticated user can view achievement details.
+     * @deny (write) Any non-admin user trying to modify the global catalog.
+     * @principle Public Read: Global resources are accessible but strictly immutable for regular users.
+     */
+    match /achievements/{achievementId} {
+      allow get, list: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

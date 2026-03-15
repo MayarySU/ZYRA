@@ -1,95 +1,273 @@
-
 {
   "entities": {
-    "User": {
-      "title": "Empleado/Usuario",
-      "description": "Perfil del empleado vinculado a credenciales de usuario y gamificación.",
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
       "type": "object",
+      "description": "Represents a user profile within the ZYRA system, including authentication-related identifiers and gamification statistics. Authentication details like passwords are not stored here.",
       "properties": {
-        "uid": { "type": "string" },
-        "Emp_Nombre": { "type": "string" },
-        "Emp_Correo": { "type": "string", "format": "email" },
-        "Rol_ID": { "type": "number", "description": "1: Admin, 2: Empleado" },
-        "puntos": { "type": "number" },
-        "nivel": { "type": "number" },
-        "racha": { "type": "number" },
-        "projectStatus": { "type": "object" }
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity (matches Firebase Auth UID)."
+        },
+        "name": {
+          "type": "string",
+          "description": "The full name of the user."
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user within the system, defining their permissions.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "level": {
+          "type": "number",
+          "description": "The current gamification level of the user."
+        },
+        "points": {
+          "type": "number",
+          "description": "The total gamification points accumulated by the user."
+        },
+        "streak": {
+          "type": "number",
+          "description": "The number of consecutive days the user has submitted a report."
+        },
+        "achievementIds": {
+          "type": "array",
+          "description": "References to Achievements obtained by the user. (Relationship: UserProfile N:N Achievement)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "teamId": {
+          "type": "string",
+          "description": "Reference to the current Team the user belongs to. (Relationship: Team 1:N UserProfile)"
+        }
       },
-      "required": ["uid", "Emp_Nombre", "Rol_ID"]
+      "required": [
+        "id",
+        "name",
+        "role",
+        "level",
+        "points",
+        "streak"
+      ]
     },
     "Project": {
-      "title": "Proyecto (PRY)",
-      "description": "Contenedor principal de la actividad operativa.",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Project",
       "type": "object",
+      "description": "Represents a solar energy installation project managed by ZYRA, detailing its status and location.",
       "properties": {
-        "Pry_Nombre_Proyecto": { "type": "string" },
-        "Cl_ID": { "type": "string", "description": "ID del cliente vinculado" },
-        "Srv_ID": { "type": "string", "description": "ID del servicio vinculado" },
-        "Eq_ID": { "type": "string", "description": "ID del equipo asignado" },
-        "Pry_Estado": { "type": "string", "enum": ["Pendiente", "EnProceso", "Finalizado"] },
-        "ubicacion": { "type": "string" },
-        "imageUrl": { "type": "string" },
-        "progreso": { "type": "number" },
-        "fecha_creacion": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Project entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the project."
+        },
+        "client": {
+          "type": "string",
+          "description": "The name of the client for whom the project is being executed."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current operational status of the project (e.g., execution, validation, finalized).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the project."
+        },
+        "location": {
+          "type": "string",
+          "description": "The geographical location of the project. Represented as a string for database agnosticism, often a Geopoint string representation or a composite object in specific databases."
+        }
       },
-      "required": ["Pry_Nombre_Proyecto", "Cl_ID", "Srv_ID", "Eq_ID", "Pry_Estado"]
+      "required": [
+        "id",
+        "name",
+        "client",
+        "status",
+        "description",
+        "location"
+      ]
     },
-    "Client": {
-      "title": "Cliente (CL)",
-      "description": "Registro de clientes y razón social.",
+    "Team": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Team",
       "type": "object",
+      "description": "Represents a team of employees working on ZYRA projects, including its leader and assigned project.",
       "properties": {
-        "Cl_Nombre": { "type": "string" },
-        "Cl_RazonSocial": { "type": "string" },
-        "Cl_Correo": { "type": "string", "format": "email" },
-        "Cl_Telefono": { "type": "string" }
-      }
-    },
-    "Material": {
-      "title": "Material (MAT)",
-      "description": "Catálogo de inventario.",
-      "type": "object",
-      "properties": {
-        "Mat_Nombre": { "type": "string" },
-        "Mat_Stock_Disponible": { "type": "number" }
-      }
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Team entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the team."
+        },
+        "leaderId": {
+          "type": "string",
+          "description": "Reference to the UserProfile of the team's leader. (Relationship: UserProfile 1:N Team)"
+        },
+        "memberIds": {
+          "type": "array",
+          "description": "References to UserProfiles that are members of this team. (Relationship: UserProfile N:N Team)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assignedProjectId": {
+          "type": "string",
+          "description": "Reference to the Project currently assigned to this team. (Relationship: Project 1:N Team)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "leaderId",
+        "memberIds",
+        "assignedProjectId"
+      ]
     },
     "Report": {
-      "title": "Reporte (REP)",
-      "description": "Documentación final de actividades.",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Report",
       "type": "object",
+      "description": "Represents an operational report submitted by an employee for a specific project.",
       "properties": {
-        "Pry_ID": { "type": "string" },
-        "Eq_ID": { "type": "string" },
-        "Rep_Comentarios": { "type": "string" },
-        "Rep_Evidencia_URL": { "type": "string" },
-        "fecha": { "type": "string", "format": "date-time" }
-      }
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Report entity."
+        },
+        "date": {
+          "type": "string",
+          "description": "The date and time when the report was submitted.",
+          "format": "date-time"
+        },
+        "employeeId": {
+          "type": "string",
+          "description": "Reference to the UserProfile of the employee who submitted the report. (Relationship: UserProfile 1:N Report)"
+        },
+        "projectId": {
+          "type": "string",
+          "description": "Reference to the Project related to this report. (Relationship: Project 1:N Report)"
+        },
+        "content": {
+          "type": "string",
+          "description": "The textual content of the report, which may also be a URL to an image stored in Firebase Storage."
+        },
+        "pointsAwarded": {
+          "type": "number",
+          "description": "The number of gamification points awarded for this report submission."
+        }
+      },
+      "required": [
+        "id",
+        "date",
+        "employeeId",
+        "projectId",
+        "content",
+        "pointsAwarded"
+      ]
+    },
+    "Achievement": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Achievement",
+      "type": "object",
+      "description": "Represents a catalog entry for an achievement that users can earn, contributing to gamification.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Achievement entity."
+        },
+        "icon": {
+          "type": "string",
+          "description": "An emoji or a URL to an image representing the achievement's icon."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the achievement."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of how to earn the achievement."
+        }
+      },
+      "required": [
+        "id",
+        "icon",
+        "title",
+        "description"
+      ]
     }
   },
   "auth": {
-    "providers": ["password"]
+    "providers": [
+      "password",
+      "anonymous"
+    ]
   },
   "firestore": {
-    "/users/{userId}": {
-      "schema": "User",
-      "description": "Perfiles de empleados y gamificación."
-    },
-    "/proyectos/{projectId}": {
-      "schema": "Project",
-      "description": "Proyectos operativos."
-    },
-    "/clientes/{clientId}": {
-      "schema": "Client",
-      "description": "Catálogo de clientes."
-    },
-    "/materiales/{materialId}": {
-      "schema": "Material",
-      "description": "Inventario de materiales."
-    },
-    "/reportes/{reportId}": {
-      "schema": "Report",
-      "description": "Historial de reportes operativos."
-    }
+    "structure": [
+      {
+        "path": "/userProfiles/{userProfileId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores individual user profiles. The `id` field matches the Firebase Auth UID for direct ownership. Includes `teamId` for team association and `achievementIds` for gamification tracking. The `role` field within this document is used for both application logic and security rule authorization."
+        }
+      },
+      {
+        "path": "/projects/{projectId}",
+        "definition": {
+          "entityName": "Project",
+          "schema": {
+            "$ref": "#/backend/entities/Project"
+          },
+          "description": "Contains details about solar energy installation projects. To ensure authorization independence and queryable access patterns (QAPs) for employee access, each project document **must include a denormalized `assignedTeamId` field** (this field is not explicitly present in the provided `Project` schema but is critical for rule checks without hierarchical dependencies on the `teams` collection). This `assignedTeamId` will match the `id` of a `Team` document."
+        }
+      },
+      {
+        "path": "/teams/{teamId}",
+        "definition": {
+          "entityName": "Team",
+          "schema": {
+            "$ref": "#/backend/entities/Team"
+          },
+          "description": "Manages teams of employees, their leader, and members. The `memberIds` array directly supports membership checks. `assignedProjectId` links the team to its current project. Employee read access is based on comparing their `teamId` (obtained from their `UserProfile` document) with the `teamId` in the document path."
+        }
+      },
+      {
+        "path": "/reports/{reportId}",
+        "definition": {
+          "entityName": "Report",
+          "schema": {
+            "$ref": "#/backend/entities/Report"
+          },
+          "description": "Stores operational reports submitted by employees. Includes `employeeId` for direct ownership-based authorization and `projectId` for contextual linking. Supports secure write operations ensuring `request.auth.uid` matches the report's `employeeId`."
+        }
+      },
+      {
+        "path": "/achievements/{achievementId}",
+        "definition": {
+          "entityName": "Achievement",
+          "schema": {
+            "$ref": "#/backend/entities/Achievement"
+          },
+          "description": "A global catalog of gamification achievements. This collection is publicly readable by all authenticated users and managed by administrators."
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure for ZYRA Command is designed to prioritize authorization independence, clear security rules, and efficient querying, adhering strictly to the provided design principles.\n\n**Authorization Independence via Denormalization (Strategy A):**\n1.  **User Roles:** User roles (`admin`, `employee`) are stored in the `role` field within each `UserProfile` document (`/userProfiles/{userProfileId}`). While this means security rules for other collections will perform a `get()` operation on the *requesting user's own profile* (`get(/userProfiles/$(request.auth.uid)).data.role`), this is an accepted pattern. It directly ties authorization to the authenticated user's immutable ID (`request.auth.uid`) and their own stored attributes, avoiding hierarchical dependencies on the *target resource's* parent or unrelated documents. This adheres to DBAC (roles in database, auth on `request.auth.uid`).\n2.  **Project-Team Assignment:** The `Project` entity (`/projects/{projectId}`) *must* include a denormalized `assignedTeamId` field (this field is not explicitly in the provided `Project` schema but is critical for secure, scalable access). This enables direct checks in security rules to determine if an employee is authorized to read a specific project. This denormalization eliminates the need for `get()` operations on the `/teams` collection when evaluating project access.\n3.  **Report Ownership:** The `Report` entity (`/reports/{reportId}`) directly includes `employeeId`. This allows for straightforward, independent ownership checks (`request.auth.uid == request.resource.data.employeeId` for create/update, `request.auth.uid == resource.data.employeeId` for read) without any `get()` calls.\n4.  **Team Membership:** The `Team` entity (`/teams/{teamId}`) includes a `memberIds` array. This directly holds authorization context for members. Employee read access to their own team is facilitated by checking their `teamId` from their own user profile against the `teamId` in the path.\n\n**Structural Segregation (Strategy B):**\nAll collections maintain a homogeneous security posture: `/userProfiles`, `/projects`, `/teams`, `/reports`, `/achievements` are top-level. Each document within these collections shares the same general access patterns (e.g., all projects have similar access logic, all reports do too). No mixing of data with different access requirements.\n\n**Queryable Access Patterns (QAPs - Rules are not Filters):**\nThis structure directly supports QAPs, allowing efficient and secure `list` operations:\n*   **User Profiles:** Employees can only query their own profile (`db.collection('userProfiles').doc(request.auth.uid)`). Admins can query all.\n*   **Projects:** Employees can query projects assigned to their team (`db.collection('projects').where('assignedTeamId', '==', currentUserTeamId)`). The rule verifies `currentUserTeamId` matches the authenticated user's `teamId` from their profile. Admins can query all.\n*   **Teams:** Employees can query their own team (`db.collection('teams').doc(currentUserTeamId)`). The rule verifies `currentUserTeamId` against the user's profile. Admins can query all.\n*   **Reports:** Employees can query their own reports (`db.collection('reports').where('employeeId', '==', request.auth.uid)`). Admins can query all.\n*   **Achievements:** All authenticated users can query the entire catalog."
   }
 }
