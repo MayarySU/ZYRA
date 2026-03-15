@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -41,11 +40,11 @@ export default function LoginPage() {
         
         {/* Lado Izquierdo: Branding (Logo y Eslogan) */}
         <div className="relative flex-1 flex items-center justify-center p-12 overflow-hidden border-b lg:border-b-0 lg:border-r border-white/5 bg-[#05020a]">
-          {/* Sutil resplandor púrpura de fondo */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-accent/10 via-transparent to-transparent opacity-50" />
+          {/* Sutil resplandor púrpura de fondo - Ahora más intenso */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-accent/20 via-transparent to-transparent opacity-60" />
           
           <div className="relative z-10 text-center">
-            <h1 className="text-7xl md:text-8xl font-black tracking-tighter text-accent leading-none mb-2">
+            <h1 className="text-7xl md:text-8xl font-black tracking-tighter text-accent leading-none mb-2 drop-shadow-[0_0_15px_rgba(138,43,226,0.3)]">
               ZYRA
             </h1>
             <p className="text-[10px] md:text-xs font-medium tracking-[0.8em] text-zinc-500 uppercase ml-2">
@@ -88,7 +87,7 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
-                className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-12 text-sm rounded-xl transition-all active:scale-[0.98] mt-2 shadow-lg shadow-accent/10" 
+                className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-12 text-sm rounded-xl transition-all active:scale-[0.98] mt-2 shadow-lg shadow-accent/20" 
                 disabled={loading}
               >
                 {loading ? "Cargando..." : "Iniciar Sesión"}
