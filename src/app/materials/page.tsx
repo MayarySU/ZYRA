@@ -81,7 +81,7 @@ export default function MaterialsPage() {
 
   // States for Template Editing
   const [editingTemplateType, setEditingTemplateType] = useState<string | null>(null);
-  const [tempItems, setTempItems] = useState<string[]>([]);
+  const [tempItems, setTempItems] = useState<any[]>([]);
   const [newItemText, setNewItemText] = useState("");
 
   const [newMaterial, setNewMaterial] = useState({
@@ -105,9 +105,10 @@ export default function MaterialsPage() {
 
   const filteredMaterials = useMemo(() => {
     if (!materials) return [];
-    return materials.filter(m => 
-      m.Mat_Nombre?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return materials.filter(m => {
+      const name = typeof m.Mat_Nombre === 'object' ? (m.Mat_Nombre?.name || "") : (m.Mat_Nombre || "");
+      return name.toLowerCase().includes(searchTerm.toLowerCase());
+    });
   }, [materials, searchTerm]);
 
   const handleCreateMaterial = () => {
@@ -289,29 +290,32 @@ export default function MaterialsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredMaterials.map((mat) => (
-                        <TableRow key={mat.id} className="border-border hover:bg-muted/10 transition-colors">
-                          <TableCell className="py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-lg bg-accent/10 flex items-center justify-center"><Package className="h-5 w-5 text-accent" /></div>
-                              <div><p className="text-sm font-bold text-foreground">{mat.Mat_Nombre}</p></div>
-                            </div>
-                          </TableCell>
-                          <TableCell><span className="text-lg font-mono font-bold text-foreground">{mat.Mat_Stock_Disponible}</span></TableCell>
-                          <TableCell>
-                            {mat.Mat_Stock_Disponible < 10 ? (
-                              <Badge className="bg-red-500/10 text-red-500 border-none font-bold uppercase text-[9px]">{t.materials.critical}</Badge>
-                            ) : (
-                              <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-bold uppercase text-[9px]">{t.materials.optimal}</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMaterial(mat.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {filteredMaterials.map((mat) => {
+                        const materialName = typeof mat.Mat_Nombre === 'object' ? (mat.Mat_Nombre?.name || "Material sin nombre") : (mat.Mat_Nombre || "Material sin nombre");
+                        return (
+                          <TableRow key={mat.id} className="border-border hover:bg-muted/10 transition-colors">
+                            <TableCell className="py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-lg bg-accent/10 flex items-center justify-center"><Package className="h-5 w-5 text-accent" /></div>
+                                <div><p className="text-sm font-bold text-foreground">{materialName}</p></div>
+                              </div>
+                            </TableCell>
+                            <TableCell><span className="text-lg font-mono font-bold text-foreground">{mat.Mat_Stock_Disponible}</span></TableCell>
+                            <TableCell>
+                              {mat.Mat_Stock_Disponible < 10 ? (
+                                <Badge className="bg-red-500/10 text-red-500 border-none font-bold uppercase text-[9px]">{t.materials.critical}</Badge>
+                              ) : (
+                                <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-bold uppercase text-[9px]">{t.materials.optimal}</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMaterial(mat.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -408,22 +412,25 @@ export default function MaterialsPage() {
                 <ScrollArea className="h-[250px] border border-border rounded-xl p-3 bg-muted/10">
                   {tempItems.length > 0 ? (
                     <div className="space-y-2">
-                      {tempItems.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg group">
-                          <div className="flex items-center gap-3">
-                            <CheckCircle2 className="h-4 w-4 text-accent/50" />
-                            <span className="text-xs text-foreground font-medium">{item}</span>
+                      {tempItems.map((item, idx) => {
+                        const labelText = typeof item === 'object' ? (item.name || "Tarea sin nombre") : (item || "Tarea sin nombre");
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg group">
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className="h-4 w-4 text-accent/50" />
+                              <span className="text-xs text-foreground font-medium">{labelText}</span>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleRemoveItem(idx)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleRemoveItem(idx)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-10 opacity-30">
