@@ -8,7 +8,6 @@ import { useAuth } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { ZyraLogo } from "@/components/brand/zyra-logo";
 
 export default function LoginPage() {
   const auth = useAuth();
@@ -37,83 +36,63 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen font-body overflow-hidden bg-[#05020a] relative">
-      {/* Elementos de Fondo: Orbes de Luz para el Degradado Global */}
-      <div className="absolute top-[-10%] left-[-5%] w-[800px] h-[800px] bg-accent/15 blur-[120px] rounded-full animate-pulse pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-primary/10 blur-[100px] rounded-full pointer-events-none" />
-      <div className="absolute top-[20%] right-[10%] w-[400px] h-[400px] bg-secondary/5 blur-[150px] rounded-full pointer-events-none" />
-
-      {/* Lado Izquierdo: Branding (Oculto en móvil) */}
-      <div className="hidden lg:flex flex-1 items-center justify-center relative z-10">
+    <div className="flex min-h-screen font-body bg-gradient-to-r from-[#0a0514] via-[#05020a] to-black overflow-hidden">
+      {/* Lado Izquierdo: Branding */}
+      <div className="hidden lg:flex flex-1 items-center justify-center">
         <div className="text-center">
-          <div className="flex justify-center mb-8">
-            <div className="p-4 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">
-              <ZyraLogo className="h-24 w-24" />
-            </div>
-          </div>
-          <h1 className="text-[100px] font-black leading-none tracking-tighter text-white drop-shadow-[0_0_30px_rgba(138,43,226,0.3)]">
+          <h1 className="text-[100px] font-black leading-none tracking-tighter text-accent">
             ZYRA
           </h1>
-          <p className="text-accent font-black tracking-[0.8em] text-sm mt-4 opacity-80">
+          <p className="text-muted-foreground font-bold tracking-[0.6em] text-sm mt-4 opacity-50 uppercase">
             ESSE SOLAR
           </p>
-          <div className="mt-12 h-1 w-24 bg-gradient-to-r from-transparent via-accent to-transparent mx-auto rounded-full" />
         </div>
       </div>
 
-      {/* Lado Derecho: Formulario con Glassmorphism */}
-      <div className="flex-1 flex items-center justify-center p-8 relative z-20">
-        <div className="w-full max-w-[450px] bg-white/[0.02] backdrop-blur-2xl border border-white/10 p-10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-          <div className="space-y-2 mb-10">
-            <div className="lg:hidden flex justify-center mb-6">
-              <ZyraLogo className="h-12 w-12" />
+      {/* Lado Derecho: Formulario */}
+      <div className="flex-1 flex items-center justify-center p-8 bg-black/40 lg:bg-transparent">
+        <div className="w-full max-w-[380px] space-y-10">
+          <div className="space-y-2">
+            {/* Logo visible en móvil */}
+            <div className="lg:hidden mb-6">
+              <h1 className="text-5xl font-black tracking-tighter text-accent">ZYRA</h1>
             </div>
-            <h2 className="text-4xl font-bold text-white tracking-tight">
-              Bienvenido
+            <h2 className="text-5xl font-bold text-white tracking-tight">
+              ¡Hola!
             </h2>
-            <p className="text-muted-foreground text-lg">
-              Inicia sesión en ZYRA Command
+            <p className="text-zinc-500 text-lg">
+              Accede con tus credenciales guardadas.
             </p>
           </div>
 
           <form onSubmit={handleAuth} className="space-y-6">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase font-black text-accent tracking-[0.2em] ml-1">E-mail Corporativo</label>
-                <Input
-                  type="email"
-                  placeholder="admin@zyra.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white h-14 px-6 text-base rounded-2xl focus-visible:ring-accent/50 placeholder:text-gray-600 focus:bg-white/[0.08] transition-all"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase font-black text-accent tracking-[0.2em] ml-1">Contraseña Privada</label>
-                <Input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-white/5 border-white/10 text-white h-14 px-6 text-base rounded-2xl focus-visible:ring-accent/50 placeholder:text-gray-600 focus:bg-white/[0.08] transition-all"
-                  required
-                />
-              </div>
+              <Input
+                type="email"
+                placeholder="admin@zyra.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-zinc-900/50 border-zinc-800 text-white h-14 px-6 text-base rounded-xl focus-visible:ring-accent/50 placeholder:text-zinc-700"
+                required
+              />
+              <Input
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-zinc-900/50 border-zinc-800 text-white h-14 px-6 text-base rounded-xl focus-visible:ring-accent/50 placeholder:text-zinc-700"
+                required
+              />
             </div>
 
             <Button 
               type="submit" 
-              className="w-full bg-accent hover:bg-accent/90 text-white font-black h-14 text-lg rounded-2xl transition-all shadow-lg shadow-accent/20 active:scale-[0.98]" 
+              className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-14 text-lg rounded-xl transition-all active:scale-[0.98]" 
               disabled={loading}
             >
-              {loading ? "CONECTANDO..." : "ACCEDER AL SISTEMA"}
+              {loading ? "Cargando..." : "Iniciar Sesión"}
             </Button>
           </form>
-
-          <p className="mt-8 text-center text-[10px] text-muted-foreground uppercase tracking-widest opacity-50">
-            &copy; 2026 ZYRA Command — Todos los derechos reservados
-          </p>
         </div>
       </div>
     </div>
