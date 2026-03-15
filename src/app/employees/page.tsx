@@ -199,7 +199,7 @@ export default function EmployeesPage() {
                       <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">{t.employees.full_name}</Label>
                       <Input 
                         id="name" 
-                        placeholder="..." 
+                        placeholder="Nombre completo del empleado" 
                         className="bg-muted/50 border-border text-foreground"
                         value={newEmployee.Emp_Nombre}
                         onChange={(e) => setNewEmployee({...newEmployee, Emp_Nombre: e.target.value})}
@@ -210,7 +210,7 @@ export default function EmployeesPage() {
                         <Label className="text-xs uppercase font-bold text-muted-foreground">{t.employees.personal_email}</Label>
                         <Input 
                           type="email"
-                          placeholder="..." 
+                          placeholder="correo@ejemplo.com" 
                           className="bg-muted/50 border-border text-foreground"
                           value={newEmployee.Emp_CorreoPersonal}
                           onChange={(e) => setNewEmployee({...newEmployee, Emp_CorreoPersonal: e.target.value})}
@@ -219,7 +219,7 @@ export default function EmployeesPage() {
                       <div className="space-y-2">
                         <Label className="text-xs uppercase font-bold text-muted-foreground">{t.employees.phone}</Label>
                         <Input 
-                          placeholder="+..." 
+                          placeholder="+52 000 000 0000" 
                           className="bg-muted/50 border-border text-foreground"
                           value={newEmployee.Emp_Telefono}
                           onChange={(e) => setNewEmployee({...newEmployee, Emp_Telefono: e.target.value})}
