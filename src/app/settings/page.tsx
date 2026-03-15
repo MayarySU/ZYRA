@@ -105,7 +105,7 @@ export default function SettingsPage() {
             </TabsTrigger>
             <TabsTrigger value="language" className="data-[state=active]:bg-accent data-[state=active]:text-white gap-2 text-xs">
               <Globe className="h-4 w-4" /> {t.settings.language}
-            </Globe>
+            </TabsTrigger>
             <TabsTrigger value="accessibility" className="data-[state=active]:bg-accent data-[state=active]:text-white gap-2 text-xs">
               <Type className="h-4 w-4" /> {t.settings.accessibility}
             </TabsTrigger>
@@ -175,7 +175,7 @@ export default function SettingsPage() {
                   <Languages className="h-5 w-5 text-accent" /> {t.settings.loc_title}
                 </CardTitle>
                 <CardDescription>{t.settings.loc_desc}</CardDescription>
-              </CardHeader>
+              </Header>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-xs uppercase font-bold text-muted-foreground tracking-widest">{t.settings.sys_lang}</Label>
