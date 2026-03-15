@@ -152,7 +152,7 @@ export default function EmployeesPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">Correo Institucional</Label>
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">E-mail</Label>
                     <Input 
                       type="email"
                       placeholder="j.perez@empresa.com" 
