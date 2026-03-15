@@ -2,46 +2,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
+    // Funciones de utilidad
+    function isSignedIn() {
+      return request.auth != null;
+    }
     
-    function isAdmin() { 
-      return isSignedIn() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin'; 
+    function isAdmin() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isSignedIn() && exists(userPath) && get(userPath).data.rol == 'admin';
     }
 
+    // Reglas para Usuarios
     match /users/{userId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
+    // Reglas para Notificaciones
     match /notifications/{notifId} {
-      // Separamos get y list para mejorar la evaluación de consultas filtradas
+      // Permitimos 'get' si es el dueño o admin
       allow get: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
-      allow list: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.userId);
+      // Permitimos 'list' si la consulta está filtrada por el UID del usuario o si es admin
+      allow list: if isSignedIn() && (isAdmin() || request.query.limit <= 20 && request.auth.uid == request.resource.data.userId || (resource == null || resource.data.userId == request.auth.uid));
       
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
-    match /projects/{projectId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
+    // Reglas para Proyectos
     match /proyectos/{projectId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
+    // Reglas para Equipos (Teams)
     match /teams/{teamId} {
-      allow read: if isSignedIn() && (
-        isAdmin() || 
-        (resource != null && request.auth.uid in resource.data.members)
-      );
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
+    // Reglas para Reportes
     match /reports/{reportId} {
       allow get: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid);
       allow list: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.employeeId);
@@ -51,6 +52,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Reglas generales para catálogos
     match /materiales/{matId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
