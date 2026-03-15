@@ -3,7 +3,10 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { firebaseConfig } from "@/firebase/config";
+import { initializeApp, deleteApp, getApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { collection, setDoc, doc, serverTimestamp } from "firebase/firestore";
 import { 
   Card, 
   CardHeader, 
@@ -30,7 +33,7 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Users, Plus, Search, Mail, Phone, ShieldCheck, UserCircle, Star } from "lucide-react";
+import { Users, Plus, Search, Mail, Phone, ShieldCheck, UserCircle, Star, Lock, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -43,12 +46,14 @@ export default function EmployeesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [newEmployee, setNewEmployee] = useState({
     Emp_Nombre: "",
     Emp_Correo: "",
     Emp_Telefono: "",
-    Rol_ID: 2, // Default: Empleado
+    Emp_Password: "",
+    rol: 'employee',
     puntos: 0,
     nivel: 1,
     racha: 0
@@ -72,26 +77,64 @@ export default function EmployeesPage() {
   const handleCreateEmployee = async () => {
     if (!db) return;
     setLoading(true);
+    
+    // Usamos una app secundaria para no desloguear al admin actual
+    let secondaryApp;
     try {
-      await addDoc(collection(db, "users"), {
-        ...newEmployee,
-        rol: 'employee',
+      secondaryApp = initializeApp(firebaseConfig, "secondary-registration");
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      // 1. Crear usuario en Auth
+      const userCredential = await createUserWithEmailAndPassword(
+        secondaryAuth, 
+        newEmployee.Emp_Correo, 
+        newEmployee.Emp_Password
+      );
+      
+      const uid = userCredential.user.uid;
+
+      // 2. Crear perfil en Firestore (usando el db del provider principal)
+      const userRef = doc(db, "users", uid);
+      await setDoc(userRef, {
+        uid: uid,
+        nombre: newEmployee.Emp_Nombre,
+        email: newEmployee.Emp_Correo,
+        telefono: newEmployee.Emp_Telefono,
+        rol: "employee",
+        nivel: 1,
+        puntos: 0,
+        racha: 0,
+        logros: [],
         createdAt: serverTimestamp(),
       });
-      toast({ title: "Empleado registrado", description: "El perfil operativo se creó correctamente." });
+
+      toast({ 
+        title: "Empleado Registrado", 
+        description: `Acceso habilitado para ${newEmployee.Emp_Nombre}.` 
+      });
+
       setIsCreateDialogOpen(false);
       setNewEmployee({
         Emp_Nombre: "",
         Emp_Correo: "",
         Emp_Telefono: "",
-        Rol_ID: 2,
+        Emp_Password: "",
+        rol: 'employee',
         puntos: 0,
         nivel: 1,
         racha: 0
       });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo registrar al empleado." });
+      console.error(e);
+      toast({ 
+        variant: "destructive", 
+        title: "Error de registro", 
+        description: e.message || "No se pudo crear la cuenta de acceso." 
+      });
     } finally {
+      if (secondaryApp) {
+        await deleteApp(secondaryApp);
+      }
       setLoading(false);
     }
   };
@@ -131,9 +174,9 @@ export default function EmployeesPage() {
             </DialogTrigger>
             <DialogContent className="bg-card border-white/10 text-white sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle className="text-accent">Nuevo Perfil de Empleado</DialogTitle>
+                <DialogTitle className="text-accent">Nuevo Perfil y Acceso</DialogTitle>
                 <CardDescription>
-                  Capture los datos personales para el seguimiento operativo (EMP).
+                  Configure las credenciales de inicio de sesión para el nuevo integrante (EMP).
                 </CardDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -149,10 +192,10 @@ export default function EmployeesPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">E-mail</Label>
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">E-mail de Acceso</Label>
                     <Input 
                       type="email"
-                      placeholder="j.perez@empresa.com" 
+                      placeholder="j.perez@zyra.com" 
                       className="bg-white/5 border-white/10"
                       value={newEmployee.Emp_Correo}
                       onChange={(e) => setNewEmployee({...newEmployee, Emp_Correo: e.target.value})}
@@ -168,14 +211,36 @@ export default function EmployeesPage() {
                     />
                   </div>
                 </div>
+                <div className="space-y-2 relative">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">Contraseña Provisional</Label>
+                  <div className="relative">
+                    <Input 
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Mínimo 6 caracteres" 
+                      className="bg-white/5 border-white/10 pr-10"
+                      value={newEmployee.Emp_Password}
+                      onChange={(e) => setNewEmployee({...newEmployee, Emp_Password: e.target.value})}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground italic flex items-center gap-1 mt-1">
+                    <Lock className="h-3 w-3" /> El empleado podrá cambiarla después de su primer acceso.
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button 
                   className="bg-accent hover:bg-accent/90 text-white w-full h-12 text-lg font-bold"
-                  disabled={!newEmployee.Emp_Nombre || !newEmployee.Emp_Correo || loading}
+                  disabled={!newEmployee.Emp_Nombre || !newEmployee.Emp_Correo || newEmployee.Emp_Password.length < 6 || loading}
                   onClick={handleCreateEmployee}
                 >
-                  {loading ? "Registrando..." : "Guardar Empleado (EMP)"}
+                  {loading ? "Generando Acceso..." : "Guardar Empleado y Credenciales"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -233,7 +298,7 @@ export default function EmployeesPage() {
                             <Mail className="h-3 w-3 text-accent" /> {emp.Emp_Correo || emp.email || "N/A"}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Phone className="h-3 w-3 text-muted-foreground" /> {emp.Emp_Telefono || "Sin registro"}
+                            <Phone className="h-3 w-3 text-muted-foreground" /> {emp.Emp_Telefono || emp.telefono || "Sin registro"}
                           </div>
                         </div>
                       </TableCell>
