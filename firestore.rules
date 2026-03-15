@@ -4,7 +4,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
-    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin'; }
+    
+    // Función robusta para verificar rol de administrador
+    function isAdmin() { 
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin'; 
+    }
 
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -12,7 +18,14 @@ service cloud.firestore {
     }
 
     match /notifications/{notifId} {
-      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Permitir lectura si el documento pertenece al usuario o si es admin
+      // La condición de listado se satisface si la consulta está filtrada por userId
+      allow read: if isSignedIn() && (
+        (resource == null) || 
+        (resource.data.userId == request.auth.uid) || 
+        isAdmin()
+      );
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn();
       allow delete: if isAdmin();
     }
@@ -36,6 +49,21 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn();
+    }
+    
+    match /materiales/{matId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /checklist_servicio/{checkId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /clientes/{clientId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }
