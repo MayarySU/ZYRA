@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
-import { useFirestore, useCollection, useUser } from "@/firebase";
+import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { 
   Card, 
@@ -54,18 +54,18 @@ export default function EmployeesPage() {
     racha: 0
   });
 
-  const employeesQuery = useMemo(() => {
+  const employeesQuery = useMemoFirebase(() => {
     if (!db) return null;
     return collection(db, "users");
   }, [db]);
 
-  const { data: employees, loading: employeesLoading } = useCollection(employeesQuery);
+  const { data: employees, isLoading: employeesLoading } = useCollection(employeesQuery);
 
   const filteredEmployees = useMemo(() => {
     if (!employees) return [];
     return employees.filter(e => 
-      e.Emp_Nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.Emp_Correo?.toLowerCase().includes(searchTerm.toLowerCase())
+      (e.Emp_Nombre || e.nombre)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (e.Emp_Correo || e.email)?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [employees, searchTerm]);
 
@@ -73,11 +73,9 @@ export default function EmployeesPage() {
     if (!db) return;
     setLoading(true);
     try {
-      // En una app real, esto debería usar Firebase Auth para crear la cuenta.
-      // Para efectos de gestión administrativa en esta demo, registramos el perfil en la colección users.
       await addDoc(collection(db, "users"), {
         ...newEmployee,
-        rol: 'employee', // Por defecto todos los nuevos registros son empleados
+        rol: 'employee',
         createdAt: serverTimestamp(),
       });
       toast({ title: "Empleado registrado", description: "El perfil operativo se creó correctamente." });
@@ -232,7 +230,7 @@ export default function EmployeesPage() {
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-xs text-white">
-                            <Mail className="h-3 w-3 text-accent" /> {emp.Emp_Correo || "N/A"}
+                            <Mail className="h-3 w-3 text-accent" /> {emp.Emp_Correo || emp.email || "N/A"}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Phone className="h-3 w-3 text-muted-foreground" /> {emp.Emp_Telefono || "Sin registro"}

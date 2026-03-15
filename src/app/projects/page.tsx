@@ -1,21 +1,15 @@
-
 "use client";
 
 import DashboardLayout from "../dashboard/layout";
-import { useUser, useFirestore, useCollection } from "@/firebase";
+import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
   MapPin, 
   ArrowRight, 
   Activity, 
-  Users, 
   ShieldCheck, 
-  CheckCircle2, 
-  Package, 
-  AlertCircle,
-  Plus,
-  Briefcase
+  Plus
 } from "lucide-react";
 import Image from "next/image";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -27,7 +21,6 @@ import { doc, setDoc, collection, addDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { 
   Select, 
   SelectContent, 
@@ -59,7 +52,7 @@ const FALLBACK_PROJECTS = [
 ];
 
 export default function ProjectsPage() {
-  const { profile, user, loading: userLoading } = useUser();
+  const { profile, user, isUserLoading } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
   const isAdmin = profile?.rol === 'admin';
@@ -81,14 +74,13 @@ export default function ProjectsPage() {
     herramientas_listas: false,
     seguridad_area: false
   });
-  const [materialesVerificados, setMaterialesVerificados] = useState<Record<string, boolean>>({});
 
-  const projectsQuery = useMemo(() => {
+  const projectsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return collection(db, "proyectos");
   }, [db]);
 
-  const { data: firestoreProjects, loading: projectsLoading } = useCollection(projectsQuery);
+  const { data: firestoreProjects, isLoading: projectsLoading } = useCollection(projectsQuery);
 
   const displayProjects = useMemo(() => {
     const baseProjects = (firestoreProjects && firestoreProjects.length > 0) ? firestoreProjects : FALLBACK_PROJECTS;
@@ -146,7 +138,7 @@ export default function ProjectsPage() {
     }
   };
 
-  if (userLoading || projectsLoading) {
+  if (isUserLoading || projectsLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -167,7 +159,7 @@ export default function ProjectsPage() {
             <p className="text-muted-foreground">
               {isAdmin 
                 ? "Panel de administración para la creación y asignación de obras." 
-                : "Frentes de trabajo activos bajo tu responsabilidad técnica."}
+                : "Frentes de trabajo activos donde eres miembro del equipo."}
             </p>
           </div>
           

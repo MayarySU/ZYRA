@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
-import { useFirestore, useCollection, useUser } from "@/firebase";
+import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { 
   Card, 
@@ -33,7 +32,6 @@ import {
 } from "@/components/ui/dialog";
 import { Building2, Plus, Search, Mail, Phone, MapPin, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
 
 export default function ClientsPage() {
   const { profile } = useUser();
@@ -53,12 +51,12 @@ export default function ClientsPage() {
     Cl_Telefono: ""
   });
 
-  const clientsQuery = useMemo(() => {
+  const clientsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return collection(db, "clientes");
   }, [db]);
 
-  const { data: clients, loading: clientsLoading } = useCollection(clientsQuery);
+  const { data: clients, isLoading: clientsLoading } = useCollection(clientsQuery);
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];
