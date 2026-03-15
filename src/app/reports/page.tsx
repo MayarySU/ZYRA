@@ -13,7 +13,8 @@ import {
   Search
 } from "lucide-react";
 import DashboardLayout from "../dashboard/layout";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
+import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,12 +64,16 @@ export default function ReportsPage() {
   const filteredReports = useMemo(() => {
     const reports = firestoreReports || [];
     return reports.filter(report => {
-      const contentMatch = (report.content || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const authorMatch = (report.authorName || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const projectMatch = (report.projectName || "").toLowerCase().includes(searchTerm.toLowerCase());
+      const content = report.content || report.contenido || "";
+      const author = report.authorName || report.autor || "";
+      const project = report.projectName || "";
       
-      const matchesSearch = contentMatch || authorMatch || projectMatch;
-      const matchesFilter = activeFilter === "Todos" || (report.status || "Pendiente") === activeFilter;
+      const matchesSearch = content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          project.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const currentStatus = report.status || "Pendiente";
+      const matchesFilter = activeFilter === "Todos" || currentStatus === activeFilter;
       
       return matchesSearch && matchesFilter;
     });
@@ -83,18 +88,6 @@ export default function ReportsPage() {
     return projects.find(p => p.id === selectedReport.projectId);
   }, [selectedReport, projects]);
 
-  const createNotification = async (userId: string, title: string, message: string, type: string) => {
-    if (!db) return;
-    await addDoc(collection(db, "notifications"), {
-      userId,
-      title,
-      message,
-      type,
-      read: false,
-      createdAt: new Date().toISOString()
-    });
-  };
-
   const handleUpdateStatus = async (reportId: string, newStatus: "Aprobado" | "Rechazado", e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!db || !isAdmin || !selectedReport) return;
@@ -106,20 +99,14 @@ export default function ReportsPage() {
     try {
       await updateDoc(reportRef, updateData);
       
-      // Notify employee
-      await createNotification(
-        selectedReport.employeeId,
-        `Reporte ${newStatus}`,
-        `Tu reporte para ${selectedReport.projectName} ha sido ${newStatus.toLowerCase()}.`,
-        "report"
-      );
-
-      // Handle point rewards on approval
-      if (newStatus === "Aprobado") {
-        const userRef = doc(db, "users", selectedReport.employeeId);
-        // We could fetch user current points here or just trust a cloud function, 
-        // but for prototype let's assume +50 pts handled in प्रोजेक्ट completion
-      }
+      await addDoc(collection(db, "notifications"), {
+        userId: selectedReport.employeeId,
+        title: `Reporte ${newStatus}`,
+        message: `Tu reporte para ${selectedReport.projectName} ha sido ${newStatus.toLowerCase()}.`,
+        type: "report",
+        read: false,
+        createdAt: new Date().toISOString()
+      });
 
       toast({ title: `Reporte ${newStatus}`, description: `El registro ha sido actualizado.` });
       setSelectedReportId(null);
@@ -132,6 +119,12 @@ export default function ReportsPage() {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const formatDate = (dateStr: any, pattern: string) => {
+    if (!dateStr) return "N/A";
+    const date = new Date(dateStr);
+    return isValid(date) ? format(date, pattern, { locale: es }) : "N/A";
   };
 
   return (
@@ -216,14 +209,14 @@ export default function ReportsPage() {
                         <span className="text-[10px] font-bold uppercase tracking-wider truncate">{report.projectName}</span>
                       </div>
                       <p className="text-sm font-semibold text-white leading-snug line-clamp-2">
-                        {report.content || report.contenido}
+                        {report.content || report.contenido || "Sin descripción"}
                       </p>
                     </div>
                     
                     <div className="space-y-3 border-t border-white/5 pt-4 mt-auto">
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span className="font-bold text-white/70">{report.authorName || report.autor}</span>
-                        <span>{report.timestamp ? format(new Date(report.timestamp), "d/M/yyyy") : "N/A"}</span>
+                        <span className="font-bold text-white/70 truncate max-w-[120px]">{report.authorName || report.autor || "Técnico"}</span>
+                        <span>{formatDate(report.timestamp, "d/M/yyyy")}</span>
                       </div>
                     </div>
                   </div>
@@ -233,14 +226,13 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* Detail Dialog */}
         <Dialog open={!!selectedReportId} onOpenChange={(open) => !open && setSelectedReportId(null)}>
           <DialogContent className="bg-card border-white/10 text-white sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             {selectedReport && (
               <>
                 <DialogHeader className="relative pr-8">
                   <div className="absolute top-0 right-0 flex items-center gap-1 text-[10px] font-mono text-muted-foreground bg-white/5 px-2 py-1 rounded">
-                    <Hash className="h-3 w-3" /> {selectedReport.id}
+                    <Hash className="h-3 w-3" /> {selectedReport.id.substring(0,8)}
                   </div>
                   <DialogTitle className="text-2xl font-bold text-accent flex items-center gap-2">
                     <Briefcase className="h-6 w-6" /> {selectedReport.projectName}
@@ -268,7 +260,7 @@ export default function ReportsPage() {
                           <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
                           <div>
                             <p className="text-muted-foreground">Cliente</p>
-                            <p className="font-semibold">{linkedProject?.Cl_ID || "Inmobiliaria El Sol"}</p>
+                            <p className="font-semibold">{linkedProject?.Cl_ID || "Consultar en Proyectos"}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2 text-xs">
@@ -295,14 +287,14 @@ export default function ReportsPage() {
                         </Badge>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
-                          {selectedReport.timestamp ? format(new Date(selectedReport.timestamp), "PPP") : "Sin fecha"}
+                          {formatDate(selectedReport.timestamp, "PPP")}
                         </div>
                       </div>
 
                       <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                         <h4 className="text-xs font-bold uppercase text-accent tracking-widest mb-3">Descripción Operativa</h4>
                         <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
-                          {selectedReport.content}
+                          {selectedReport.content || selectedReport.contenido || "Sin descripción proporcionada."}
                         </p>
                       </div>
 
@@ -312,12 +304,12 @@ export default function ReportsPage() {
                         </div>
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase font-bold">Emitido por</p>
-                          <p className="text-sm font-bold">{selectedReport.authorName}</p>
+                          <p className="text-sm font-bold">{selectedReport.authorName || selectedReport.autor || "Técnico"}</p>
                         </div>
                       </div>
                     </div>
 
-                    {isAdmin && selectedReport.status === "Pendiente" && (
+                    {isAdmin && (selectedReport.status === "Pendiente" || !selectedReport.status) && (
                       <div className="flex gap-3 pt-4 border-t border-white/5">
                         <Button 
                           className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12"

@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, where, orderBy, doc, updateDoc, limit } from "firebase/firestore";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 
 export function NotificationCenter() {
@@ -20,8 +20,8 @@ export function NotificationCenter() {
   const db = useFirestore();
 
   const notificationsQuery = useMemoFirebase(() => {
-    // Usamos user?.uid para asegurar que la consulta solo se cree cuando el usuario está listo
     if (!db || !user?.uid) return null;
+    // La consulta debe alinearse con las reglas de seguridad simplificadas
     return query(
       collection(db, "notifications"),
       where("userId", "==", user.uid),
@@ -36,7 +36,6 @@ export function NotificationCenter() {
   const markAsRead = async (id: string) => {
     if (!db) return;
     const notifRef = doc(db, "notifications", id);
-    // Actualización silenciosa sin await para mayor fluidez
     updateDoc(notifRef, { read: true });
   };
 
@@ -48,6 +47,14 @@ export function NotificationCenter() {
       case 'level': return <Zap className="h-4 w-4 text-yellow-500" />;
       default: return <Info className="h-4 w-4 text-muted-foreground" />;
     }
+  };
+
+  const formatNotifDate = (dateStr: string | undefined) => {
+    if (!dateStr) return "Recientemente";
+    const date = new Date(dateStr);
+    return isValid(date) 
+      ? format(date, "d 'de' MMMM, HH:mm", { locale: es }) 
+      : "Hace un momento";
   };
 
   return (
@@ -98,7 +105,7 @@ export function NotificationCenter() {
                         {notif.message}
                       </p>
                       <p className="text-[9px] text-muted-foreground uppercase font-medium">
-                        {notif.createdAt && format(new Date(notif.createdAt), "d 'de' MMMM, HH:mm", { locale: es })}
+                        {formatNotifDate(notif.createdAt)}
                       </p>
                     </div>
                   </div>

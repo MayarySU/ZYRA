@@ -23,16 +23,17 @@ service cloud.firestore {
 
     // Reglas para Notificaciones
     match /notifications/{notifId} {
-      // Permitimos leer si es el dueño o admin
-      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
-      // Permitimos crear si el usuario se asigna a sí mismo o es admin
+      // Regla de lectura individual
+      allow get: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      // Regla de listado: Fundamental para que el motor de consultas valide el filtro por userId
+      allow list: if isSignedIn() && (isAdmin() || (request.query.limit <= 50));
+      
       allow create: if isSignedIn() && (isAdmin() || request.resource.data.userId == request.auth.uid);
-      // Permitimos actualizar si es el dueño o admin
       allow update: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
-    // Reglas para Proyectos (Legacy y Nuevo nombre)
+    // Reglas para Proyectos
     match /proyectos/{projectId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
