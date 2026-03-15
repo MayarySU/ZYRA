@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { 
   Card, 
@@ -37,14 +37,40 @@ export default function SettingsPage() {
   const [fontSize, setFontSize] = useState([14]);
   const [themeColor, setThemeColor] = useState("zyra");
 
+  // Efecto para aplicar modo oscuro/claro
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Efecto para aplicar esquema de colores
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', themeColor);
+  }, [themeColor]);
+
+  // Efecto para aplicar tamaño de fuente
+  useEffect(() => {
+    document.documentElement.style.setProperty('--base-font-size', `${fontSize[0]}px`);
+  }, [fontSize]);
+
   const handleSaveSettings = () => {
     setLoading(true);
-    // Simulamos guardado en Firestore o LocalStorage
+    // Persistimos en localStorage para esta demo
+    localStorage.setItem('zyra-settings', JSON.stringify({
+      darkMode,
+      language,
+      fontSize,
+      themeColor
+    }));
+    
     setTimeout(() => {
       setLoading(false);
       toast({
         title: "Configuración guardada",
-        description: "Tus preferencias se han actualizado correctamente.",
+        description: "Tus preferencias se han aplicado en todo el sistema.",
       });
     }, 800);
   };

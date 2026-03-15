@@ -4,6 +4,32 @@
 
 @layer base {
   :root {
+    --background: 0 0% 100%;
+    --foreground: 260 13% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 260 13% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 260 13% 10%;
+    --primary: 271 76% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 189 86% 66%;
+    --secondary-foreground: 260 13% 10%;
+    --muted: 260 13% 95%;
+    --muted-foreground: 260 13% 40%;
+    --accent: 271 76% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 260 13% 90%;
+    --input: 260 13% 90%;
+    --ring: 271 76% 53%;
+    --radius: 0.75rem;
+    --base-font-size: 14px;
+    --chart-1: 189 86% 66%;
+    --chart-2: 271 76% 53%;
+  }
+
+  .dark {
     --background: 260 13% 10%;
     --foreground: 189 86% 96%;
     --card: 260 13% 12%;
@@ -23,12 +49,25 @@
     --border: 260 13% 20%;
     --input: 260 13% 20%;
     --ring: 271 76% 53%;
-    --radius: 0.75rem;
     --chart-1: 189 86% 66%;
     --chart-2: 271 76% 53%;
-    --chart-3: 280 65% 60%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+  }
+
+  /* Theme color variations */
+  [data-theme='emerald'] {
+    --primary: 142 71% 45%;
+    --accent: 142 71% 45%;
+    --ring: 142 71% 45%;
+  }
+  [data-theme='cobalt'] {
+    --primary: 217 91% 60%;
+    --accent: 217 91% 60%;
+    --ring: 217 91% 60%;
+  }
+  [data-theme='amber'] {
+    --primary: 38 92% 50%;
+    --accent: 38 92% 50%;
+    --ring: 38 92% 50%;
   }
 }
 
@@ -38,26 +77,11 @@
   }
   body {
     @apply bg-background text-foreground font-body antialiased;
+    font-size: var(--base-font-size);
   }
 }
 
 .bg-zyra-gradient {
-  background: radial-gradient(circle at top right, hsl(271 76% 53% / 0.15), transparent),
-              radial-gradient(circle at bottom left, hsl(189 86% 66% / 0.1), transparent);
-}
-
-.text-cyan {
-  color: #63D9F0;
-}
-
-.text-violet {
-  color: #8A2BE2;
-}
-
-.border-violet {
-  border-color: #8A2BE2;
-}
-
-.bg-violet {
-  background-color: #8A2BE2;
+  background: radial-gradient(circle at top right, hsl(var(--accent) / 0.15), transparent),
+              radial-gradient(circle at bottom left, hsl(var(--primary) / 0.1), transparent);
 }
