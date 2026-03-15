@@ -1,18 +1,20 @@
+
 'use server';
 
 import nodemailer from 'nodemailer';
 
 /**
- * Envia un correo electrónico de restablecimiento de contraseña utilizando el diseño HTML profesional.
- * Requiere configuración de variables de entorno SMTP para funcionar en producción.
+ * Envia un correo electrónico de notificación de restablecimiento utilizando el diseño HTML profesional.
+ * Nota: El enlace real de Firebase se envía por separado a través de los servidores de Google.
+ * Esta acción sirve para dar un aviso profesional adicional si se desea.
  */
-export async function sendResetEmailAction(to: string, userName: string, tempPassword: string) {
+export async function sendResetNotificationAction(to: string, userName: string) {
   const htmlTemplate = `
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Restablecimiento de contraseña</title>
+<title>Restablecimiento de acceso solicitado</title>
 </head>
 
 <body style="margin:0; padding:0; background-color:#f4f6fb; font-family: Arial, Helvetica, sans-serif;">
@@ -40,23 +42,19 @@ Hemos recibido una solicitud para restablecer la contraseña de acceso a su cuen
 </p>
 
 <p>
-Por seguridad, se ha generado la siguiente <strong>contraseña temporal</strong>:
+Por seguridad y cumplimiento de protocolos, se ha disparado un <strong>enlace oficial de recuperación</strong> a esta misma dirección de correo.
 </p>
 
-<div style="background:#f2f4ff; border-left:4px solid #2f80ed; padding:15px; margin:20px 0; font-size:18px; font-weight:bold; text-align:center; letter-spacing:2px;">
-${tempPassword}
+<div style="background:#f2f4ff; border-left:4px solid #2f80ed; padding:15px; margin:20px 0; font-size:14px; text-align:center;">
+Busque en su bandeja de entrada (o SPAM) un correo enviado por <strong>Firebase/Google</strong> con el asunto "Reset your password".
 </div>
 
 <p>
-Utilice esta contraseña para iniciar sesión en la plataforma. Una vez dentro, le recomendamos cambiarla inmediatamente desde la sección de <strong>perfil</strong>.
-</p>
-
-<p>
-Si también recibió un correo automático de Firebase, puede utilizar el enlace de restablecimiento incluido en ese mensaje como método alternativo.
+Haga clic en el enlace incluido en ese mensaje oficial para configurar su nueva clave privada. Una vez dentro, le recomendamos verificar sus datos desde la sección de <strong>perfil</strong>.
 </p>
 
 <p style="margin-top:30px;">
-Si usted <strong>no solicitó este cambio</strong>, le recomendamos contactar con el administrador del sistema.
+Si usted <strong>no solicitó este cambio</strong>, le recomendamos contactar con el administrador del sistema inmediatamente.
 </p>
 
 <p style="margin-top:40px;">
@@ -84,7 +82,6 @@ ZYRA Command
 </html>`;
 
   try {
-    // Configuración de transporte (utiliza variables de entorno o valores por defecto)
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port: Number(process.env.SMTP_PORT) || 587,
@@ -95,13 +92,10 @@ ZYRA Command
       },
     });
 
-    // Verificación rápida de conexión (opcional)
-    // await transporter.verify();
-
     await transporter.sendMail({
       from: `"ZYRA Command" <${process.env.SMTP_USER || 'admin@zyra.com'}>`,
       to: to,
-      subject: "Restablecimiento de contraseña - ZYRA Command",
+      subject: "Restablecimiento de contraseña solicitado - ZYRA Command",
       html: htmlTemplate,
     });
 

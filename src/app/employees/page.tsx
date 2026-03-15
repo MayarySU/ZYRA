@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -44,11 +45,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Users, Plus, Search, Mail, ShieldCheck, UserCircle, Star, Lock, Copy, Loader2, Trash2, Zap, Phone, MessageSquare, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/components/providers/i18n-provider";
-import { sendResetEmailAction } from "@/app/actions/email-actions";
 
 export default function EmployeesPage() {
   const { profile, loading: userLoading } = useUser();
@@ -184,56 +183,19 @@ export default function EmployeesPage() {
     if (!emp || !emp.emailPersonal) return;
     
     setLoading(true);
-    const newTempPassword = Math.random().toString(36).slice(-8).toUpperCase() + "@Z" + Math.floor(Math.random() * 99);
-    const nombreUsuario = emp.nombre || emp.Emp_Nombre || "Usuario";
-    
     try {
-      // 1. Intentar envío profesional vía Server Action (HTML)
-      const result = await sendResetEmailAction(emp.emailPersonal, nombreUsuario, newTempPassword);
-      
-      if (result.success) {
-        toast({ 
-          title: "Correo enviado", 
-          description: "El empleado ha recibido el diseño HTML profesional." 
-        });
-      } else {
-        // 2. Fallback: Si no hay SMTP configurado, abrimos Gmail con el texto profesional
-        toast({ 
-          variant: "destructive", 
-          title: "Envío automático pendiente", 
-          description: "Abriendo Gmail para envío manual (Configure SMTP en .env para automatizar)." 
-        });
-
-        const subject = encodeURIComponent("Restablecimiento de contraseña - ZYRA Command");
-        const body = encodeURIComponent(
-          `Hola ${nombreUsuario},\n\n` +
-          `Hemos recibido una solicitud para restablecer la contraseña de acceso a su cuenta en ZYRA.\n\n` +
-          `ZYRA | SISTEMA DE GESTIÓN\n` +
-          `------------------------------------------------------------\n` +
-          `Por seguridad, se ha generado la siguiente CONTRASEÑA TEMPORAL:\n\n` +
-          `>>> ${newTempPassword} <<<\n\n` +
-          `------------------------------------------------------------\n\n` +
-          `Utilice esta contraseña para iniciar sesión en la plataforma. Una vez dentro, le recomendamos cambiarla inmediatamente desde la sección de perfil.\n\n` +
-          `Si también recibió un correo automático de Firebase, puede utilizar el enlace de restablecimiento incluido en ese mensaje como método alternativo.\n\n` +
-          `Atentamente,\n` +
-          `Administración del Sistema\n` +
-          `ZYRA Command`
-        );
-        
-        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${emp.emailPersonal}&su=${subject}&body=${body}`;
-        window.open(gmailUrl, '_blank');
-      }
-
-      // 3. Como respaldo adicional, enviamos el oficial de Firebase
       if (auth) {
         await sendPasswordResetEmail(auth, emp.emailPersonal);
+        toast({ 
+          title: "Enlace enviado", 
+          description: `Se ha enviado un enlace de recuperación a: ${emp.emailPersonal}` 
+        });
       }
-
     } catch (e: any) {
       toast({ 
         variant: "destructive", 
         title: "Aviso", 
-        description: "Hubo un problema al procesar la solicitud." 
+        description: "Hubo un problema al procesar la solicitud de recuperación." 
       });
     } finally {
       setLoading(false);
@@ -358,7 +320,7 @@ export default function EmployeesPage() {
                         <Input readOnly value={generatedCreds.zyraEmail || ""} className="bg-muted/50 border-border font-mono text-sm text-foreground" />
                         <Button variant="outline" size="icon" className="border-border hover:bg-muted" onClick={() => copyToClipboard(generatedCreds.zyraEmail)}><Copy className="h-4 w-4" /></Button>
                       </div>
-                      <p className="text-[9px] text-muted-foreground">Nota: El empleado deberá usar este correo corporativo generado para identificarse.</p>
+                      <p className="text-[9px] text-muted-foreground">Nota: Este es el identificador corporativo del empleado en el sistema.</p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">PASSWORD TEMPORAL</Label>
@@ -534,7 +496,7 @@ export default function EmployeesPage() {
                         disabled={loading}
                       >
                         {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                        Restablecer contraseña
+                        Enviar enlace de restablecimiento
                       </button>
                     )}
                   </div>
