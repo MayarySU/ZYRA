@@ -32,11 +32,13 @@ import {
 } from "@/components/ui/dialog";
 import { Building2, Plus, Search, Mail, Phone, MapPin, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export default function ClientsPage() {
   const { profile } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -74,7 +76,7 @@ export default function ClientsPage() {
         ...newClient,
         createdAt: serverTimestamp(),
       });
-      toast({ title: "Cliente registrado", description: "La información se guardó correctamente." });
+      toast({ title: t.common.success, description: t.projects.create_success });
       setIsCreateDialogOpen(false);
       setNewClient({
         Cl_Nombre: "",
@@ -84,7 +86,7 @@ export default function ClientsPage() {
         Cl_Telefono: ""
       });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo registrar al cliente." });
+      toast({ variant: "destructive", title: t.common.error, description: "Error" });
     } finally {
       setLoading(false);
     }
@@ -97,9 +99,9 @@ export default function ClientsPage() {
           <div className="p-4 rounded-full bg-destructive/10">
             <Building2 className="h-12 w-12 text-destructive" />
           </div>
-          <h2 className="text-2xl font-bold text-white">Acceso Restringido</h2>
+          <h2 className="text-2xl font-bold text-white">{t.common.error}</h2>
           <p className="text-muted-foreground max-w-md">
-            Solo los administradores tienen permiso para gestionar el catálogo de clientes corporativos.
+            {t.employees.subtitle}
           </p>
         </div>
       </DashboardLayout>
@@ -112,41 +114,41 @@ export default function ClientsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-2">
             <h2 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Building2 className="h-8 w-8 text-accent" /> Clientes (CL)
+              <Building2 className="h-8 w-8 text-accent" /> {t.clients.title}
             </h2>
-            <p className="text-muted-foreground">Gestión de razones sociales y contactos operativos.</p>
+            <p className="text-muted-foreground">{t.clients.subtitle}</p>
           </div>
           
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2">
-                <Plus className="h-4 w-4" /> Registrar Cliente
+                <Plus className="h-4 w-4" /> {t.clients.register}
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-card border-white/10 text-white sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle className="text-accent">Nuevo Registro de Cliente</DialogTitle>
+                <DialogTitle className="text-accent">{t.clients.register}</DialogTitle>
                 <CardDescription>
-                  Ingrese la información legal y de contacto según el diccionario de datos (CL).
+                  {t.clients.subtitle}
                 </CardDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">Nombre Comercial</Label>
+                    <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">{t.clients.name}</Label>
                     <Input 
                       id="name" 
-                      placeholder="Ej: Inmobiliaria Sol" 
+                      placeholder="ZYRA..." 
                       className="bg-white/5 border-white/10"
                       value={newClient.Cl_Nombre}
                       onChange={(e) => setNewClient({...newClient, Cl_Nombre: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="legal" className="text-xs uppercase font-bold text-muted-foreground">Razón Social</Label>
+                    <Label htmlFor="legal" className="text-xs uppercase font-bold text-muted-foreground">{t.clients.legal}</Label>
                     <Input 
                       id="legal" 
-                      placeholder="Ej: Sol S.A. de C.V." 
+                      placeholder="..." 
                       className="bg-white/5 border-white/10"
                       value={newClient.Cl_RazonSocial}
                       onChange={(e) => setNewClient({...newClient, Cl_RazonSocial: e.target.value})}
@@ -155,19 +157,19 @@ export default function ClientsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">Correo Electrónico</Label>
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">{t.clients.email}</Label>
                     <Input 
                       type="email"
-                      placeholder="contacto@cliente.com" 
+                      placeholder="email@company.com" 
                       className="bg-white/5 border-white/10"
                       value={newClient.Cl_Correo}
                       onChange={(e) => setNewClient({...newClient, Cl_Correo: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase font-bold text-muted-foreground">Teléfono</Label>
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">{t.clients.phone}</Label>
                     <Input 
-                      placeholder="+56 9..." 
+                      placeholder="+..." 
                       className="bg-white/5 border-white/10"
                       value={newClient.Cl_Telefono}
                       onChange={(e) => setNewClient({...newClient, Cl_Telefono: e.target.value})}
@@ -175,9 +177,9 @@ export default function ClientsPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs uppercase font-bold text-muted-foreground">Dirección Fiscal / Obra</Label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">{t.clients.address}</Label>
                   <Input 
-                    placeholder="Calle, Ciudad, Región" 
+                    placeholder="..." 
                     className="bg-white/5 border-white/10"
                     value={newClient.Cl_Direccion}
                     onChange={(e) => setNewClient({...newClient, Cl_Direccion: e.target.value})}
@@ -190,7 +192,7 @@ export default function ClientsPage() {
                   disabled={!newClient.Cl_Nombre || loading}
                   onClick={handleCreateClient}
                 >
-                  {loading ? "Registrando..." : "Guardar Cliente (CL)"}
+                  {loading ? t.common.loading : t.common.save}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -200,11 +202,11 @@ export default function ClientsPage() {
         <Card className="bg-card border-white/5 shadow-2xl overflow-hidden">
           <CardHeader className="border-b border-white/5 bg-white/2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white text-lg font-bold">Catálogo de Clientes</CardTitle>
+              <CardTitle className="text-white text-lg font-bold">{t.clients.catalog}</CardTitle>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Filtrar por nombre..." 
+                  placeholder={t.common.search} 
                   className="pl-10 bg-white/5 border-white/5 text-xs h-9"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -221,11 +223,11 @@ export default function ClientsPage() {
               <Table>
                 <TableHeader className="bg-white/5">
                   <TableRow className="border-white/5 hover:bg-transparent">
-                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Cliente</TableHead>
-                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Razón Social</TableHead>
-                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Contacto</TableHead>
-                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Ubicación</TableHead>
-                    <TableHead className="text-right text-muted-foreground uppercase text-[10px] font-bold">Acciones</TableHead>
+                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.clients.name}</TableHead>
+                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.clients.legal}</TableHead>
+                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.clients.email}</TableHead>
+                    <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.clients.address}</TableHead>
+                    <TableHead className="text-right text-muted-foreground uppercase text-[10px] font-bold">{t.common.actions}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -238,33 +240,33 @@ export default function ClientsPage() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-white">{client.Cl_Nombre}</p>
-                            <p className="text-[10px] text-muted-foreground">ID: {client.id.substring(0,8)}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{t.common.id}: {client.id.substring(0,8)}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <span className="text-xs text-muted-foreground italic">
-                          {client.Cl_RazonSocial || "No especificada"}
+                          {client.Cl_RazonSocial || "-"}
                         </span>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-xs text-white">
-                            <Mail className="h-3 w-3 text-accent" /> {client.Cl_Correo || "Sin correo"}
+                            <Mail className="h-3 w-3 text-accent" /> {client.Cl_Correo || "-"}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Phone className="h-3 w-3 text-muted-foreground" /> {client.Cl_Telefono || "Sin teléfono"}
+                            <Phone className="h-3 w-3 text-muted-foreground" /> {client.Cl_Telefono || "-"}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground max-w-[200px] truncate">
-                          <MapPin className="h-3 w-3 shrink-0 text-accent" /> {client.Cl_Direccion || "N/A"}
+                          <MapPin className="h-3 w-3 shrink-0 text-accent" /> {client.Cl_Direccion || "-"}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" className="text-accent hover:bg-accent/10 font-bold text-[10px]">
-                          VER PROYECTOS
+                          {t.clients.view_projects}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -276,12 +278,7 @@ export default function ClientsPage() {
                 <div className="h-16 w-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                   <Building2 className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-bold text-white uppercase tracking-tighter">Sin registros de clientes</h3>
-                <p className="text-sm text-muted-foreground mt-2 max-w-xs">
-                  {searchTerm 
-                    ? `No hay resultados para "${searchTerm}".`
-                    : "Comienza registrando un cliente corporativo para asignar nuevos proyectos."}
-                </p>
+                <h3 className="text-lg font-bold text-white uppercase tracking-tighter">{t.common.no_results}</h3>
               </div>
             )}
           </CardContent>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
@@ -7,9 +6,11 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 import { UserNav } from "@/components/layout/user-nav";
 import { useUser } from "@/firebase";
 import { Zap } from "lucide-react";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { profile } = useUser();
+  const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
   return (
@@ -25,7 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-sm font-black tracking-tighter">ZYRA</span>
             </div>
             <h1 className="text-xs md:text-sm font-semibold text-muted-foreground truncate hidden md:block">
-              {isAdmin ? "Sistema de Gestión Operativa ZYRA" : `ZYRA OPERATIVO - ${profile?.nombre || "Técnico"}`}
+              {isAdmin ? `ZYRA COMMAND - ${t.common.admin}` : `ZYRA OPERATIVO - ${profile?.nombre || t.common.employee}`}
             </h1>
           </div>
           

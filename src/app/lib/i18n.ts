@@ -534,9 +534,9 @@ export const translations = {
       language: "语言",
       accessibility: "无障碍",
       viz_title: "可视化",
-      viz_desc: "控制视觉外观和颜色主题。",
+      viz_desc: "控制视觉外观 and 颜色主题。",
       dark_mode: "深色模式",
-      dark_mode_desc: "在浅色和深色模式之间切换。",
+      dark_mode_desc: "在浅色 and 深色模式之间切换。",
       color_scheme: "配色方案",
       colors: {
         zyra: "Zyra (紫色)",

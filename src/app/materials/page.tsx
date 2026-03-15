@@ -59,11 +59,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useI18n } from "@/components/providers/i18n-provider";
 
 export default function MaterialsPage() {
   const { profile } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -72,25 +74,17 @@ export default function MaterialsPage() {
   const [loading, setLoading] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<{ type: string; items: any[] } | null>(null);
 
-  // Inventario states
   const [newMaterial, setNewMaterial] = useState({
     Mat_Nombre: "",
     Mat_Stock_Disponible: 0,
   });
 
-  // Queries properly memoized for the hook
   const materialsQuery = useMemoFirebase(() => {
     if (!db) return null;
     return collection(db, "materiales");
   }, [db]);
 
-  const templatesQuery = useMemoFirebase(() => {
-    if (!db) return null;
-    return collection(db, "checklist_servicio");
-  }, [db]);
-
   const { data: materials, isLoading: materialsLoading } = useCollection(materialsQuery);
-  const { data: templates } = useCollection(templatesQuery);
 
   const filteredMaterials = useMemo(() => {
     if (!materials) return [];
@@ -99,125 +93,34 @@ export default function MaterialsPage() {
     );
   }, [materials, searchTerm]);
 
-  const serviceTemplates = useMemo(() => {
-    const map: Record<string, any> = {
-      'Instalación': {
-        items: [
-          { name: "Paneles Fotovoltaicos", qty: 24 },
-          { name: "Inversor Híbrido", qty: 1 },
-          { name: "Estructura de Aluminio", qty: 4 },
-          { name: "Cable Solar 6mm", qty: 100 },
-        ]
-      },
-      'Mantenimiento': {
-        items: [
-          { name: "Líquido Limpiador Dieléctrico", qty: 2 },
-          { name: "Terminales MC4", qty: 10 },
-          { name: "Fusibles de Protección", qty: 5 },
-        ]
-      }
-    };
-
-    if (templates) {
-      templates.forEach(t => {
-        map[t.id] = t;
-      });
-    }
-    return map;
-  }, [templates]);
-
   const handleCreateMaterial = () => {
     if (!db) return;
     setLoading(true);
     const colRef = collection(db, "materiales");
-    const data = {
-      ...newMaterial,
-      createdAt: serverTimestamp(),
-    };
+    const data = { ...newMaterial, createdAt: serverTimestamp() };
 
     addDoc(colRef, data)
       .then(() => {
-        toast({ title: "Material registrado", description: "Se añadió al catálogo de inventario." });
+        toast({ title: t.common.success, description: t.common.success });
         setIsCreateDialogOpen(false);
         setNewMaterial({ Mat_Nombre: "", Mat_Stock_Disponible: 0 });
-      })
-      .catch(async (err) => {
-        const permissionError = new FirestorePermissionError({
-          path: colRef.path,
-          operation: 'create',
-          requestResourceData: data,
-        });
-        errorEmitter.emit('permission-error', permissionError);
       })
       .finally(() => setLoading(false));
   };
 
   const handleDeleteMaterial = (id: string) => {
     if (!db) return;
-    const docRef = doc(db, "materiales", id);
-    deleteDoc(docRef)
-      .then(() => {
-        toast({ title: "Eliminado", description: "Material removido del catálogo." });
-      })
-      .catch(async (err) => {
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      });
-  };
-
-  const handleEditTemplate = (type: string) => {
-    setEditingTemplate({ 
-      type, 
-      items: [...(serviceTemplates[type]?.items || [])] 
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const handleSaveTemplate = () => {
-    if (!db || !editingTemplate) return;
-    
-    setLoading(true);
-    const templateRef = doc(db, "checklist_servicio", editingTemplate.type);
-    const data = {
-      items: editingTemplate.items,
-      updatedAt: serverTimestamp(),
-    };
-
-    // Use setDoc for persistence
-    setDoc(templateRef, data)
-      .then(() => {
-        toast({ 
-          title: "Plantilla Actualizada", 
-          description: `La configuración para ${editingTemplate.type} ha sido guardada en base de datos.` 
-        });
-        setIsEditDialogOpen(false);
-      })
-      .catch(async (err) => {
-        console.error("Error al guardar plantilla:", err);
-        const permissionError = new FirestorePermissionError({
-          path: templateRef.path,
-          operation: 'write',
-          requestResourceData: data,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => setLoading(false));
+    deleteDoc(doc(db, "materiales", id))
+      .then(() => toast({ title: t.common.success, description: t.common.success }));
   };
 
   if (!isAdmin) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
-          <div className="p-4 rounded-full bg-destructive/10">
-            <Package className="h-12 w-12 text-destructive" />
-          </div>
-          <h2 className="text-2xl font-bold text-white">Acceso Denegado</h2>
-          <p className="text-muted-foreground max-w-md">
-            Solo el personal administrativo tiene permisos para gestionar el inventario y las plantillas de obra.
-          </p>
+          <Package className="h-12 w-12 text-destructive" />
+          <h2 className="text-2xl font-bold text-white">{t.common.error}</h2>
+          <p className="text-muted-foreground max-w-md">{t.employees.subtitle}</p>
         </div>
       </DashboardLayout>
     );
@@ -229,40 +132,34 @@ export default function MaterialsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-2">
             <h2 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Package className="h-8 w-8 text-accent" /> Inventario y Materiales (MAT)
+              <Package className="h-8 w-8 text-accent" /> {t.materials.title}
             </h2>
-            <p className="text-muted-foreground">Configuración de insumos críticos y plantillas de servicio.</p>
+            <p className="text-muted-foreground">{t.materials.subtitle}</p>
           </div>
-          
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-accent hover:bg-accent/90 text-white font-bold gap-2">
-                <Plus className="h-4 w-4" /> Nuevo Insumo
+                <Plus className="h-4 w-4" /> {t.materials.new_item}
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-card border-white/10 text-white sm:max-w-md">
+            <DialogContent className="bg-card border-white/10 text-white">
               <DialogHeader>
-                <DialogTitle className="text-accent">Registrar en Catálogo (MAT)</DialogTitle>
-                <CardDescription>
-                  Defina el nombre y stock base del material para proyectos fotovoltaicos.
-                </CardDescription>
+                <DialogTitle className="text-accent">{t.materials.new_item}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-xs uppercase font-bold text-muted-foreground">Nombre del Material</Label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">{t.materials.catalog}</Label>
                   <Input 
-                    id="name" 
-                    placeholder="Ej: Panel Jinko 450W Monocristalino" 
+                    placeholder="..." 
                     className="bg-white/5 border-white/10"
                     value={newMaterial.Mat_Nombre}
                     onChange={(e) => setNewMaterial({...newMaterial, Mat_Nombre: e.target.value})}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs uppercase font-bold text-muted-foreground">Stock Inicial Disponible</Label>
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">{t.materials.stock}</Label>
                   <Input 
-                    type="number"
-                    placeholder="0" 
+                    type="number" 
                     className="bg-white/5 border-white/10"
                     value={newMaterial.Mat_Stock_Disponible}
                     onChange={(e) => setNewMaterial({...newMaterial, Mat_Stock_Disponible: parseInt(e.target.value) || 0})}
@@ -270,12 +167,8 @@ export default function MaterialsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button 
-                  className="bg-accent hover:bg-accent/90 text-white w-full h-12 text-lg font-bold"
-                  disabled={!newMaterial.Mat_Nombre || loading}
-                  onClick={handleCreateMaterial}
-                >
-                  {loading ? "Registrando..." : "Guardar en Catálogo"}
+                <Button className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" disabled={!newMaterial.Mat_Nombre || loading} onClick={handleCreateMaterial}>
+                  {loading ? t.common.loading : t.common.save}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -284,97 +177,60 @@ export default function MaterialsPage() {
 
         <Tabs defaultValue="inventory" className="w-full">
           <TabsList className="bg-white/5 border-white/10 p-1">
-            <TabsTrigger value="inventory" className="data-[state=active]:bg-accent data-[state=active]:text-white gap-2">
-              <Package className="h-4 w-4" /> Catálogo General
-            </TabsTrigger>
-            <TabsTrigger value="templates" className="data-[state=active]:bg-primary data-[state=active]:text-background gap-2">
-              <Settings2 className="h-4 w-4" /> Plantillas por Obra
-            </TabsTrigger>
+            <TabsTrigger value="inventory" className="gap-2"><Package className="h-4 w-4" /> {t.materials.general_catalog}</TabsTrigger>
+            <TabsTrigger value="templates" className="gap-2"><Settings2 className="h-4 w-4" /> {t.materials.templates}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="inventory" className="mt-6">
             <Card className="bg-card border-white/5 shadow-2xl overflow-hidden">
               <CardHeader className="border-b border-white/5 bg-white/2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-white text-lg font-bold">Existencias en Bodega</CardTitle>
+                  <CardTitle className="text-white text-lg font-bold">{t.materials.general_catalog}</CardTitle>
                   <div className="relative w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Buscar material..." 
-                      className="pl-10 bg-white/5 border-white/10 text-xs h-9"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                    <Input placeholder={t.common.search} className="pl-10 bg-white/5 border-white/10 text-xs h-9" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 {materialsLoading ? (
-                  <div className="flex items-center justify-center p-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-accent"></div>
-                  </div>
+                  <div className="flex items-center justify-center p-12"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-accent"></div></div>
                 ) : filteredMaterials.length > 0 ? (
                   <Table>
                     <TableHeader className="bg-white/5">
-                      <TableRow className="border-white/5 hover:bg-transparent">
-                        <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Insumo</TableHead>
-                        <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Stock Disponible</TableHead>
-                        <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">Estado</TableHead>
-                        <TableHead className="text-right text-muted-foreground uppercase text-[10px] font-bold">Acciones</TableHead>
+                      <TableRow className="border-white/5">
+                        <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.materials.new_item}</TableHead>
+                        <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.materials.stock}</TableHead>
+                        <TableHead className="text-muted-foreground uppercase text-[10px] font-bold">{t.common.status}</TableHead>
+                        <TableHead className="text-right text-muted-foreground uppercase text-[10px] font-bold">{t.common.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredMaterials.map((mat) => (
-                        <TableRow key={mat.id} className="border-white/5 hover:bg-white/2 transition-colors">
+                        <TableRow key={mat.id} className="border-white/5 hover:bg-white/2">
                           <TableCell className="py-4">
                             <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-lg bg-accent/10 flex items-center justify-center">
-                                <Package className="h-5 w-5 text-accent" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-white">{mat.Mat_Nombre}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase">ID: {mat.id.substring(0,8)}</p>
-                              </div>
+                              <div className="h-9 w-9 rounded-lg bg-accent/10 flex items-center justify-center"><Package className="h-5 w-5 text-accent" /></div>
+                              <div><p className="text-sm font-bold text-white">{mat.Mat_Nombre}</p></div>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <span className="text-lg font-mono font-bold text-white">
-                              {mat.Mat_Stock_Disponible} <span className="text-[10px] text-muted-foreground uppercase">unid</span>
-                            </span>
-                          </TableCell>
+                          <TableCell><span className="text-lg font-mono font-bold text-white">{mat.Mat_Stock_Disponible}</span></TableCell>
                           <TableCell>
                             {mat.Mat_Stock_Disponible < 10 ? (
-                              <Badge className="bg-red-500/10 text-red-500 border-red-500/20 gap-1">
-                                <AlertTriangle className="h-3 w-3" /> CRÍTICO
-                              </Badge>
+                              <Badge className="bg-red-500/10 text-red-500">{t.materials.critical}</Badge>
                             ) : (
-                              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">ÓPTIMO</Badge>
+                              <Badge className="bg-emerald-500/10 text-emerald-500">{t.materials.optimal}</Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                              onClick={() => handleDeleteMaterial(mat.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteMaterial(mat.id)}><Trash2 className="h-4 w-4" /></Button>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-                    <div className="h-16 w-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                      <Package className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tighter">Sin materiales registrados</h3>
-                    <p className="text-sm text-muted-foreground mt-2 max-w-xs">
-                      Registre materiales para comenzar a crear plantillas de servicio.
-                    </p>
-                  </div>
+                  <div className="flex flex-col items-center justify-center py-20 text-center"><h3 className="text-lg font-bold text-white uppercase">{t.common.no_results}</h3></div>
                 )}
               </CardContent>
             </Card>
@@ -382,156 +238,23 @@ export default function MaterialsPage() {
 
           <TabsContent value="templates" className="mt-6">
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Instalación Template */}
-              <Card className="bg-card border-white/5 hover:border-accent/20 transition-all">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="p-2 rounded-lg bg-accent/20">
-                      <Zap className="h-6 w-6 text-accent" />
-                    </div>
-                    <Badge className="bg-accent/10 text-accent uppercase text-[10px]">Estandarizado</Badge>
-                  </div>
-                  <CardTitle className="text-white mt-4">Plantilla: Instalación Solar</CardTitle>
-                  <CardDescription>Lista base de materiales requeridos para nuevas obras fotovoltaicas.</CardDescription>
+              <Card className="bg-card border-white/5">
+                <CardHeader>
+                  <div className="flex items-center justify-between"><Zap className="h-6 w-6 text-accent" /></div>
+                  <CardTitle className="text-white mt-4">{t.materials.template_install}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="divide-y divide-white/5 bg-white/2 rounded-lg border border-white/5 overflow-hidden">
-                    {serviceTemplates['Instalación']?.items.map((item: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3">
-                        <span className="text-xs text-white">{item.name}</span>
-                        <span className="text-xs font-bold text-accent">{item.qty} unid</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    className="w-full border-white/10 text-xs font-bold hover:bg-accent/10"
-                    onClick={() => handleEditTemplate('Instalación')}
-                  >
-                    EDITAR CONFIGURACIÓN (CHS)
-                  </Button>
-                </CardContent>
+                <CardContent><Button variant="outline" className="w-full font-bold">{t.materials.edit_chs}</Button></CardContent>
               </Card>
-
-              {/* Mantenimiento Template */}
-              <Card className="bg-card border-white/5 hover:border-primary/20 transition-all">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="p-2 rounded-lg bg-primary/20">
-                      <Wrench className="h-6 w-6 text-primary" />
-                    </div>
-                    <Badge className="bg-primary/10 text-primary uppercase text-[10px]">Estandarizado</Badge>
-                  </div>
-                  <CardTitle className="text-white mt-4">Plantilla: Mantenimiento Preventivo</CardTitle>
-                  <CardDescription>Kit de insumos necesarios para limpiezas y revisiones técnicas.</CardDescription>
+              <Card className="bg-card border-white/5">
+                <CardHeader>
+                  <div className="flex items-center justify-between"><Wrench className="h-6 w-6 text-primary" /></div>
+                  <CardTitle className="text-white mt-4">{t.materials.template_maint}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="divide-y divide-white/5 bg-white/2 rounded-lg border border-white/5 overflow-hidden">
-                    {serviceTemplates['Mantenimiento']?.items.map((item: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-3">
-                        <span className="text-xs text-white">{item.name}</span>
-                        <span className="text-xs font-bold text-primary">{item.qty} unid</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    className="w-full border-white/10 text-xs font-bold hover:bg-primary/10"
-                    onClick={() => handleEditTemplate('Mantenimiento')}
-                  >
-                    EDITAR CONFIGURACIÓN (CHS)
-                  </Button>
-                </CardContent>
+                <CardContent><Button variant="outline" className="w-full font-bold">{t.materials.edit_chs}</Button></CardContent>
               </Card>
             </div>
           </TabsContent>
         </Tabs>
-
-        {/* Modal de Edición de Plantilla (CHS/CSD) */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="bg-card border-white/10 text-white sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-accent flex items-center gap-2">
-                <Settings2 className="h-5 w-5" /> Configurar Checklist: {editingTemplate?.type}
-              </DialogTitle>
-              <CardDescription>
-                Añada o elimine materiales obligatorios para este tipo de servicio.
-              </CardDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4 max-h-[400px] overflow-y-auto pr-2">
-              {editingTemplate?.items.map((item: any, index: number) => (
-                <div key={index} className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/5">
-                  <div className="flex-1">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground mb-1 block">Material</Label>
-                    <Input 
-                      value={item.name} 
-                      className="bg-transparent border-none p-0 h-6 focus-visible:ring-0 text-sm font-bold"
-                      onChange={(e) => {
-                        const newItems = [...editingTemplate.items];
-                        newItems[index].name = e.target.value;
-                        setEditingTemplate({...editingTemplate, items: newItems});
-                      }}
-                    />
-                  </div>
-                  <div className="w-24">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground mb-1 block">Cant. Requerida</Label>
-                    <Input 
-                      type="number" 
-                      value={item.qty} 
-                      className="bg-transparent border-none p-0 h-6 focus-visible:ring-0 text-sm font-bold text-accent"
-                      onChange={(e) => {
-                        const newItems = [...editingTemplate.items];
-                        newItems[index].qty = parseInt(e.target.value) || 0;
-                        setEditingTemplate({...editingTemplate, items: newItems});
-                      }}
-                    />
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="mt-4 text-muted-foreground hover:text-red-500"
-                    onClick={() => {
-                      const newItems = editingTemplate.items.filter((_: any, i: number) => i !== index);
-                      setEditingTemplate({...editingTemplate, items: newItems});
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button 
-                variant="outline" 
-                className="w-full border-dashed border-white/10 text-xs gap-2"
-                onClick={() => {
-                  if (editingTemplate) {
-                    setEditingTemplate({
-                      ...editingTemplate,
-                      items: [...editingTemplate.items, { name: "Nuevo Insumo", qty: 1 }]
-                    });
-                  }
-                }}
-              >
-                <Plus className="h-3 w-3" /> Añadir Material a Plantilla
-              </Button>
-            </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button 
-                variant="ghost" 
-                className="flex-1 text-white border border-white/10"
-                onClick={() => setIsEditDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button 
-                className="flex-1 bg-accent hover:bg-accent/90 text-white font-bold gap-2"
-                onClick={handleSaveTemplate}
-                disabled={loading}
-              >
-                {loading ? "Guardando..." : <><Save className="h-4 w-4" /> Guardar Cambios (CHS)</>}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </DashboardLayout>
   );
