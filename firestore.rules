@@ -40,12 +40,16 @@ service cloud.firestore {
     
     match /materiales/{materialId} {
       allow read, get, list: if isSignedIn();
-      allow write: if isAdmin();
+      // Admin puede crear/eliminar. Empleados autenticados pueden actualizar stock (decremento).
+      allow create, delete: if isAdmin();
+      allow update: if isSignedIn();
     }
     
     match /proyectos/{projectId} {
       allow read, get, list: if isSignedIn();
-      allow write: if isAdmin();
+      // Admin puede crear/eliminar proyectos. Empleados pueden actualizar (checklist, estado, stock).
+      allow create, delete: if isAdmin();
+      allow update: if isSignedIn();
     }
 
     match /teams/{teamId} {

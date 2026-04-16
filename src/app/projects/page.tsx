@@ -431,7 +431,13 @@ export default function ProjectsPage() {
     if (!db) return;
     const currentMaterials = [...(project.projectMaterials?.length > 0 ? project.projectMaterials : opProjectMaterials)];
     if (currentMaterials[idx]) {
-      currentMaterials[idx] = { ...currentMaterials[idx], done: !currentMaterials[idx].done };
+      const mat = currentMaterials[idx];
+      const newDone = !mat.done;
+      // Si el empleado marca como hecho y no ha puesto cantidad, auto-asigna la requerida
+      const newTakenQty = newDone && (!mat.takenQuantity || mat.takenQuantity === 0)
+        ? (mat.quantity || 1)
+        : mat.takenQuantity;
+      currentMaterials[idx] = { ...mat, done: newDone, takenQuantity: newTakenQty };
     }
 
     setOpProjectMaterials(currentMaterials);
@@ -488,7 +494,7 @@ export default function ProjectsPage() {
     }
 
     try {
-      // Solo actualizamos NUESTRO perfil (para quitar previous errors de firesotre "insufficient permissions"), el estado cooperativo principal vive ahora en "proyectos"
+      // Actualizamos NUESTRO perfil
       try {
         const userRef = doc(db, "users", currentUid);
         await updateDoc(userRef, {
@@ -498,24 +504,68 @@ export default function ProjectsPage() {
         });
       } catch (e) { }
 
-      // Cambiamos el proyecto en DB a "EnProceso" para que TODOS lo vean En Curso al mismo tiempo
-      try {
-        const projectRef = doc(db, "proyectos", project.id);
-        await updateDoc(projectRef, {
-          Pry_Estado: "EnProceso"
-        });
+      // Cambiamos el proyecto en DB a "EnProceso"
+      const projectRef = doc(db, "proyectos", project.id);
 
-        // Descontar inventario físico de la base de datos "materiales"
-        const currentMaterials = project.projectMaterials || opProjectMaterials || [];
-        for (const m of currentMaterials) {
-          if (m.id && m.takenQuantity > 0) {
-            const matRef = doc(db, "materiales", m.id);
-            await updateDoc(matRef, {
-              Mat_Stock_Disponible: increment(-m.takenQuantity)
-            }).catch(e => console.warn("No se pudo descontar stock", e));
-          }
+      // --- DESCUENTO DE STOCK ---
+      // Leer snapshot fresco de Firestore para obtener takenQuantity actualizado
+      const freshSnap = await getDoc(projectRef);
+      const freshData = freshSnap.data();
+      const materialsToDeduct: any[] = freshData?.projectMaterials || project.projectMaterials || [];
+
+      const stockUpdates: Promise<void>[] = [];
+      const deductedItems: string[] = [];
+
+      for (const m of materialsToDeduct) {
+        // Descontar si: tiene ID en catalogo, esta marcado como hecho, y tiene cantidad a descontar
+        const qtyToDeduct = m.takenQuantity || m.quantity || 0;
+        if (m.id && m.done && qtyToDeduct > 0) {
+          const matRef = doc(db, "materiales", m.id);
+          stockUpdates.push(
+            updateDoc(matRef, {
+              Mat_Stock_Disponible: increment(-qtyToDeduct)
+            }).then(() => {
+              deductedItems.push(`${m.name}: -${qtyToDeduct}`);
+            }).catch(e => console.warn("No se pudo descontar stock de", m.name, e))
+          );
         }
-      } catch (projErr) { }
+      }
+
+      await Promise.all(stockUpdates);
+
+      // Marcar proyecto como iniciado y guardar registro de lo descontado
+      await updateDoc(projectRef, {
+        Pry_Estado: "EnProceso",
+        stockDescontado: true,
+        stockDescontadoAt: new Date().toISOString(),
+        stockDescontadoPor: currentProfileName,
+        materialesDescontados: materialsToDeduct
+          .filter((m: any) => m.id && m.done)
+          .map((m: any) => ({ id: m.id, name: m.name, qty: m.takenQuantity || m.quantity || 0 }))
+      });
+
+      if (deductedItems.length > 0) {
+        toast({
+          title: "✅ Stock actualizado",
+          description: `Inventario descontado: ${deductedItems.join(", ")}`
+        });
+      }
+
+      // Generar reporte de inicio
+      await addDoc(collection(db, "reports"), {
+        projectId: project.id,
+        Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
+        employeeId: currentUid,
+        employeeName: currentProfileName,
+        assignedTeamId: project.assignedTeamId || "no-team",
+        content: "Inicio de jornada en equipo.",
+        progressAtTime: projectProgresoOriginal,
+        checklistProgress: checklistProgress,
+        checklistSnapshot: currentTasks,
+        timestamp: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        type: 'start_day_sync'
+      }).catch(e => console.warn("Error en Sync Report: ", e.message));
 
       toast({ title: t.projects.day_started, description: `Jornada iniciada para todo el equipo.` });
       setIsSheetOpen(false);
@@ -876,7 +926,7 @@ export default function ProjectsPage() {
 
                           if (template?.materials) {
                             currentMaterials = template.materials.map((m: any) => ({
-                              ...m, done: false, takenQuantity: 0
+                              ...m, done: false, takenQuantity: m.quantity || 1
                             }));
                             needsUpdate = true;
                           }
