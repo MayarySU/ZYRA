@@ -39,6 +39,7 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebas
 import { cn } from "@/lib/utils";
 import { doc, updateDoc, deleteDoc, collection, query, where, addDoc, serverTimestamp, increment, getDoc } from "firebase/firestore";
 import { recordAction } from "@/lib/gamification";
+import { sendNotification } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -154,14 +155,45 @@ function ReportsContent() {
           Pry_Estado: "Rechazado",
           lastRejectedReportId: reportId 
         });
+        // Notificar al empleado
+        if (targetReport.employeeId) {
+          await sendNotification(db, {
+            userId: targetReport.employeeId,
+            type: "report",
+            title: "Reporte Rechazado ❌",
+            message: `Tu reporte del proyecto "${targetReport.projectName || targetReport.Pry_Nombre_Proyecto || "Sin nombre"}" fue rechazado. Por favor corrígelo y vuelve a enviarlo.`,
+          });
+        }
       } else if (newStatus === "Aprobado" && targetReport?.projectId) {
         // 1. Cambiar estado del proyecto
         const projectRef = doc(db, "proyectos", targetReport.projectId);
         await updateDoc(projectRef, { Pry_Estado: "Finalizado" });
-
         // 2. Sumar puntos al empleado, recalcular nivel y otorgar medallas
         if (targetReport.employeeId) {
-          await recordAction(db, targetReport.employeeId, "project_approved", 50).catch(console.warn);
+          const result = await recordAction(db, targetReport.employeeId, "project_approved", 50).catch(() => null);
+          // Notificar al empleado
+          await sendNotification(db, {
+            userId: targetReport.employeeId,
+            type: "report",
+            title: "Reporte Aprobado ✅",
+            message: `¡Tu reporte del proyecto "${targetReport.projectName || "Sin nombre"}" fue aprobado! +50 puntos ganados.`,
+          });
+          if (result?.leveledUp) {
+            await sendNotification(db, {
+              userId: targetReport.employeeId,
+              type: "level",
+              title: `🎉 ¡Subiste al Nivel ${result.newNivel}!`,
+              message: "Sigue completando proyectos para desbloquear nuevas medallas y recompensas.",
+            });
+          }
+          for (const medal of (result?.newMedals || [])) {
+            await sendNotification(db, {
+              userId: targetReport.employeeId,
+              type: "achievement",
+              title: `${medal.emoji} Medalla Desbloqueada: ${medal.nombre}`,
+              message: medal.descripcion,
+            });
+          }
         }
       }
 

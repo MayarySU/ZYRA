@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, query, where } from "firebase/firestore";
+import { sendNotificationToMany } from "@/lib/notifications";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,14 @@ export default function TeamPage() {
       await addDoc(colRef, data);
       toast({ title: t.common.success, description: t.projects.create_success });
       setIsCreateDialogOpen(false);
+      // Notificar a cada miembro que fue añadido al equipo
+      if (db && newTeam.members.length > 0) {
+        await sendNotificationToMany(db, newTeam.members, {
+          type: "team",
+          title: `👥 Fuiste añadido al equipo "${newTeam.name}"`,
+          message: `El administrador te asignó al equipo de ${newTeam.type}. ¡Prepárate para el trabajo en equipo!`,
+        });
+      }
       setNewTeam({ name: "", leaderId: "", leaderName: "", members: [], type: "Instalación", status: "Disponible" });
     } catch (err: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -211,6 +220,14 @@ export default function TeamPage() {
       await setDoc(teamRef, updateData, { merge: true });
       toast({ title: t.common.success });
       setIsEditDialogOpen(false);
+      // Notificar a los miembros del equipo actualizado
+      if (db && editTeamData?.members?.length > 0) {
+        await sendNotificationToMany(db, editTeamData.members, {
+          type: "team",
+          title: `🔄 Equipo "${editTeamData.name}" actualizado`,
+          message: "La configuración de tu equipo fue actualizada por el administrador.",
+        });
+      }
     } catch (err: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: teamRef.path,
