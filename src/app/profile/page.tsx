@@ -11,17 +11,17 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Camera, 
-  User, 
-  Shield, 
-  Zap, 
-  Trophy, 
-  Save, 
-  Loader2, 
-  History as HistoryIcon, 
-  Award, 
-  CheckCircle2, 
+import {
+  Camera,
+  User,
+  Shield,
+  Zap,
+  Trophy,
+  Save,
+  Loader2,
+  History as HistoryIcon,
+  Award,
+  CheckCircle2,
   Clock,
   LayoutDashboard,
   Star
@@ -38,7 +38,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [newPhoto, setNewPhoto] = useState<string | null>(null);
 
@@ -56,7 +56,7 @@ export default function ProfilePage() {
       } else {
         date = new Date(dateValue);
       }
-      
+
       if (!isValid(date)) return "Reciente";
       return format(date, "d MMM, HH:mm", { locale: es });
     } catch (e) {
@@ -64,17 +64,7 @@ export default function ProfilePage() {
     }
   };
 
-  // Query for activity logs
-  /*
-  const logsQuery = useMemoFirebase(() => {
-    if (!db || !user?.uid) return null;
-    return query(
-      collection(db, "activity_logs"),
-      where("userId", "==", user.uid),
-      limit(20)
-    );
-  }, [db, user?.uid]);
-  */
+  // Query for activity logs — desactivado: la colección activity_logs no tiene permisos configurados
   const logsQuery = null;
 
   const { data: activities, isLoading: logsLoading } = useCollection(logsQuery);
@@ -91,7 +81,6 @@ export default function ProfilePage() {
   };
 
   const handleSaveProfile = async () => {
-    /*
     if (!db || !user) return;
     setIsUpdating(true);
     try {
@@ -103,8 +92,6 @@ export default function ProfilePage() {
     } finally {
       setIsUpdating(false);
     }
-    */
-    toast({ title: "Acción temporalmente deshabilitada por permisos de base de datos" });
   };
 
   if (userLoading) {
@@ -179,16 +166,16 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-3 gap-4">
                   {profile?.logros && profile.logros.length > 0 ? (
                     profile.logros.map((logro: any, idx: number) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className={cn(
                           "aspect-square rounded-xl flex flex-col items-center justify-center p-2 text-center transition-all",
                           "bg-accent/10 border border-accent/20"
                         )}
-                        title={logro}
+                        title={typeof logro === 'string' ? logro : (logro.nombre || logro.id || '')}
                       >
-                        <Trophy className="h-6 w-6 mb-1 text-accent" />
-                        <span className="text-[8px] font-bold uppercase leading-tight line-clamp-2">{logro}</span>
+                        <span className="text-2xl mb-1">{typeof logro === 'string' ? '🏆' : (logro.emoji || '🏆')}</span>
+                        <span className="text-[8px] font-bold uppercase leading-tight line-clamp-2">{typeof logro === 'string' ? logro : (logro.nombre || logro.id)}</span>
                       </div>
                     ))
                   ) : (
@@ -233,12 +220,12 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
               <CardFooter className="border-t border-border py-4 bg-muted/5">
-                <Button 
-                  className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-11 gap-2 rounded-xl transition-all shadow-lg shadow-accent/20" 
-                  onClick={handleSaveProfile} 
+                <Button
+                  className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-11 gap-2 rounded-xl transition-all shadow-lg shadow-accent/20"
+                  onClick={handleSaveProfile}
                   disabled={!newPhoto || isUpdating}
                 >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} 
+                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {t.common.save} Cambios de Perfil
                 </Button>
               </CardFooter>
@@ -308,13 +295,13 @@ export default function ProfilePage() {
 
 function ActivityIcon({ className }: { className?: string }) {
   return (
-    <svg 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={className}
     >
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
