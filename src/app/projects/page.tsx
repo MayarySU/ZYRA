@@ -552,21 +552,7 @@ export default function ProjectsPage() {
         });
       }
 
-      // Generar reporte de inicio
-      await addDoc(collection(db, "reports"), {
-        projectId: project.id,
-        Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
-        employeeId: currentUid,
-        employeeName: currentProfileName,
-        assignedTeamId: project.assignedTeamId || "no-team",
-        content: "Inicio de jornada en equipo.",
-        progressAtTime: projectProgresoOriginal,
-        checklistProgress: checklistProgress,
-        checklistSnapshot: currentTasks,
-        timestamp: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-        type: 'start_day_sync'
-      }).catch(e => console.warn("Error en Sync Report: ", e.message));
+
 
       toast({ title: t.projects.day_started, description: `Jornada iniciada para todo el equipo.` });
       setIsSheetOpen(false);
