@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { doc, collection, addDoc, query, where, serverTimestamp, updateDoc, deleteDoc, getDoc, setDoc, increment, getDocs } from "firebase/firestore";
+import { recordAction } from "@/lib/gamification";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -497,28 +498,23 @@ export default function ProjectsPage() {
         });
       } catch (e) { }
 
-      // Generar UN reporte inicial para todo el equipo para el TimeTracking y Visibilidad (Todo usuario autenticado puede instertar en 'reports')
-      await addDoc(collection(db, "reports"), {
-        projectId: project.id,
-        Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
-        employeeId: currentUid,
-        employeeName: currentProfileName,
-        assignedTeamId: project.assignedTeamId || "no-team", // Clave para la query general
-        content: "Inicio de jornada en equipo.",
-        progressAtTime: projectProgresoOriginal,
-        checklistProgress: checklistProgress,
-        checklistSnapshot: currentTasks,
-        timestamp: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-        type: 'start_day_sync'
-      }).catch(e => console.warn("Error en Sync Report: ", e.message));
-
       // Cambiamos el proyecto en DB a "EnProceso" para que TODOS lo vean En Curso al mismo tiempo
       try {
         const projectRef = doc(db, "proyectos", project.id);
         await updateDoc(projectRef, {
           Pry_Estado: "EnProceso"
         });
+
+        // Descontar inventario físico de la base de datos "materiales"
+        const currentMaterials = project.projectMaterials || opProjectMaterials || [];
+        for (const m of currentMaterials) {
+          if (m.id && m.takenQuantity > 0) {
+            const matRef = doc(db, "materiales", m.id);
+            await updateDoc(matRef, {
+              Mat_Stock_Disponible: increment(-m.takenQuantity)
+            }).catch(e => console.warn("No se pudo descontar stock", e));
+          }
+        }
       } catch (projErr) { }
 
       toast({ title: t.projects.day_started, description: `Jornada iniciada para todo el equipo.` });
@@ -583,7 +579,7 @@ export default function ProjectsPage() {
         clientName: project.clientName || "N/A",
         ubicacion: project.ubicacion || "N/A",
         serviceType: project.serviceType || "N/A",
-        projectStatus: "EnRevision", // Se va a enviar a revisión
+        projectStatus: "EnRevision", 
         projectProgress: 100, // Marcamos el 100% de avance
         assignedTeamId: project.assignedTeamId || "no-team",
         teamName: assignedTeam?.name || "Sin equipo asignado",
@@ -608,7 +604,7 @@ export default function ProjectsPage() {
             ...baseReportData,
             employeeId: currentUid,
             employeeName: currentProfile.nombre || "Técnico Zyra",
-            status: "Pendiente" // Se vuelve a mandar a revisión
+            status: "Pendiente" 
           });
           
           // Limpiar el ID del proyecto
@@ -627,7 +623,7 @@ export default function ProjectsPage() {
         console.warn("Report Sync Error:", e);
       }
 
-      // Cambiamos estado de PORYECTO a 'EnRevision' para TODO el equipo
+      // Cambiamos estado de PORYECTO para TODO el equipo
       try {
         const projectRef = doc(db, "proyectos", project.id);
         await updateDoc(projectRef, {
@@ -635,16 +631,22 @@ export default function ProjectsPage() {
           progreso: 100
         });
       } catch (projErr) {
-        console.warn(projErr);
+        console.warn("Report Sync Error:", projErr);
       }
 
-      // Limpiamos nuestra actividad
+
+      // Otorgar medallas y actualizar stats del empleado
       try {
-        const userRef = doc(db, "users", currentUid);
-        const newPoints = (currentProfile.puntos || 0) + 50;
-        const newLevel = newPoints >= (currentProfile.level || 1) * 200 ? (currentProfile.level || 1) + 1 : (currentProfile.level || 1);
-        await updateDoc(userRef, { workingOn: null, puntos: newPoints, level: newLevel });
-      } catch (e) { }
+        const isCorrection = !!project.lastRejectedReportId;
+        if (isCorrection) {
+          await recordAction(db, currentUid, "correction_submitted", 10);
+        } else {
+          await recordAction(db, currentUid, "report_submitted", 10);
+          if (reportPhotos.length > 0) {
+            await recordAction(db, currentUid, "photo_uploaded", 0);
+          }
+        }
+      } catch (e) { console.warn("Gamification error:", e); }
 
       toast({ title: t.common.success, description: "Reportes generados para el equipo y enviando a aprobación." });
 

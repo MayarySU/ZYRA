@@ -37,7 +37,8 @@ import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { cn } from "@/lib/utils";
-import { doc, updateDoc, deleteDoc, collection, query, where, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, collection, query, where, addDoc, serverTimestamp, increment, getDoc } from "firebase/firestore";
+import { recordAction } from "@/lib/gamification";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -146,12 +147,22 @@ function ReportsContent() {
       await updateDoc(reportRef, { status: newStatus });
 
       const targetReport = firestoreReports?.find(r => r.id === reportId);
+
       if (newStatus === "Rechazado" && targetReport?.projectId) {
         const projectRef = doc(db, "proyectos", targetReport.projectId);
-        await updateDoc(projectRef, { Pry_Estado: "Rechazado" });
+        await updateDoc(projectRef, { 
+          Pry_Estado: "Rechazado",
+          lastRejectedReportId: reportId 
+        });
       } else if (newStatus === "Aprobado" && targetReport?.projectId) {
+        // 1. Cambiar estado del proyecto
         const projectRef = doc(db, "proyectos", targetReport.projectId);
         await updateDoc(projectRef, { Pry_Estado: "Finalizado" });
+
+        // 2. Sumar puntos al empleado, recalcular nivel y otorgar medallas
+        if (targetReport.employeeId) {
+          await recordAction(db, targetReport.employeeId, "project_approved", 50).catch(console.warn);
+        }
       }
 
       toast({ title: t.common.success });

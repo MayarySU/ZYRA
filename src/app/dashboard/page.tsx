@@ -2,114 +2,529 @@
 "use client";
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { 
-  Trophy, 
-  Flame, 
-  Star, 
-  Zap, 
+import { useToast } from "@/hooks/use-toast";
+import {
+  Trophy,
+  Star,
+  Zap,
   Briefcase,
-  Camera,
+  FileText,
   Users,
-  Loader2
+  Loader2,
+  TrendingUp,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Award,
+  Flame,
+  Shield,
+  ChevronRight,
+  Activity,
+  BarChart2,
+  Package,
+  Wrench,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
+import { useMemo, useEffect, useRef } from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
-} from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+  Cell,
+  LineChart,
+  Line,
+  Tooltip,
+} from "recharts";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { collection, query, where } from "firebase/firestore";
-import { startOfDay, subWeeks, isAfter, format, startOfWeek } from "date-fns";
+import { startOfDay, subWeeks, isAfter, format, startOfWeek, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 
-export default function DashboardPage() {
-  const { profile, loading: userLoading, user } = useUser();
-  const db = useFirestore();
+// ─────────────────────────────────────────────────
+// MEDAL CONFIG
+// ─────────────────────────────────────────────────
+const MEDAL_CONFIG: Record<string, { color: string; icon: string; label: string }> = {
+  Novato:   { color: "text-blue-400 bg-blue-500/10 border-blue-500/20",    icon: "🥉", label: "Novato" },
+  Experto:  { color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", icon: "🥈", label: "Experto" },
+  Elite:    { color: "text-purple-400 bg-purple-500/10 border-purple-500/20",   icon: "🥇", label: "Elite" },
+  Leyenda:  { color: "text-amber-400 bg-amber-500/10 border-amber-500/20",      icon: "👑", label: "Leyenda" },
+};
+
+// ─────────────────────────────────────────────────
+// STATUS STYLE HELPERS
+// ─────────────────────────────────────────────────
+function statusStyle(status: string) {
+  switch (status) {
+    case "Finalizado":  return { color: "text-emerald-400", bg: "bg-emerald-500/10", icon: <CheckCircle2 className="h-3 w-3" /> };
+    case "EnProceso":   return { color: "text-blue-400",    bg: "bg-blue-500/10",    icon: <Activity className="h-3 w-3" /> };
+    case "EnRevision":  return { color: "text-yellow-400",  bg: "bg-yellow-500/10",  icon: <Clock className="h-3 w-3" /> };
+    case "Rechazado":   return { color: "text-red-400",     bg: "bg-red-500/10",     icon: <XCircle className="h-3 w-3" /> };
+    default:            return { color: "text-muted-foreground", bg: "bg-muted/20",  icon: <Clock className="h-3 w-3" /> };
+  }
+}
+
+// ─────────────────────────────────────────────────
+// ADMIN DASHBOARD
+// ─────────────────────────────────────────────────
+function AdminDashboard({ projects, reports, allUsers, materials }: any) {
   const { t } = useI18n();
-  const isAdmin = profile?.rol === 'admin';
 
-  // Admin Queries - Solo se activan si el usuario es administrador y está autenticado
-  const projectsQuery = useMemoFirebase(() => (db && isAdmin) ? collection(db, "proyectos") : null, [db, isAdmin]);
-  const reportsQuery = useMemoFirebase(() => (db && isAdmin) ? collection(db, "reports") : null, [db, isAdmin]);
-  const usersQuery = useMemoFirebase(() => (db && isAdmin) ? collection(db, "users") : null, [db, isAdmin]);
-
-  const { data: projects, isLoading: projectsLoading } = useCollection(projectsQuery);
-  const { data: reports, isLoading: reportsLoading } = useCollection(reportsQuery);
-  const { data: allUsers, isLoading: usersLoading } = useCollection(usersQuery);
-
-  // Statistics Calculation
   const stats = useMemo(() => {
-    if (!projects || !reports || !allUsers) return { activeProjects: 0, dailyReports: 0, activeEmployees: 0 };
-    
-    const activeProjects = projects.filter(p => p.Pry_Estado !== 'Finalizado').length;
-    
+    const activeProjects  = (projects || []).filter((p: any) => p.Pry_Estado !== "Finalizado").length;
+    const finishedProjects = (projects || []).filter((p: any) => p.Pry_Estado === "Finalizado").length;
+    const pendingReports  = (reports  || []).filter((r: any) => r.status === "Pendiente").length;
+    const approvedReports = (reports  || []).filter((r: any) => r.status === "Aprobado").length;
+    const employees       = (allUsers || []).filter((u: any) => u.rol === "employee");
+    const criticalMats    = (materials || []).filter((m: any) => (m.Mat_Stock_Disponible || 0) <= 5).length;
+
     const today = startOfDay(new Date());
-    const dailyReports = reports.filter(r => {
-      const reportDate = r.timestamp ? new Date(r.timestamp) : null;
-      return reportDate && isAfter(reportDate, today);
-    }).length;
+    const todayReports = (reports || []).filter((r: any) =>
+      r.timestamp && isAfter(new Date(r.timestamp), today)
+    ).length;
 
-    const activeEmployees = allUsers.filter(u => u.rol === 'employee').length;
+    return { activeProjects, finishedProjects, pendingReports, approvedReports, employees, todayReports, criticalMats,
+      totalProjects: (projects || []).length, totalReports: (reports || []).length };
+  }, [projects, reports, allUsers, materials]);
 
-    return { 
-      activeProjects, 
-      dailyReports, 
-      activeEmployees,
-      totalProjects: projects.length,
-      totalEmployees: allUsers.length
-    };
-  }, [projects, reports, allUsers]);
-
-  // Project Progress Data (Pie Chart)
-  const projectProgressData = useMemo(() => {
-    if (!projects) return [];
-    const finished = projects.filter(p => p.Pry_Estado === 'Finalizado').length;
-    const inProgress = projects.length - finished;
-    return [
-      { name: t.reports.approved, value: finished, color: 'hsl(var(--primary))' },
-      { name: t.reports.pending, value: inProgress, color: 'hsl(var(--secondary))' },
-    ];
-  }, [projects, t]);
-
-  // Weekly Reports Data (Bar Chart)
+  // Weekly bar chart
   const weeklyData = useMemo(() => {
-    if (!reports) return [];
-    const weeks = [3, 2, 1, 0].map(offset => {
-      const date = subWeeks(new Date(), offset);
-      const start = startOfWeek(date, { weekStartsOn: 1 });
-      const label = `Sem ${format(start, "dd/MM")}`;
-      return { name: label, total: 0, start };
+    const weeks = [6, 5, 4, 3, 2, 1, 0].map(offset => {
+      const date  = subDays(new Date(), offset);
+      const label = format(date, "EEE", { locale: es });
+      return { name: label, reportes: 0, proyectos: 0, date };
     });
-
-    reports.forEach(r => {
-      const reportDate = r.timestamp ? new Date(r.timestamp) : null;
-      if (reportDate) {
-        const weekIndex = weeks.findIndex((w, i) => {
-          const nextWeek = i < 3 ? weeks[i+1].start : new Date();
-          return isAfter(reportDate, w.start) && (i === 3 || !isAfter(reportDate, nextWeek));
-        });
-        if (weekIndex !== -1) weeks[weekIndex].total++;
-      }
+    (reports || []).forEach((r: any) => {
+      if (!r.timestamp) return;
+      const d = new Date(r.timestamp);
+      const idx = weeks.findIndex(w => format(w.date, "yyyyMMdd") === format(d, "yyyyMMdd"));
+      if (idx !== -1) weeks[idx].reportes++;
     });
-
     return weeks;
   }, [reports]);
 
-  if (userLoading || (isAdmin && (projectsLoading || reportsLoading || usersLoading))) {
+  // Pie chart: project states
+  const pieData = useMemo(() => [
+    { name: "Activos",    value: stats.activeProjects,   color: "hsl(var(--accent))" },
+    { name: "Finalizados",value: stats.finishedProjects, color: "hsl(142 71% 45%)" },
+  ], [stats]);
+
+  // Report status breakdown
+  const reportStatusData = useMemo(() => [
+    { name: "Pendiente", value: stats.pendingReports,  color: "#f59e0b" },
+    { name: "Aprobado",  value: stats.approvedReports, color: "#10b981" },
+    { name: "Rechazado", value: (reports || []).filter((r: any) => r.status === "Rechazado").length, color: "#ef4444" },
+  ], [reports, stats]);
+
+  // Top employees by points
+  const topEmployees = useMemo(() =>
+    [...(stats.employees || [])]
+      .sort((a: any, b: any) => (b.puntos || 0) - (a.puntos || 0))
+      .slice(0, 5),
+    [stats.employees]
+  );
+
+  // Recent projects
+  const recentProjects = useMemo(() =>
+    [...(projects || [])].slice(-5).reverse(),
+    [projects]
+  );
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto font-body">
+      {/* Header */}
+      <div className="flex flex-col gap-1">
+        <h2 className="text-3xl font-black tracking-tight text-foreground">
+          Panel <span className="text-accent">Administrativo</span>
+        </h2>
+        <p className="text-sm text-muted-foreground">Resumen operativo en tiempo real de todos los equipos y proyectos.</p>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Proyectos Activos",  value: stats.activeProjects,  icon: <Briefcase className="h-5 w-5" />,  delta: `${stats.totalProjects} en total`, color: "text-accent bg-accent/10" },
+          { label: "Reportes Hoy",       value: stats.todayReports,    icon: <FileText className="h-5 w-5" />,   delta: `${stats.pendingReports} pendientes`, color: "text-yellow-400 bg-yellow-500/10" },
+          { label: "Empleados",          value: stats.employees.length, icon: <Users className="h-5 w-5" />,     delta: "en nómina activa", color: "text-blue-400 bg-blue-500/10" },
+          { label: "Stock Crítico",      value: stats.criticalMats,     icon: <Package className="h-5 w-5" />,   delta: "materiales ≤ 5 unidades", color: "text-red-400 bg-red-500/10" },
+        ].map((kpi) => (
+          <Card key={kpi.label} className="border-border bg-card hover:border-accent/30 transition-all">
+            <CardContent className="p-5">
+              <div className={cn("inline-flex p-2 rounded-xl mb-3", kpi.color)}>
+                {kpi.icon}
+              </div>
+              <div className="text-3xl font-black text-foreground">{kpi.value}</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">{kpi.label}</div>
+              <div className="text-[10px] text-muted-foreground/60 mt-0.5">{kpi.delta}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Charts row */}
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Bar chart - Weekly reports */}
+        <Card className="md:col-span-2 border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <BarChart2 className="h-4 w-4 text-accent" /> Reportes – Últimos 7 días
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weeklyData} barSize={28}>
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.07} vertical={false} />
+                <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} stroke="currentColor" opacity={0.4} />
+                <YAxis fontSize={10} tickLine={false} axisLine={false} stroke="currentColor" opacity={0.4} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 11 }}
+                  labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 700 }}
+                  itemStyle={{ color: "hsl(var(--accent))" }}
+                />
+                <Bar dataKey="reportes" fill="hsl(var(--accent))" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Pie – Project states */}
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-accent" /> Estado Proyectos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center h-[220px]">
+            <ResponsiveContainer width="100%" height={150}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={4} dataKey="value">
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 11 }}
+                  itemStyle={{ color: "hsl(var(--foreground))" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex flex-col gap-1.5 w-full px-2">
+              {pieData.map((e, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: e.color }} />
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">{e.name}</span>
+                  </div>
+                  <span className="text-[10px] font-black text-foreground">{e.value}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bottom row */}
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Report Status Breakdown */}
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <FileText className="h-4 w-4 text-accent" /> Estado de Reportes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {reportStatusData.map((item) => (
+              <div key={item.name} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-xs font-bold text-muted-foreground">{item.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        backgroundColor: item.color,
+                        width: stats.totalReports > 0 ? `${(item.value / stats.totalReports) * 100}%` : "0%"
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs font-black text-foreground w-6 text-right">{item.value}</span>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Top Employees */}
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-accent" /> Ranking de Empleados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {topEmployees.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">Sin datos aún</p>
+            ) : topEmployees.map((emp: any, i: number) => (
+              <div key={emp.id} className="flex items-center gap-3">
+                <div className={cn(
+                  "h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
+                  i === 0 ? "bg-amber-500/20 text-amber-400" :
+                  i === 1 ? "bg-slate-400/20 text-slate-300" :
+                  i === 2 ? "bg-orange-700/20 text-orange-500" : "bg-muted text-muted-foreground"
+                )}>{i + 1}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-foreground truncate">{emp.nombre || "—"}</p>
+                  <p className="text-[9px] text-muted-foreground">Nv. {emp.nivel || 1}</p>
+                </div>
+                <Badge variant="outline" className="text-[9px] font-black border-accent/30 text-accent shrink-0">
+                  {emp.puntos || 0} pts
+                </Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Recent Projects */}
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Briefcase className="h-4 w-4 text-accent" /> Proyectos Recientes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentProjects.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">Sin proyectos</p>
+            ) : recentProjects.map((proj: any) => {
+              const s = statusStyle(proj.Pry_Estado);
+              return (
+                <div key={proj.id} className="flex items-center gap-3">
+                  <div className={cn("p-1.5 rounded-lg shrink-0", s.bg, s.color)}>{s.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground truncate">{proj.Pry_Nombre_Proyecto}</p>
+                    <p className="text-[9px] text-muted-foreground truncate">{proj.clientName || "Sin cliente"}</p>
+                  </div>
+                  <Badge variant="outline" className={cn("text-[8px] font-black shrink-0 border-0", s.bg, s.color)}>
+                    {proj.Pry_Estado || "—"}
+                  </Badge>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// EMPLOYEE DASHBOARD
+// ─────────────────────────────────────────────────
+function EmployeeDashboard({ profile, reports, projects }: any) {
+  const puntos   = profile?.puntos  || 0;
+  const nivel    = profile?.nivel   || 1;
+  const racha    = profile?.racha   || 0;
+  const logros   = profile?.logros  || [];
+  const targetPts = nivel * 200;
+  const pct      = Math.min((puntos / targetPts) * 100, 100);
+
+  // Level-up celebration
+  const prevNivelRef = useRef<number>(nivel);
+  const { toast } = useToast();
+  useEffect(() => {
+    if (nivel > prevNivelRef.current) {
+      toast({
+        title: `🎉 ¡Subiste al Nivel ${nivel}!`,
+        description: `Felicidades, ahora eres Nivel ${nivel}. ¡Sigue así!`,
+      });
+    }
+    prevNivelRef.current = nivel;
+  }, [nivel]);
+
+  // History feed: combine my reports + project events
+  const historial = useMemo(() => {
+    const uid = profile?.uid;
+    const myReports = (reports || [])
+      .filter((r: any) => r.employeeId === uid || r.authorName === profile?.nombre)
+      .map((r: any) => ({
+        id: r.id,
+        type: "report" as const,
+        label: r.status === "Aprobado" ? "✅ Reporte aprobado" : r.status === "Rechazado" ? "❌ Reporte rechazado" : "📤 Reporte enviado",
+        sub: r.projectName || "Sin proyecto",
+        date: r.timestamp,
+        pts: r.status === "Aprobado" ? "+50 pts" : null,
+        color: r.status === "Aprobado" ? "text-emerald-400" : r.status === "Rechazado" ? "text-red-400" : "text-yellow-400",
+      }));
+    return myReports
+      .sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
+      .slice(0, 8);
+  }, [reports, profile]);
+
+  const completedLogros = logros.filter((l: any) => l.completado);
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto font-body">
+      {/* Header */}
+      <div>
+        <h2 className="text-3xl font-black tracking-tight text-foreground">
+          ¡Hola, <span className="text-accent">{profile?.nombre?.split(" ")[0] || "Técnico"}</span>! 👋
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">Tu progreso y actividad reciente.</p>
+      </div>
+
+      {/* Level + Streak + Medals KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Level progress */}
+        <Card className="col-span-2 border-border bg-card">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-accent/20"><Zap className="h-5 w-5 text-accent" /></div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nivel actual</p>
+                  <p className="text-2xl font-black text-foreground">Nivel {nivel}</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="border-accent/30 text-accent font-black text-xs">
+                {puntos} / {targetPts} pts
+              </Badge>
+            </div>
+            <Progress value={pct} className="h-2.5 rounded-full" />
+            <p className="text-[9px] text-muted-foreground mt-2 font-bold">{Math.round(pct)}% al siguiente nivel</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card flex flex-col items-center justify-center p-5">
+          <div className="p-3 rounded-full bg-orange-500/10 mb-2">
+            <Flame className="h-6 w-6 text-orange-400" />
+          </div>
+          <p className="text-3xl font-black text-foreground">{racha}</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-orange-400 mt-0.5">Días de Racha</p>
+        </Card>
+
+        <Card className="border-border bg-card flex flex-col items-center justify-center p-5">
+          <div className="p-3 rounded-full bg-yellow-500/10 mb-2">
+            <Trophy className="h-6 w-6 text-yellow-400" />
+          </div>
+          <p className="text-3xl font-black text-foreground">{completedLogros.length}</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-yellow-400 mt-0.5">Logros</p>
+        </Card>
+      </div>
+
+      {/* Medals + History */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Medals */}
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Award className="h-4 w-4 text-accent" /> Medallas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {logros.length === 0 ? (
+              <div className="flex flex-col items-center py-8 gap-2">
+                <Shield className="h-10 w-10 text-muted-foreground/20" />
+                <p className="text-xs text-muted-foreground font-bold">Completa proyectos para ganar medallas</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {logros.map((logro: any) => {
+                  const cfg = MEDAL_CONFIG[logro.nombre as string] || { color: "text-accent bg-accent/10 border-accent/20", icon: "⭐", label: logro.nombre };
+                  const done = logro.completado;
+                  return (
+                    <div
+                      key={logro.id}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all",
+                        done ? cn("bg-card", cfg.color) : "bg-muted/10 border-border grayscale opacity-30"
+                      )}
+                    >
+                      <span className="text-3xl">{cfg.icon}</span>
+                      <div className="text-center">
+                        <p className={cn("text-[10px] font-black uppercase tracking-widest", done ? "text-foreground" : "text-muted-foreground")}>
+                          {cfg.label}
+                        </p>
+                        {done && <span className="text-[8px] text-accent font-bold uppercase">Obtenida</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Activity History */}
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Activity className="h-4 w-4 text-accent" /> Historial de Acciones
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {historial.length === 0 ? (
+              <div className="flex flex-col items-center py-8 gap-2">
+                <Activity className="h-10 w-10 text-muted-foreground/20" />
+                <p className="text-xs text-muted-foreground font-bold">Sin actividad registrada aún</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {historial.map((item: any) => (
+                  <div key={item.id} className="flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0">
+                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-accent" />
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-xs font-bold", item.color)}>{item.label}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{item.sub}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {item.pts && <p className="text-[9px] font-black text-emerald-400">{item.pts}</p>}
+                      <p className="text-[9px] text-muted-foreground">
+                        {item.date ? format(new Date(item.date), "dd MMM", { locale: es }) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// MAIN PAGE
+// ─────────────────────────────────────────────────
+export default function DashboardPage() {
+  const { profile, loading: userLoading, user } = useUser();
+  const db      = useFirestore();
+  const isAdmin = profile?.rol === "admin";
+
+  const projectsQuery  = useMemoFirebase(() => (db && isAdmin)   ? collection(db, "proyectos")  : null, [db, isAdmin]);
+  const reportsQuery   = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    if (isAdmin) return collection(db, "reports");
+    // Employees can only read their own reports (Firestore rules)
+    return query(collection(db, "reports"), where("employeeId", "==", user.uid));
+  }, [db, isAdmin, user]);
+  const usersQuery     = useMemoFirebase(() => (db && isAdmin)   ? collection(db, "users")      : null, [db, isAdmin]);
+  const materialsQuery = useMemoFirebase(() => (db && isAdmin)   ? collection(db, "materiales") : null, [db, isAdmin]);
+
+  const { data: projects,  isLoading: projectsLoading  } = useCollection(projectsQuery);
+  const { data: reports,   isLoading: reportsLoading   } = useCollection(reportsQuery);
+  const { data: allUsers,  isLoading: usersLoading     } = useCollection(usersQuery);
+  const { data: materials, isLoading: materialsLoading } = useCollection(materialsQuery);
+
+  const isLoading = userLoading || reportsLoading || (isAdmin && (projectsLoading || usersLoading || materialsLoading));
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-accent" />
@@ -118,214 +533,8 @@ export default function DashboardPage() {
   }
 
   if (isAdmin) {
-    return (
-      <div className="space-y-8 max-w-7xl mx-auto font-body">
-        <div className="flex flex-col gap-2">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            {t.common.welcome}, <span className="text-accent">{t.common.admin}.</span>
-          </h2>
-          <p className="text-muted-foreground">{t.dashboard.admin_subtitle}</p>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          <StatCard
-            title={t.dashboard.active_projects}
-            value={stats.activeProjects}
-            icon={Briefcase}
-            description={`${t.dashboard.of} ${stats.totalProjects} ${t.dashboard.total}`}
-          />
-          <StatCard
-            title={t.dashboard.daily_reports}
-            value={`+${stats.dailyReports}`}
-            icon={Camera}
-            description={`${reports?.length || 0} en ${t.dashboard.total}`}
-          />
-          <StatCard
-            title={t.dashboard.active_employees}
-            value={stats.activeEmployees}
-            icon={Users}
-            description={`${stats.totalEmployees} miembros en ${t.dashboard.total}`}
-          />
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="lg:col-span-2 border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground text-lg">{t.dashboard.weekly_reports}</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              <ChartContainer config={{ total: { label: t.nav.reports, color: "hsl(var(--accent))" } }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weeklyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} vertical={false} />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="currentColor" 
-                      opacity={0.5}
-                      fontSize={10} 
-                      tickLine={false} 
-                      axisLine={false} 
-                    />
-                    <YAxis 
-                      stroke="currentColor"
-                      opacity={0.5}
-                      fontSize={10} 
-                      tickLine={false} 
-                      axisLine={false} 
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar 
-                      dataKey="total" 
-                      fill="hsl(var(--accent))" 
-                      radius={[4, 4, 0, 0]} 
-                      barSize={40}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground text-lg">{t.dashboard.work_progress}</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px] flex flex-col items-center justify-center relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={projectProgressData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {projectProgressData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                    itemStyle={{ color: 'hsl(var(--foreground))' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex flex-col gap-2 mt-4 w-full">
-                {projectProgressData.map((entry, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">{entry.name}</span>
-                    </div>
-                    <span className="text-[10px] font-bold text-foreground">{entry.value}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
+    return <AdminDashboard projects={projects} reports={reports} allUsers={allUsers} materials={materials} />;
   }
 
-  // Employee View
-  const puntos = profile?.puntos || 0;
-  const nivel = profile?.nivel || 1;
-  const racha = profile?.racha || 0;
-  const targetPoints = nivel * 200;
-  const progressPercentage = (puntos / targetPoints) * 100;
-  const logros = profile?.logros || [];
-
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto font-body">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-          {t.dashboard.op_panel}
-        </h2>
-        <p className="text-xs md:text-sm text-muted-foreground">{t.dashboard.op_subtitle}</p>
-      </div>
-
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden relative border-border">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 rounded-lg bg-accent/20">
-                <Zap className="h-4 w-4 text-accent" />
-              </div>
-              <Badge variant="outline" className="text-[10px] border-accent/30 text-accent font-bold">{t.dashboard.level} {nivel}</Badge>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between items-end">
-                <h3 className="text-2xl font-bold text-foreground">{Math.floor(progressPercentage)}%</h3>
-                <span className="text-[10px] text-muted-foreground font-bold">{t.dashboard.points}: {puntos} / {targetPoints}</span>
-              </div>
-              <Progress value={progressPercentage} className="h-1.5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 gap-4 md:contents">
-          <Card className="flex flex-col items-center justify-center p-4 border-border">
-            <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center mb-2">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground">{logros.filter((l: any) => l.completado).length}</h3>
-            <p className="text-[9px] font-bold text-yellow-500 uppercase tracking-tighter">{t.dashboard.achievements}</p>
-          </Card>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="text-sm font-bold text-foreground uppercase tracking-widest flex items-center gap-2">
-          <Star className="h-4 w-4 text-accent" /> {t.dashboard.badges}
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {logros.length > 0 ? logros.map((logro: any) => {
-            const isCompletado = logro.completado;
-            const colors: Record<string, string> = {
-              'Novato': 'text-blue-500 bg-blue-500/10 border-blue-500/20',
-              'Experto': 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-              'Elite': 'text-purple-500 bg-purple-500/10 border-purple-500/20',
-              'Leyenda': 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-            };
-            const medalColor = colors[logro.nombre as string] || 'text-accent bg-accent/10 border-accent/20';
-            
-            return (
-              <div 
-                key={logro.id}
-                className={cn(
-                  "flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all duration-300",
-                  isCompletado 
-                    ? `bg-card ${medalColor.split(' ').slice(1).join(' ')} shadow-lg shadow-black/5 scale-100` 
-                    : "bg-muted/10 border-border text-muted-foreground opacity-30 grayscale blur-[0.5px] scale-95"
-                )}
-              >
-                <div className={cn(
-                  "h-12 w-12 rounded-full flex items-center justify-center shadow-inner transition-transform duration-500",
-                  isCompletado ? "bg-white/80 dark:bg-black/20 rotate-0" : "bg-muted rotate-12"
-                )}>
-                  <Trophy className={cn("h-6 w-6", isCompletado ? medalColor.split(' ')[0] : "text-muted-foreground")} />
-                </div>
-                <div className="text-center">
-                  <p className={cn("font-black text-[10px] uppercase tracking-widest", isCompletado ? "text-foreground" : "text-muted-foreground")}>
-                    {logro.nombre}
-                  </p>
-                  {isCompletado && (
-                    <span className="text-[8px] font-bold text-accent uppercase opacity-70">Obtenido</span>
-                  )}
-                </div>
-              </div>
-            );
-          }) : (
-            <div className="col-span-full py-12 text-center bg-muted/20 border border-dashed border-border rounded-2xl flex flex-col items-center">
-              <Trophy className="h-8 w-8 text-muted-foreground opacity-20 mb-2" />
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t.dashboard.op_subtitle}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <EmployeeDashboard profile={profile} reports={reports} projects={projects} />;
 }
