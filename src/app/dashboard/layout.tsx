@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-4">
-            {/* <NotificationCenter /> */}
+            <NotificationCenter />
             <UserNav />
           </div>
         </header>

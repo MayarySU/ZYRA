@@ -22,7 +22,8 @@ import {
   CheckCircle2,
   Circle,
   TrendingUp,
-  X
+  X,
+  Search
 } from "lucide-react";
 import Image from "next/image";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -83,6 +84,8 @@ export default function ProjectsPage() {
   const isAdmin = profile?.rol === 'admin';
 
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [isAiDrafting, setIsAiDrafting] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false);
@@ -199,6 +202,19 @@ export default function ProjectsPage() {
     return query(collection(db, "proyectos"), where("assignedTeamId", "==", "no-team"));
   }, [db, isAdmin, profile, myTeams]);
   const { data: firestoreProjects, isLoading: projectsLoading } = useCollection(projectsQuery);
+
+  const filteredProjects = useMemo(() => {
+    if (!firestoreProjects) return [];
+    return firestoreProjects.filter((p: any) => {
+      const matchesSearch = searchTerm === "" || 
+        p.Pry_Nombre_Proyecto?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        p.clientName?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const isStatusMatch = statusFilter === "all" || p.Pry_Estado === statusFilter;
+      
+      return matchesSearch && isStatusMatch;
+    });
+  }, [firestoreProjects, searchTerm, statusFilter]);
 
 
   const employeesQuery = useMemoFirebase(() => (db && profile && isAdmin) ? collection(db, "users") : null, [db, profile, isAdmin]);
@@ -654,8 +670,35 @@ export default function ProjectsPage() {
           )}
         </div>
 
+        {isAdmin && (
+          <div className="flex flex-col sm:flex-row gap-4 bg-muted/20 p-4 rounded-xl border border-border">
+            <div className="relative flex-1">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+               <Input 
+                 placeholder="Buscar por proyecto o cliente (Ej. Sofia)..." 
+                 className="pl-10 h-10 bg-background border-border text-foreground"
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+               />
+            </div>
+            <div className="w-full sm:w-48">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-10 bg-background border-border text-foreground">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="Pendiente">Pendiente</SelectItem>
+                  <SelectItem value="EnProceso">En Proceso</SelectItem>
+                  <SelectItem value="Finalizado">Finalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {firestoreProjects?.map((project: any) => {
+          {filteredProjects?.map((project: any) => {
             const isEnCurso = profile?.projectStatus?.[project.id]?.en_curso;
             const assignedTeam = teams?.find(t => t.id === project.assignedTeamId);
 
@@ -747,7 +790,26 @@ export default function ProjectsPage() {
                       if (o) { 
                         setSelectedProject(project); 
                         // Load items from the LATEST VIRTUAL progress instead of the blocked database record
-                        const currentTasks = latestReport?.checklistSnapshot || project.checklistItems || [];
+                        let currentTasks = latestReport?.checklistSnapshot || project.checklistItems || [];
+                        
+                        // If no previous tasks, fallback to the Admin predefined checklist template
+                        if (currentTasks.length === 0 && checklistTemplates) {
+                          const templateKey = project.serviceType === 'Mantenimiento' ? 'Mantenimiento' : 'Instalación';
+                          const template = checklistTemplates.find(c => c.id === templateKey);
+                          if (template?.items) {
+                            currentTasks = template.items.map((it: any) => ({ 
+                              name: typeof it === 'string' ? it : (it.name || 'Tarea'), 
+                              done: false 
+                            }));
+                          }
+                        }
+
+                        // If NOT in course (meaning we are about to start the day), force all items to be unchecked
+                        // so the employee MUST verify them today.
+                        if (!isEnCurso) {
+                          currentTasks = currentTasks.map((t: any) => ({ ...t, done: false }));
+                        }
+
                         setOpChecklistItems(currentTasks); 
                       } 
                     }}>
@@ -795,8 +857,12 @@ export default function ProjectsPage() {
                                 <div className="p-6 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-center">
                                   <p className="text-sm text-orange-500 font-bold">Verifica todos los puntos anteriores para iniciar jornada.</p>
                                 </div>
-                                <Button onClick={() => handleStartDay(project)} className="w-full h-16 bg-accent hover:bg-accent/90 text-white font-black text-lg rounded-2xl shadow-xl shadow-accent/20">
-                                  CONFIRMAR E INICIAR JORNADA
+                                <Button 
+                                  onClick={() => handleStartDay(project)} 
+                                  disabled={opChecklistItems.length > 0 && !opChecklistItems.every(i => i.done)}
+                                  className="w-full h-16 bg-accent hover:bg-accent/90 text-white font-black text-lg rounded-2xl shadow-xl shadow-accent/20 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none transition-all"
+                                >
+                                  {opChecklistItems.length > 0 && !opChecklistItems.every(i => i.done) ? "COMPLETA EL CHECKLIST PARA INICIAR" : "CONFIRMAR E INICIAR JORNADA"}
                                 </Button>
                               </div>
                             ) : (

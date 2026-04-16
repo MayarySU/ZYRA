@@ -4,7 +4,7 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useFirestore, useCollection, useUser, useMemoFirebase } from "@/firebase";
-import { collection, addDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, where, doc, deleteDoc, getDocs, writeBatch } from "firebase/firestore";
 import { 
   Card, 
   CardHeader, 
@@ -32,6 +32,17 @@ import {
   DialogTrigger,
   DialogDescription
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Building2, 
   Plus, 
@@ -45,7 +56,9 @@ import {
   ExternalLink,
   ChevronRight,
   Zap,
-  Wrench
+  Wrench,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -130,6 +143,38 @@ export default function ClientsPage() {
       });
     } catch (e: any) {
       toast({ variant: "destructive", title: t.common.error, description: "Error al registrar cliente" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (!db || !isAdmin) return;
+    setLoading(true);
+    try {
+      const q = query(collection(db, "proyectos"), where("clientId", "==", clientId));
+      const snap = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      
+      for (const docSnap of snap.docs) {
+        batch.delete(docSnap.ref);
+        
+        // Purge related reports to wipe any duplicated personal info
+        const qRep = query(collection(db, "reports"), where("projectId", "==", docSnap.id));
+        const snapRep = await getDocs(qRep);
+        snapRep.forEach((repDoc) => {
+          batch.delete(repDoc.ref);
+        });
+      }
+      
+      batch.delete(doc(db, "clientes", clientId));
+      
+      await batch.commit();
+      
+      toast({ title: t.common.success, description: "Cliente, obras y reportes vinculados eliminados. Datos purgados." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: t.common.error, description: "Error al eliminar información del cliente." });
     } finally {
       setLoading(false);
     }
@@ -323,14 +368,43 @@ export default function ClientsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-accent hover:bg-accent/10 font-bold text-[10px] gap-2"
-                          onClick={() => handleViewProjects(client)}
-                        >
-                          {t.clients.view_projects} <ChevronRight className="h-3 w-3" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-accent hover:bg-accent/10 font-bold text-[10px] gap-2"
+                            onClick={() => handleViewProjects(client)}
+                          >
+                            {t.clients.view_projects} <ChevronRight className="h-3 w-3" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="bg-card border-border">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>{t.common.confirm}</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  ¿Eliminar permanentemente al cliente {client.Cl_Nombre}?
+                                  <span className="block mt-2 font-bold text-destructive">
+                                    ¡Advertencia! No hay vuelta atrás. Todos los proyectos vinculados a este cliente también se eliminarán del sistema de inmediato.
+                                  </span>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="bg-muted">{t.common.cancel}</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDeleteClient(client.id)}
+                                  className="bg-destructive hover:bg-destructive/90 text-white font-bold"
+                                >
+                                  {t.common.delete}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

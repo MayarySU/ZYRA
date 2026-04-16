@@ -47,6 +47,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -76,14 +77,6 @@ function ReportsContent() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
-  // --- Generate Report State ---
-  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
-  const [genProjectId, setGenProjectId] = useState("");
-  const [genComments, setGenComments] = useState("");
-  const [genPhotos, setGenPhotos] = useState<{ name: string; dataUrl: string }[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
   // Queries
   const reportsQuery = useMemoFirebase(() => {
     if (!db || !profile) return null;
@@ -105,19 +98,6 @@ function ReportsContent() {
   const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
   const { data: projects } = useCollection(projectsQuery);
   const { data: teams } = useCollection(teamsQuery);
-
-  // Only finalized projects for report generation
-  const finishedProjects = useMemo(() => {
-    if (!projects) return [];
-    return projects.filter(p => (p.Pry_Estado || "").toLowerCase() === "finalizado");
-  }, [projects]);
-
-  // Preview data for the selected project in the generate dialog
-  const genProject = useMemo(() => projects?.find(p => p.id === genProjectId), [projects, genProjectId]);
-  const genTeam = useMemo(() => {
-    if (!genProject || !teams) return null;
-    return teams.find(t => t.id === genProject.assignedTeamId);
-  }, [genProject, teams]);
 
   // Filtrado de reportes
   const filteredReports = useMemo(() => {
@@ -193,87 +173,6 @@ function ReportsContent() {
     router.push('/reports');
   };
 
-  // --- Generate Report Logic ---
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach(file => {
-      if (genPhotos.length >= 5) return; // Max 5 photos
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setGenPhotos(prev => [...prev, { name: file.name, dataUrl: ev.target?.result as string }]);
-      };
-      reader.readAsDataURL(file);
-    });
-    // Reset file input
-    if (photoInputRef.current) photoInputRef.current.value = "";
-  };
-
-  const handleRemovePhoto = (index: number) => {
-    setGenPhotos(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleGenerateReport = async () => {
-    if (!db || !genProject) return;
-    if (!genComments.trim()) {
-      toast({ variant: "destructive", title: t.common.error, description: "Los comentarios son obligatorios." });
-      return;
-    }
-
-    setIsGenerating(true);
-    const reportsCol = collection(db, "reports");
-
-    const reportData = {
-      // Datos del Proyecto (join)
-      projectId: genProject.id,
-      projectName: genProject.Pry_Nombre_Proyecto || "Sin nombre",
-      clientName: genProject.clientName || "N/A",
-      ubicacion: genProject.ubicacion || "N/A",
-      serviceType: genProject.serviceType || "N/A",
-      projectStatus: genProject.Pry_Estado || "N/A",
-      projectProgress: genProject.progreso || 0,
-      fechaCreacionProyecto: genProject.fecha_creacion || null,
-      // Datos del Equipo (join)
-      assignedTeamId: genProject.assignedTeamId || "no-team",
-      teamName: genTeam?.name || "Sin equipo asignado",
-      teamType: genTeam?.type || "N/A",
-      teamLeader: genTeam?.leaderId || null,
-      teamMembers: genTeam?.members || [],
-      // Datos del Reporte
-      content: genComments,
-      authorName: profile?.nombre || "Administrador ZYRA",
-      employeeId: user?.uid || "",
-      status: "Pendiente",
-      timestamp: new Date().toISOString(),
-      createdAt: serverTimestamp(),
-      // Evidencias fotográficas (base64 data URLs)
-      photoEvidence: genPhotos.map(p => ({ name: p.name, dataUrl: p.dataUrl })),
-      photoCount: genPhotos.length,
-      // Metadatos
-      reportType: "generated", // diferencia de los creados por operadores al finalizar jornada
-      imageUrl: genPhotos.length > 0 ? genPhotos[0].dataUrl : (genProject.imageUrl || "https://picsum.photos/seed/solar-report/800/600"),
-    };
-
-    try {
-      await addDoc(reportsCol, reportData);
-      toast({ title: t.common.success, description: "Reporte generado y guardado exitosamente." });
-      // Reset
-      setGenProjectId("");
-      setGenComments("");
-      setGenPhotos([]);
-      setIsGenerateOpen(false);
-    } catch (e: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: reportsCol.path,
-        operation: 'create',
-        requestResourceData: { ...reportData, photoEvidence: `[${reportData.photoCount} fotos]` }
-      }));
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 font-body">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -288,16 +187,6 @@ function ReportsContent() {
           </h2>
           <p className="text-muted-foreground">{isAdmin ? t.reports.subtitle_admin : t.reports.subtitle_op}</p>
         </div>
-
-        {/* Admin: Generate Report Button */}
-        {isAdmin && (
-          <Button
-            className="bg-accent hover:bg-accent/90 text-white font-bold gap-2"
-            onClick={() => setIsGenerateOpen(true)}
-          >
-            <Plus className="h-4 w-4" /> Generar Reporte
-          </Button>
-        )}
       </div>
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4">
@@ -488,180 +377,6 @@ function ReportsContent() {
         </DialogContent>
       </Dialog>
 
-      {/* ====== GENERATE REPORT DIALOG ====== */}
-      <Dialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen}>
-        <DialogContent className="w-[95vw] bg-card border-border text-foreground sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-accent flex items-center gap-2">
-              <FileText className="h-5 w-5" /> Generar Reporte de Obra
-            </DialogTitle>
-            <DialogDescription>
-              Selecciona un proyecto finalizado, agrega comentarios y sube evidencias fotográficas para generar un reporte formal.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6 py-4">
-            {/* Step 1: Select Project */}
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
-                1. Selección del Proyecto
-              </Label>
-              <Select value={genProjectId} onValueChange={setGenProjectId}>
-                <SelectTrigger className="h-11 bg-muted/50 border-border">
-                  <SelectValue placeholder="Seleccionar proyecto..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {finishedProjects.length > 0 ? (
-                    finishedProjects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div className="flex items-center gap-2">
-                          {p.serviceType === 'Mantenimiento' ? <Wrench className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                          {p.Pry_Nombre_Proyecto} — {p.Pry_Estado}
-                        </div>
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="p-3 text-xs text-muted-foreground text-center">No hay proyectos disponibles para reportear.</div>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Project Preview (auto-populated) */}
-            {genProject && (
-              <div className="bg-muted/20 rounded-2xl border border-border p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest text-accent border-accent/20">
-                    Datos Extraídos Automáticamente
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Building2 className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span><strong className="text-foreground">Cliente:</strong> {genProject.clientName || "N/A"}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span><strong className="text-foreground">Dirección:</strong> {genProject.ubicacion || "N/A"}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <CalendarDays className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span><strong className="text-foreground">Creación:</strong> {formatDate(genProject.fecha_creacion, "PPP")}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Users className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span><strong className="text-foreground">Equipo:</strong> {genTeam?.name || "Sin equipo asignado"}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Wrench className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span><strong className="text-foreground">Tipo:</strong> {genProject.serviceType}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span><strong className="text-foreground">Estado:</strong> {genProject.Pry_Estado}</span>
-                    </div>
-                  </div>
-                </div>
-                {genProject.progreso !== undefined && (
-                  <div className="pt-2">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase text-muted-foreground mb-1">
-                      <span>Avance del Proyecto</span>
-                      <span className="text-accent">{genProject.progreso || 0}%</span>
-                    </div>
-                    <Progress value={genProject.progreso || 0} className="h-1.5" />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Step 2: Comments */}
-            <div className="space-y-2">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
-                2. Comentarios y Observaciones
-              </Label>
-              <Textarea
-                placeholder="Observaciones finales del equipo técnico, recomendaciones para el cliente, detalles sobre el desempeño de la instalación..."
-                className="min-h-[140px] text-sm rounded-xl p-4 bg-muted/20 border-border resize-none"
-                value={genComments}
-                onChange={(e) => setGenComments(e.target.value)}
-              />
-            </div>
-
-            {/* Step 3: Photo Evidence */}
-            <div className="space-y-3">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
-                3. Evidencias Fotográficas
-              </Label>
-
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handlePhotoSelect}
-              />
-
-              {genPhotos.length > 0 && (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {genPhotos.map((photo, idx) => (
-                    <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-border group">
-                      <Image src={photo.dataUrl} alt={photo.name} fill className="object-cover" />
-                      <button
-                        onClick={() => handleRemovePhoto(idx)}
-                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <div className="absolute bottom-0 inset-x-0 bg-black/70 px-2 py-1">
-                        <span className="text-[8px] text-white truncate block">{photo.name}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <button
-                onClick={() => photoInputRef.current?.click()}
-                disabled={genPhotos.length >= 5}
-                className={cn(
-                  "w-full aspect-[3/1] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 text-muted-foreground transition-colors",
-                  genPhotos.length >= 5
-                    ? "border-border/50 opacity-50 cursor-not-allowed"
-                    : "border-border hover:border-accent/40 cursor-pointer hover:text-accent"
-                )}
-              >
-                <ImagePlus className="h-8 w-8" />
-                <span className="text-xs font-bold uppercase tracking-tighter">
-                  {genPhotos.length >= 5 ? "Máximo 5 fotos" : `Subir Fotografías (${genPhotos.length}/5)`}
-                </span>
-                <span className="text-[10px] text-muted-foreground/60">PNG, JPG, WEBP</span>
-              </button>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
-            <Button
-              variant="outline"
-              className="w-full border-border"
-              onClick={() => setIsGenerateOpen(false)}
-            >
-              {t.common.cancel}
-            </Button>
-            <Button
-              className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-11 gap-2"
-              onClick={handleGenerateReport}
-              disabled={!genProjectId || !genComments.trim() || isGenerating}
-            >
-              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              Generar Reporte
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

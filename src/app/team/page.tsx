@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, addDoc, serverTimestamp, doc, setDoc, query, where } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, query, where } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,28 +11,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogFooter,
   DialogTrigger,
   DialogDescription
 } from "@/components/ui/dialog";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
-import { 
-  Users as UsersIcon, 
-  Plus, 
-  Search, 
-  Crown, 
-  Trash2, 
+import {
+  Users as UsersIcon,
+  Plus,
+  Search,
+  Crown,
+  Trash2,
   Wrench,
   UserCheck,
   Settings2,
@@ -100,7 +111,7 @@ export default function TeamPage() {
 
   const filteredTeams = useMemo(() => {
     if (!teams) return [];
-    return teams.filter(t => 
+    return teams.filter(t =>
       (t.name || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [teams, searchTerm]);
@@ -137,10 +148,10 @@ export default function TeamPage() {
       const newMembers = isRemoving
         ? prev.members.filter(id => id !== empId)
         : [...prev.members, empId];
-      
+
       // Validation: If removing the current leader, clear the leader fields
       const shouldClearLeader = isRemoving && empId === prev.leaderId;
-      
+
       return {
         ...prev,
         members: newMembers,
@@ -185,13 +196,13 @@ export default function TeamPage() {
   const handleUpdateTeam = async () => {
     if (!db || !selectedTeam || !editTeamData) return;
     setLoading(true);
-    
+
     const teamRef = doc(db, "teams", selectedTeam.id);
     const leader = validEmployees?.find(e => e.id === editTeamData.leaderId);
-    
+
     const updateData = {
       ...editTeamData,
-      leaderName: editTeamData.leaderId 
+      leaderName: editTeamData.leaderId
         ? ((leader?.nombre || leader?.Emp_Nombre) || editTeamData.leaderName)
         : ""
     };
@@ -211,6 +222,22 @@ export default function TeamPage() {
     }
   };
 
+  const handleDeleteTeam = async (teamId: string) => {
+    if (!db || !isAdmin) return;
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, "teams", teamId));
+      toast({ title: t.common.success, description: "Equipo eliminado correctamente." });
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `teams/${teamId}`,
+        operation: 'delete'
+      }));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 font-body px-2 sm:px-4 md:px-0">
@@ -223,7 +250,7 @@ export default function TeamPage() {
               {isAdmin ? t.teams.subtitle_admin : t.teams.subtitle_op}
             </p>
           </div>
-          
+
           {isAdmin && (
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
@@ -240,16 +267,16 @@ export default function TeamPage() {
                   <div className="space-y-3 md:space-y-4">
                     <div className="space-y-1.5 md:space-y-2">
                       <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.team_name}</Label>
-                      <Input 
-                        placeholder="..." 
+                      <Input
+                        placeholder="..."
                         className="bg-white/5 border-white/10 h-10"
                         value={newTeam.name}
-                        onChange={(e) => setNewTeam({...newTeam, name: e.target.value})}
+                        onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.team_type}</Label>
-                      <Select value={newTeam.type} onValueChange={(val: any) => setNewTeam({...newTeam, type: val})}>
+                      <Select value={newTeam.type} onValueChange={(val: any) => setNewTeam({ ...newTeam, type: val })}>
                         <SelectTrigger className="bg-white/5 border-white/10 h-10"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-card border-white/10 text-white">
                           <SelectItem value="Instalación">{t.teams.installation}</SelectItem>
@@ -290,9 +317,9 @@ export default function TeamPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button 
-                    className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" 
-                    disabled={!newTeam.name || (newTeam.members.length > 0 && !newTeam.leaderId) || loading} 
+                  <Button
+                    className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold"
+                    disabled={!newTeam.name || (newTeam.members.length > 0 && !newTeam.leaderId) || loading}
                     onClick={handleCreateTeam}
                   >
                     {loading ? t.common.loading : t.common.save}
@@ -320,7 +347,7 @@ export default function TeamPage() {
                   <p className="text-[10px] text-accent font-bold uppercase tracking-widest">{team.type || "Instalación"}</p>
                   {team.leaderId && employees?.some(e => e.id === team.leaderId) && team.members?.includes(team.leaderId) ? (
                     <CardDescription className="text-muted-foreground flex items-center gap-2 text-xs mt-1 md:mt-0">
-                      <Crown className="h-3 w-3 text-yellow-500 shrink-0" /> 
+                      <Crown className="h-3 w-3 text-yellow-500 shrink-0" />
                       <span className="truncate">{t.teams.leader}: {team.leaderName}</span>
                     </CardDescription>
                   ) : (
@@ -331,7 +358,7 @@ export default function TeamPage() {
                   <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
                     <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">{t.teams.members}</p>
                     <p className="text-lg font-bold text-white flex items-center justify-center gap-2">
-                      {team.members?.filter((id: string) => employees?.some(e => e.id === id)).length || 0} 
+                      {team.members?.filter((id: string) => employees?.some(e => e.id === id)).length || 0}
                       <UserCheck className="h-4 w-4 text-accent" />
                     </p>
                   </div>
@@ -342,10 +369,10 @@ export default function TeamPage() {
                     </p>
                     {Array.isArray(team?.members) && team.members.map((memberId: any) => {
                       if (!memberId) return null;
-                      
+
                       const employeesList = Array.isArray(employees) ? employees : [];
                       const member = employeesList.find(e => e.id === memberId);
-                      
+
                       // If it's still loading, show a subtle hint, otherwise only show if member is found
                       if (!member) {
                         if (employeesLoading) {
@@ -358,9 +385,9 @@ export default function TeamPage() {
                         }
                         return null; // Skip if not found and not loading
                       }
-                      
+
                       const memberName = member.nombre || member.Emp_Nombre || member.email || "Técnico";
-                      
+
                       return (
                         <div key={memberId.toString()} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/member hover:bg-accent/10 transition-all shadow-sm mb-2">
                           <div className="flex items-center gap-3 truncate">
@@ -378,10 +405,35 @@ export default function TeamPage() {
                   </div>
                 </CardContent>
                 {isAdmin && (
-                  <div className="p-3 md:p-4 bg-white/2 border-t border-white/5">
+                  <div className="grid grid-cols-2 p-3 md:p-4 bg-white/2 border-t border-white/5 gap-2">
                     <Button variant="outline" className="w-full text-xs md:text-[10px] h-10 md:h-9 font-bold border-accent/30 text-accent uppercase" onClick={() => openEditDialog(team)}>
-                      Gestionar Equipo
+                      Gestionar
                     </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="w-full text-xs md:text-[10px] h-10 md:h-9 font-bold uppercase gap-2">
+                          <Trash2 className="h-3 w-3" /> Eliminar
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="bg-card border-white/10 text-white">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t.common.confirm}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            ¿Estás seguro de que deseas eliminar permanentemente al equipo {team.name}?
+                            Esta acción no se puede deshacer y los técnicos asignados quedarán sin equipo.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="bg-white/10">{t.common.cancel}</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteTeam(team.id)}
+                            className="bg-destructive hover:bg-destructive/90 text-white font-bold"
+                          >
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 )}
               </Card>
@@ -407,15 +459,15 @@ export default function TeamPage() {
               <div className="space-y-3 md:space-y-4">
                 <div className="space-y-1.5 md:space-y-2">
                   <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.team_name}</Label>
-                  <Input 
-                    value={editTeamData?.name || ""} 
-                    onChange={(e) => setEditTeamData({...editTeamData, name: e.target.value})}
+                  <Input
+                    value={editTeamData?.name || ""}
+                    onChange={(e) => setEditTeamData({ ...editTeamData, name: e.target.value })}
                     className="bg-white/5 border-white/10 h-10"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.team_type}</Label>
-                  <Select value={editTeamData?.type} onValueChange={(val: any) => setEditTeamData({...editTeamData, type: val})}>
+                  <Select value={editTeamData?.type} onValueChange={(val: any) => setEditTeamData({ ...editTeamData, type: val })}>
                     <SelectTrigger className="bg-white/5 border-white/10 h-10"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-card border-white/10 text-white">
                       <SelectItem value="Instalación">{t.teams.installation}</SelectItem>
@@ -425,9 +477,9 @@ export default function TeamPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.leader}</Label>
-                  <Select 
-                    value={editTeamData?.leaderId} 
-                    onValueChange={(val) => setEditTeamData({...editTeamData, leaderId: val})}
+                  <Select
+                    value={editTeamData?.leaderId}
+                    onValueChange={(val) => setEditTeamData({ ...editTeamData, leaderId: val })}
                     disabled={editTeamData?.members.length === 0}
                   >
                     <SelectTrigger className="bg-white/5 border-white/10 h-10">
@@ -449,10 +501,10 @@ export default function TeamPage() {
                   <div className="divide-y divide-white/5">
                     {validEmployees.map(emp => (
                       <div key={emp.id} className="flex items-center space-x-3 py-2.5">
-                        <Checkbox 
-                          id={`edit-emp-${emp.id}`} 
-                          checked={editTeamData?.members.includes(emp.id)} 
-                          onCheckedChange={() => handleToggleEditMember(emp.id)} 
+                        <Checkbox
+                          id={`edit-emp-${emp.id}`}
+                          checked={editTeamData?.members.includes(emp.id)}
+                          onCheckedChange={() => handleToggleEditMember(emp.id)}
                         />
                         <label htmlFor={`edit-emp-${emp.id}`} className="text-sm font-medium text-white/80 cursor-pointer">{emp.nombre || emp.Emp_Nombre}</label>
                       </div>
@@ -462,8 +514,8 @@ export default function TeamPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button 
-                className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" 
+              <Button
+                className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold"
                 onClick={handleUpdateTeam}
                 disabled={loading || !editTeamData?.name || (editTeamData?.members?.length > 0 && !editTeamData?.leaderId)}
               >
