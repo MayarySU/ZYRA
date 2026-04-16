@@ -579,7 +579,7 @@ export default function ProjectsPage() {
         clientName: project.clientName || "N/A",
         ubicacion: project.ubicacion || "N/A",
         serviceType: project.serviceType || "N/A",
-        projectStatus: "EnRevision", 
+        projectStatus: "EnRevision",
         projectProgress: 100, // Marcamos el 100% de avance
         assignedTeamId: project.assignedTeamId || "no-team",
         teamName: assignedTeam?.name || "Sin equipo asignado",
@@ -604,13 +604,13 @@ export default function ProjectsPage() {
             ...baseReportData,
             employeeId: currentUid,
             employeeName: currentProfile.nombre || "Técnico Zyra",
-            status: "Pendiente" 
+            status: "Pendiente"
           });
-          
+
           // Limpiar el ID del proyecto
           await updateDoc(doc(db, "proyectos", project.id), {
             lastRejectedReportId: null
-          }).catch(() => {});
+          }).catch(() => { });
         } else {
           // Si no hay ID, crear un SÓLO reporte nuevo para todo el equipo
           await addDoc(collection(db, "reports"), {
@@ -623,7 +623,6 @@ export default function ProjectsPage() {
         console.warn("Report Sync Error:", e);
       }
 
-      // Cambiamos estado de PORYECTO para TODO el equipo
       try {
         const projectRef = doc(db, "proyectos", project.id);
         await updateDoc(projectRef, {
@@ -1040,7 +1039,6 @@ export default function ProjectsPage() {
                     <div className="space-y-2"><Label className="text-xs uppercase font-bold text-muted-foreground">Estado</Label><Select value={managedStatus} onValueChange={setManagedStatus}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Pendiente">Pendiente</SelectItem><SelectItem value="EnProceso">En Proceso</SelectItem><SelectItem value="EnRevision">En Revisión</SelectItem><SelectItem value="Finalizado">Finalizado</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-xs uppercase font-bold text-muted-foreground">Equipo (EQ)</Label><Select value={managedTeamId} onValueChange={setManagedTeamId}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no-team">SIN EQUIPO ASIGNADO</SelectItem>{teams?.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
-                  <div className="space-y-2"><div className="flex justify-between text-xs font-bold uppercase mb-2"><span>Progreso Estructura</span><span className="text-accent">{managedProgress}%</span></div><Slider value={[managedProgress]} onValueChange={(v) => setManagedProgress(v[0])} max={100} step={5} /></div>
                 </div>
                 <DialogFooter><Button onClick={handleSaveManagement} className="w-full h-12 bg-accent hover:bg-accent/90 text-white font-bold rounded-xl" disabled={savingManage}>Guardar Cambios</Button></DialogFooter>
               </>
