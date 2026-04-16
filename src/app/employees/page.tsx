@@ -90,6 +90,19 @@ export default function EmployeesPage() {
 
   const handleCreateEmployee = async () => {
     if (!db || !newEmployee.Emp_Nombre || !newEmployee.Emp_CorreoPersonal) return;
+
+    // Validaciones
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmployee.Emp_CorreoPersonal)) {
+      toast({ variant: "destructive", title: "Error", description: "Formato de correo personal inválido" });
+      return;
+    }
+
+    if (newEmployee.Emp_Telefono && !/^\d{10,13}$/.test(newEmployee.Emp_Telefono.replace(/\s+/g, ""))) {
+      toast({ variant: "destructive", title: "Error", description: "El teléfono debe tener un formato válido (10-13 dígitos)" });
+      return;
+    }
+
     setLoading(true);
     
     // Generación de credenciales corporativas

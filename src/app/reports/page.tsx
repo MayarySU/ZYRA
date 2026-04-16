@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
-import { 
+import { useState, useMemo, useRef, Suspense } from "react";
+import {
   Briefcase,
   Check,
   X,
@@ -15,19 +15,29 @@ import {
   Zap,
   Wrench,
   AlertCircle,
-  FileText
+  FileText,
+  Plus,
+  Users,
+  CalendarDays,
+  ImagePlus,
+  Trash2,
+  Loader2,
+  Download,
+  Eye
 } from "lucide-react";
 import DashboardLayout from "../dashboard/layout";
 import { format, isValid } from "date-fns";
 import { es, enUS, zhCN } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { cn } from "@/lib/utils";
-import { doc, updateDoc, collection, query, where } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, collection, query, where, addDoc, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -36,9 +46,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
 
 function ReportsContent() {
   const { profile, user } = useUser();
@@ -48,12 +69,20 @@ function ReportsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isAdmin = profile?.rol === 'admin';
-  
+
   const projectIdParam = searchParams.get("projectId");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("Todos");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+
+  // --- Generate Report State ---
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
+  const [genProjectId, setGenProjectId] = useState("");
+  const [genComments, setGenComments] = useState("");
+  const [genPhotos, setGenPhotos] = useState<{ name: string; dataUrl: string }[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Queries
   const reportsQuery = useMemoFirebase(() => {
@@ -68,13 +97,32 @@ function ReportsContent() {
     return collection(db, "proyectos");
   }, [db, profile]);
 
+  const teamsQuery = useMemoFirebase(() => {
+    if (!db || !profile) return null;
+    return collection(db, "teams");
+  }, [db, profile]);
+
   const { data: firestoreReports, isLoading } = useCollection(reportsQuery);
   const { data: projects } = useCollection(projectsQuery);
+  const { data: teams } = useCollection(teamsQuery);
+
+  // Only finalized projects for report generation
+  const finishedProjects = useMemo(() => {
+    if (!projects) return [];
+    return projects.filter(p => (p.Pry_Estado || "").toLowerCase() === "finalizado");
+  }, [projects]);
+
+  // Preview data for the selected project in the generate dialog
+  const genProject = useMemo(() => projects?.find(p => p.id === genProjectId), [projects, genProjectId]);
+  const genTeam = useMemo(() => {
+    if (!genProject || !teams) return null;
+    return teams.find(t => t.id === genProject.assignedTeamId);
+  }, [genProject, teams]);
 
   // Filtrado de reportes
   const filteredReports = useMemo(() => {
     let reports = firestoreReports || [];
-    
+
     // Filtrar por proyecto si viene de la URL
     if (projectIdParam) {
       reports = reports.filter(r => r.projectId === projectIdParam);
@@ -93,7 +141,8 @@ function ReportsContent() {
 
   const selectedReport = useMemo(() => firestoreReports?.find(r => r.id === selectedReportId), [firestoreReports, selectedReportId]);
   const linkedProject = useMemo(() => selectedReport && projects?.find(p => p.id === selectedReport.projectId), [selectedReport, projects]);
-  
+  const linkedTeam = useMemo(() => selectedReport && teams?.find(t => t.id === (selectedReport.assignedTeamId || linkedProject?.assignedTeamId)), [selectedReport, teams, linkedProject]);
+
   // Resumen del proyecto si se filtra por uno solo
   const currentProject = useMemo(() => projects?.find(p => p.id === projectIdParam), [projects, projectIdParam]);
 
@@ -105,6 +154,22 @@ function ReportsContent() {
       await updateDoc(reportRef, { status: newStatus });
       toast({ title: t.common.success });
       setSelectedReportId(null);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: t.common.error });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Evitar que se abra el detalle
+    if (!db || !isAdmin) return;
+    if (!confirm("¿Estás seguro de que deseas eliminar este reporte?")) return;
+    
+    setProcessingId(reportId);
+    try {
+      await deleteDoc(doc(db, "reports", reportId));
+      toast({ title: t.common.success, description: "Reporte eliminado." });
     } catch (e: any) {
       toast({ variant: "destructive", title: t.common.error });
     } finally {
@@ -128,6 +193,87 @@ function ReportsContent() {
     router.push('/reports');
   };
 
+  // --- Generate Report Logic ---
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      if (genPhotos.length >= 5) return; // Max 5 photos
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setGenPhotos(prev => [...prev, { name: file.name, dataUrl: ev.target?.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset file input
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setGenPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleGenerateReport = async () => {
+    if (!db || !genProject) return;
+    if (!genComments.trim()) {
+      toast({ variant: "destructive", title: t.common.error, description: "Los comentarios son obligatorios." });
+      return;
+    }
+
+    setIsGenerating(true);
+    const reportsCol = collection(db, "reports");
+
+    const reportData = {
+      // Datos del Proyecto (join)
+      projectId: genProject.id,
+      projectName: genProject.Pry_Nombre_Proyecto || "Sin nombre",
+      clientName: genProject.clientName || "N/A",
+      ubicacion: genProject.ubicacion || "N/A",
+      serviceType: genProject.serviceType || "N/A",
+      projectStatus: genProject.Pry_Estado || "N/A",
+      projectProgress: genProject.progreso || 0,
+      fechaCreacionProyecto: genProject.fecha_creacion || null,
+      // Datos del Equipo (join)
+      assignedTeamId: genProject.assignedTeamId || "no-team",
+      teamName: genTeam?.name || "Sin equipo asignado",
+      teamType: genTeam?.type || "N/A",
+      teamLeader: genTeam?.leaderId || null,
+      teamMembers: genTeam?.members || [],
+      // Datos del Reporte
+      content: genComments,
+      authorName: profile?.nombre || "Administrador ZYRA",
+      employeeId: user?.uid || "",
+      status: "Pendiente",
+      timestamp: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+      // Evidencias fotográficas (base64 data URLs)
+      photoEvidence: genPhotos.map(p => ({ name: p.name, dataUrl: p.dataUrl })),
+      photoCount: genPhotos.length,
+      // Metadatos
+      reportType: "generated", // diferencia de los creados por operadores al finalizar jornada
+      imageUrl: genPhotos.length > 0 ? genPhotos[0].dataUrl : (genProject.imageUrl || "https://picsum.photos/seed/solar-report/800/600"),
+    };
+
+    try {
+      await addDoc(reportsCol, reportData);
+      toast({ title: t.common.success, description: "Reporte generado y guardado exitosamente." });
+      // Reset
+      setGenProjectId("");
+      setGenComments("");
+      setGenPhotos([]);
+      setIsGenerateOpen(false);
+    } catch (e: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: reportsCol.path,
+        operation: 'create',
+        requestResourceData: { ...reportData, photoEvidence: `[${reportData.photoCount} fotos]` }
+      }));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 font-body">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -142,6 +288,16 @@ function ReportsContent() {
           </h2>
           <p className="text-muted-foreground">{isAdmin ? t.reports.subtitle_admin : t.reports.subtitle_op}</p>
         </div>
+
+        {/* Admin: Generate Report Button */}
+        {isAdmin && (
+          <Button
+            className="bg-accent hover:bg-accent/90 text-white font-bold gap-2"
+            onClick={() => setIsGenerateOpen(true)}
+          >
+            <Plus className="h-4 w-4" /> Generar Reporte
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-4">
@@ -156,11 +312,11 @@ function ReportsContent() {
         </Tabs>
         <div className="relative w-full lg:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder={t.common.search} 
-            className="pl-10 bg-muted/50 border-border h-10 text-sm" 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
+          <Input
+            placeholder={t.common.search}
+            className="pl-10 bg-muted/50 border-border h-10 text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
@@ -172,10 +328,10 @@ function ReportsContent() {
       ) : filteredReports.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
           {filteredReports.map((report) => (
-            <div 
-              key={report.id} 
-              onClick={() => setSelectedReportId(report.id)} 
-              className="bg-card border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-accent/40 transition-all flex flex-col shadow-xl"
+            <div
+              key={report.id}
+              onClick={() => setSelectedReportId(report.id)}
+              className="bg-card border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-accent/40 transition-all flex flex-col shadow-xl group"
             >
               <div className="relative aspect-[4/3] w-full overflow-hidden">
                 <Image src={report.imageUrl || "https://picsum.photos/seed/solar-report/800/600"} alt="" fill className="object-cover" />
@@ -184,6 +340,23 @@ function ReportsContent() {
                     {(report.status || "Pendiente").toUpperCase()}
                   </Badge>
                 </div>
+                {report.reportType === "generated" && (
+                  <div className="absolute top-3 left-3">
+                    <Badge className="bg-accent/90 font-bold text-[9px] gap-1">
+                      <FileText className="h-3 w-3" /> REPORTE FORMAL
+                    </Badge>
+                  </div>
+                )}
+                {isAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute bottom-3 right-3 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    onClick={(e) => handleDeleteReport(report.id, e)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <div className="p-5 flex flex-col flex-1 space-y-4">
                 <div className="space-y-2">
@@ -193,6 +366,12 @@ function ReportsContent() {
                   </div>
                   <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{report.content || "-"}</p>
                 </div>
+                {report.teamName && report.teamName !== "Sin equipo asignado" && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Users className="h-3 w-3" />
+                    <span className="text-[10px] font-medium truncate">{report.teamName}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-4 border-t border-border">
                   <span className="font-bold text-foreground/70 truncate">{report.authorName || t.common.employee}</span>
                   <span>{formatDate(report.timestamp, "d/M/yyyy")}</span>
@@ -200,59 +379,6 @@ function ReportsContent() {
               </div>
             </div>
           ))}
-        </div>
-      ) : projectIdParam && currentProject ? (
-        <div className="max-w-3xl mx-auto pt-10">
-          <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl">
-            <div className="p-8 space-y-8">
-              <div className="flex items-center gap-6">
-                <div className="h-20 w-20 rounded-2xl bg-accent/10 flex items-center justify-center text-accent">
-                  {currentProject.serviceType === 'Mantenimiento' ? <Wrench className="h-10 w-10" /> : <Zap className="h-10 w-10" />}
-                </div>
-                <div className="space-y-1">
-                  <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest text-accent border-accent/20">RESUMEN DE PROYECTO</Badge>
-                  <h3 className="text-2xl font-bold text-foreground">{currentProject.Pry_Nombre_Proyecto}</h3>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Building2 className="h-4 w-4 text-accent" />
-                    <span className="font-bold text-foreground">Cliente:</span> {currentProject.clientName}
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4 text-accent" />
-                    <span className="font-bold text-foreground">Ubicación:</span> {currentProject.ubicacion}
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4 text-accent" />
-                    <span className="font-bold text-foreground">Estado:</span> {currentProject.Pry_Estado}
-                  </div>
-                </div>
-                <div className="bg-muted/30 p-6 rounded-2xl border border-border flex flex-col justify-center gap-4">
-                  <div className="flex items-center justify-between font-bold text-[10px] uppercase tracking-widest text-muted-foreground">
-                    <span>Avance General</span>
-                    <span className="text-accent">{currentProject.progreso || 0}%</span>
-                  </div>
-                  <Progress value={currentProject.progreso || 0} className="h-2" />
-                </div>
-              </div>
-
-              <div className="bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-2xl flex items-start gap-4">
-                <AlertCircle className="h-6 w-6 text-yellow-500 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-yellow-500 uppercase tracking-tighter">Sin evidencias cargadas</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Aún no se han generado reportes operativos para este proyecto. El equipo asignado debe iniciar jornada y finalizarla para subir fotos y notas de campo.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-muted/20 border-t border-border p-4 flex justify-end">
-              <Button onClick={clearProjectFilter} variant="outline" className="text-[10px] font-bold uppercase tracking-widest">Ver todos los reportes</Button>
-            </div>
-          </div>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center px-6">
@@ -262,6 +388,7 @@ function ReportsContent() {
         </div>
       )}
 
+      {/* ====== VIEW REPORT DETAIL DIALOG ====== */}
       <Dialog open={!!selectedReportId} onOpenChange={(open) => !open && setSelectedReportId(null)}>
         <DialogContent className="w-[95vw] bg-card border-border text-foreground sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedReport && (
@@ -272,31 +399,267 @@ function ReportsContent() {
                 </DialogTitle>
                 <DialogDescription className="text-muted-foreground">{t.reports.audit_detail}</DialogDescription>
               </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-                <div className="space-y-4">
+
+              <div className="space-y-6 py-4">
+                {/* Project + Team Info Header */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-muted/30 p-4 rounded-xl border border-border space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase text-accent tracking-widest">Datos del Proyecto</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Building2 className="h-3.5 w-3.5 text-accent" />
+                        <span className="font-semibold text-foreground">{selectedReport.clientName || linkedProject?.clientName || "-"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 text-accent" />
+                        <span>{selectedReport.ubicacion || linkedProject?.ubicacion || "-"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <CalendarDays className="h-3.5 w-3.5 text-accent" />
+                        <span>{formatDate(selectedReport.fechaCreacionProyecto || linkedProject?.fecha_creacion, "PPP")}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-muted/30 p-4 rounded-xl border border-border space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase text-accent tracking-widest">Equipo Responsable</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Users className="h-3.5 w-3.5 text-accent" />
+                        <span className="font-semibold text-foreground">{selectedReport.teamName || linkedTeam?.name || "Sin equipo"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Wrench className="h-3.5 w-3.5 text-accent" />
+                        <span>Tipo: {selectedReport.teamType || linkedTeam?.type || "N/A"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Hash className="h-3.5 w-3.5 text-accent" />
+                        <span>ID Reporte: {selectedReport.id?.slice(0, 8).toUpperCase()}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Report Content */}
+                <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                  <h4 className="text-xs font-bold uppercase text-accent mb-3">{t.reports.description}</h4>
+                  <p className="text-sm leading-relaxed">{selectedReport.content || "-"}</p>
+                </div>
+
+                {/* Photo Evidence */}
+                {selectedReport.photoEvidence && selectedReport.photoEvidence.length > 0 ? (
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase text-accent tracking-widest">Evidencias Fotográficas ({selectedReport.photoEvidence.length})</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {selectedReport.photoEvidence.map((photo: any, idx: number) => (
+                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-border shadow-inner group">
+                          <Image src={photo.dataUrl} alt={photo.name || `Evidencia ${idx + 1}`} fill className="object-cover" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <Eye className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : selectedReport.imageUrl ? (
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-border shadow-inner">
                     <Image src={selectedReport.imageUrl || "https://picsum.photos/seed/solar-report/800/600"} alt="" fill className="object-cover" />
                   </div>
-                  <div className="bg-muted/30 p-4 rounded-xl border border-border space-y-2">
-                    <h4 className="text-xs font-bold uppercase text-accent">{t.projects.location}</h4>
-                    <p className="text-sm">{linkedProject?.ubicacion || "-"}</p>
-                  </div>
+                ) : null}
+
+                {/* Metadata footer */}
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-2 border-t border-border">
+                  <Badge variant="outline" className="text-[9px] font-bold">{t.reports.emitted_by}: {selectedReport.authorName}</Badge>
+                  <Badge variant="outline" className="text-[9px] font-bold">Fecha: {formatDate(selectedReport.timestamp, "PPP")}</Badge>
+                  <Badge variant="outline" className={cn("text-[9px] font-bold", selectedReport.status === "Aprobado" ? "border-emerald-500/50 text-emerald-500" : selectedReport.status === "Rechazado" ? "border-red-500/50 text-red-500" : "border-yellow-500/50 text-yellow-500")}>
+                    {(selectedReport.status || "Pendiente").toUpperCase()}
+                  </Badge>
                 </div>
-                <div className="space-y-6">
-                  <div className="bg-muted/30 p-4 rounded-xl border border-border">
-                    <h4 className="text-xs font-bold uppercase text-accent mb-3">{t.reports.description}</h4>
-                    <p className="text-sm leading-relaxed">{selectedReport.content || "-"}</p>
+
+                {/* Admin Approve/Reject */}
+                {isAdmin && (selectedReport.status === "Pendiente" || !selectedReport.status) && (
+                  <div className="flex gap-3 pt-4 border-t border-border">
+                    <Button className="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold" onClick={() => handleUpdateStatus(selectedReport.id, "Aprobado")}>{t.reports.approve_btn}</Button>
+                    <Button variant="destructive" className="flex-1 font-bold" onClick={() => handleUpdateStatus(selectedReport.id, "Rechazado")}>{t.reports.reject_btn}</Button>
                   </div>
-                  {isAdmin && (selectedReport.status === "Pendiente" || !selectedReport.status) && (
-                    <div className="flex gap-3 pt-4 border-t border-border">
-                      <Button className="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold" onClick={() => handleUpdateStatus(selectedReport.id, "Aprobado")}>{t.reports.approve_btn}</Button>
-                      <Button variant="destructive" className="flex-1 font-bold" onClick={() => handleUpdateStatus(selectedReport.id, "Rechazado")}>{t.reports.reject_btn}</Button>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ====== GENERATE REPORT DIALOG ====== */}
+      <Dialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen}>
+        <DialogContent className="w-[95vw] bg-card border-border text-foreground sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-accent flex items-center gap-2">
+              <FileText className="h-5 w-5" /> Generar Reporte de Obra
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona un proyecto finalizado, agrega comentarios y sube evidencias fotográficas para generar un reporte formal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Step 1: Select Project */}
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                1. Selección del Proyecto
+              </Label>
+              <Select value={genProjectId} onValueChange={setGenProjectId}>
+                <SelectTrigger className="h-11 bg-muted/50 border-border">
+                  <SelectValue placeholder="Seleccionar proyecto..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {finishedProjects.length > 0 ? (
+                    finishedProjects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <div className="flex items-center gap-2">
+                          {p.serviceType === 'Mantenimiento' ? <Wrench className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                          {p.Pry_Nombre_Proyecto} — {p.Pry_Estado}
+                        </div>
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-3 text-xs text-muted-foreground text-center">No hay proyectos disponibles para reportear.</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Project Preview (auto-populated) */}
+            {genProject && (
+              <div className="bg-muted/20 rounded-2xl border border-border p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest text-accent border-accent/20">
+                    Datos Extraídos Automáticamente
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Building2 className="h-3.5 w-3.5 text-accent shrink-0" />
+                      <span><strong className="text-foreground">Cliente:</strong> {genProject.clientName || "N/A"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5 text-accent shrink-0" />
+                      <span><strong className="text-foreground">Dirección:</strong> {genProject.ubicacion || "N/A"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5 text-accent shrink-0" />
+                      <span><strong className="text-foreground">Creación:</strong> {formatDate(genProject.fecha_creacion, "PPP")}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Users className="h-3.5 w-3.5 text-accent shrink-0" />
+                      <span><strong className="text-foreground">Equipo:</strong> {genTeam?.name || "Sin equipo asignado"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Wrench className="h-3.5 w-3.5 text-accent shrink-0" />
+                      <span><strong className="text-foreground">Tipo:</strong> {genProject.serviceType}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5 text-accent shrink-0" />
+                      <span><strong className="text-foreground">Estado:</strong> {genProject.Pry_Estado}</span>
+                    </div>
+                  </div>
+                </div>
+                {genProject.progreso !== undefined && (
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase text-muted-foreground mb-1">
+                      <span>Avance del Proyecto</span>
+                      <span className="text-accent">{genProject.progreso || 0}%</span>
+                    </div>
+                    <Progress value={genProject.progreso || 0} className="h-1.5" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Comments */}
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                2. Comentarios y Observaciones
+              </Label>
+              <Textarea
+                placeholder="Observaciones finales del equipo técnico, recomendaciones para el cliente, detalles sobre el desempeño de la instalación..."
+                className="min-h-[140px] text-sm rounded-xl p-4 bg-muted/20 border-border resize-none"
+                value={genComments}
+                onChange={(e) => setGenComments(e.target.value)}
+              />
+            </div>
+
+            {/* Step 3: Photo Evidence */}
+            <div className="space-y-3">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                3. Evidencias Fotográficas
+              </Label>
+
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
+
+              {genPhotos.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {genPhotos.map((photo, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-border group">
+                      <Image src={photo.dataUrl} alt={photo.name} fill className="object-cover" />
+                      <button
+                        onClick={() => handleRemovePhoto(idx)}
+                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="absolute bottom-0 inset-x-0 bg-black/70 px-2 py-1">
+                        <span className="text-[8px] text-white truncate block">{photo.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                disabled={genPhotos.length >= 5}
+                className={cn(
+                  "w-full aspect-[3/1] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 text-muted-foreground transition-colors",
+                  genPhotos.length >= 5
+                    ? "border-border/50 opacity-50 cursor-not-allowed"
+                    : "border-border hover:border-accent/40 cursor-pointer hover:text-accent"
+                )}
+              >
+                <ImagePlus className="h-8 w-8" />
+                <span className="text-xs font-bold uppercase tracking-tighter">
+                  {genPhotos.length >= 5 ? "Máximo 5 fotos" : `Subir Fotografías (${genPhotos.length}/5)`}
+                </span>
+                <span className="text-[10px] text-muted-foreground/60">PNG, JPG, WEBP</span>
+              </button>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              className="w-full border-border"
+              onClick={() => setIsGenerateOpen(false)}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button
+              className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-11 gap-2"
+              onClick={handleGenerateReport}
+              disabled={!genProjectId || !genComments.trim() || isGenerating}
+            >
+              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Generar Reporte
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import { Bell, Check, Info, Zap, Briefcase, Users } from "lucide-react";
-import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,9 +22,7 @@ export function NotificationCenter() {
     if (!db || !user?.uid) return null;
     return query(
       collection(db, "notifications"),
-      where("userId", "==", user.uid),
-      orderBy("createdAt", "desc"),
-      limit(20)
+      where("userId", "==", user.uid)
     );
   }, [db, user?.uid]);
 
@@ -84,8 +82,8 @@ export function NotificationCenter() {
           ) : notifications && notifications.length > 0 ? (
             <div className="divide-y divide-white/5">
               {notifications.map((notif) => (
-                <div 
-                  key={notif.id} 
+                <div
+                  key={notif.id}
                   className={cn(
                     "p-4 transition-colors cursor-pointer hover:bg-white/2",
                     !notif.read && "bg-accent/5"

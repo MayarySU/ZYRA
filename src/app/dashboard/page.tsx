@@ -290,25 +290,43 @@ export default function DashboardPage() {
           <Star className="h-4 w-4 text-accent" /> {t.dashboard.badges}
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {logros.length > 0 ? logros.map((logro: any) => (
-            <div 
-              key={logro.id}
-              className={cn(
-                "flex items-center gap-2 p-3 rounded-xl border transition-all",
-                logro.completado 
-                  ? "bg-accent/5 border-accent/20 text-foreground" 
-                  : "bg-muted/30 border-border text-muted-foreground opacity-30"
-              )}
-            >
-              <div className={cn(
-                "h-6 w-6 rounded-md flex items-center justify-center",
-                logro.completado ? "bg-accent text-white" : "bg-muted"
-              )}>
-                <Star className="h-3 w-3" />
+          {logros.length > 0 ? logros.map((logro: any) => {
+            const isCompletado = logro.completado;
+            const colors: Record<string, string> = {
+              'Novato': 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+              'Experto': 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+              'Elite': 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+              'Leyenda': 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+            };
+            const medalColor = colors[logro.nombre as string] || 'text-accent bg-accent/10 border-accent/20';
+            
+            return (
+              <div 
+                key={logro.id}
+                className={cn(
+                  "flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all duration-300",
+                  isCompletado 
+                    ? `bg-card ${medalColor.split(' ').slice(1).join(' ')} shadow-lg shadow-black/5 scale-100` 
+                    : "bg-muted/10 border-border text-muted-foreground opacity-30 grayscale blur-[0.5px] scale-95"
+                )}
+              >
+                <div className={cn(
+                  "h-12 w-12 rounded-full flex items-center justify-center shadow-inner transition-transform duration-500",
+                  isCompletado ? "bg-white/80 dark:bg-black/20 rotate-0" : "bg-muted rotate-12"
+                )}>
+                  <Trophy className={cn("h-6 w-6", isCompletado ? medalColor.split(' ')[0] : "text-muted-foreground")} />
+                </div>
+                <div className="text-center">
+                  <p className={cn("font-black text-[10px] uppercase tracking-widest", isCompletado ? "text-foreground" : "text-muted-foreground")}>
+                    {logro.nombre}
+                  </p>
+                  {isCompletado && (
+                    <span className="text-[8px] font-bold text-accent uppercase opacity-70">Obtenido</span>
+                  )}
+                </div>
               </div>
-              <span className="font-bold text-[10px] truncate">{logro.nombre}</span>
-            </div>
-          )) : (
+            );
+          }) : (
             <div className="col-span-full py-12 text-center bg-muted/20 border border-dashed border-border rounded-2xl flex flex-col items-center">
               <Trophy className="h-8 w-8 text-muted-foreground opacity-20 mb-2" />
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t.dashboard.op_subtitle}</p>

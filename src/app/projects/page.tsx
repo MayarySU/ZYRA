@@ -18,13 +18,18 @@ import {
   Building2,
   Zap,
   Wrench,
-  Trash2
+  Trash2,
+  Settings2,
+  CheckCircle2,
+  Circle,
+  TrendingUp,
+  X
 } from "lucide-react";
 import Image from "next/image";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { doc, collection, addDoc, query, where, serverTimestamp, updateDoc, deleteDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -44,7 +49,8 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogTrigger
+  DialogTrigger,
+  DialogDescription
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -58,6 +64,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Slider } from "@/components/ui/slider";
 import { aiReportDraftingAssistant } from "@/ai/flows/ai-report-drafting-assistant-flow";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { useRouter } from "next/navigation";
@@ -78,6 +86,14 @@ export default function ProjectsPage() {
   const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   
+  // --- Admin Project Management State ---
+  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+  const [managedProject, setManagedProject] = useState<any>(null);
+  const [managedStatus, setManagedStatus] = useState("");
+  const [managedProgress, setManagedProgress] = useState(0);
+  const [checklistItems, setChecklistItems] = useState<{name: string; done: boolean}[]>([]);
+  const [savingManage, setSavingManage] = useState(false);
+
   const [newProject, setNewProject] = useState({
     Pry_Nombre_Proyecto: "",
     clientId: "",
@@ -89,7 +105,11 @@ export default function ProjectsPage() {
   });
 
   const [reportContent, setReportContent] = useState("");
+  const [reportPhotos, setReportPhotos] = useState<{ name: string; dataUrl: string }[]>([]);
+  const [usedMaterials, setUsedMaterials] = useState<{ id: string; name: string; qty: number }[]>([]);
+  const [opChecklistItems, setOpChecklistItems] = useState<{ name: string; done: boolean }[]>([]);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [checklist, setChecklist] = useState({
     epp_completo: false,
@@ -104,11 +124,22 @@ export default function ProjectsPage() {
 
   const { data: myTeams } = useCollection(userTeamsQuery);
 
-  const clientsQuery = useMemoFirebase(() => (db && profile) ? collection(db, "clientes") : null, [db, profile]);
+  const clientsQuery = useMemoFirebase(() => (db && profile && isAdmin) ? collection(db, "clientes") : null, [db, profile, isAdmin]);
   const { data: clients } = useCollection(clientsQuery);
 
-  const teamsQuery = useMemoFirebase(() => (db && profile) ? collection(db, "teams") : null, [db, profile]);
+  const teamsQuery = useMemoFirebase(() => {
+    if (!db || !profile) return null;
+    if (isAdmin) return collection(db, "teams");
+    return query(collection(db, "teams"), where("members", "array-contains", user?.uid));
+  }, [db, profile, isAdmin, user?.uid]);
   const { data: teams } = useCollection(teamsQuery);
+
+  // Checklist templates (from materials/checklist_servicio)
+  const checklistsQuery = useMemoFirebase(() => {
+    if (!db || !profile) return null;
+    return collection(db, "checklist_servicio");
+  }, [db, profile]);
+  const { data: checklistTemplates } = useCollection(checklistsQuery);
 
   const projectsQuery = useMemoFirebase(() => {
     if (!db || !profile) return null;
@@ -120,7 +151,39 @@ export default function ProjectsPage() {
     return query(collection(db, "proyectos"), where("assignedTeamId", "==", "no-team"));
   }, [db, isAdmin, profile, myTeams]);
 
+  const materialsQuery = useMemoFirebase(() => (db && profile) ? collection(db, "materiales") : null, [db, profile]);
+  const { data: allMaterials } = useCollection(materialsQuery);
+
+  const employeesQuery = useMemoFirebase(() => (db && profile && isAdmin) ? collection(db, "users") : null, [db, profile, isAdmin]);
+  const { data: employees } = useCollection(employeesQuery);
+
   const { data: firestoreProjects, isLoading: projectsLoading } = useCollection(projectsQuery);
+
+  const createNotification = async (notif: { userId: string, title: string, message: string, type: string }) => {
+    if (!db) return;
+    try {
+      await addDoc(collection(db, "notifications"), {
+        ...notif,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error("Error creating notification:", e);
+    }
+  };
+
+  const notifyTeamMembers = (teamId: string, title: string, message: string) => {
+    const team = teams?.find(t => t.id === teamId);
+    if (!team) return;
+    
+    const recipients = new Set<string>();
+    if (team.leaderId) recipients.add(team.leaderId);
+    if (team.members) team.members.forEach((uid: string) => recipients.add(uid));
+    
+    recipients.forEach(uid => {
+      createNotification({ userId: uid, title, message, type: 'project' });
+    });
+  };
 
   const handleCreateProject = () => {
     if (!db) return;
@@ -150,6 +213,16 @@ export default function ProjectsPage() {
       .then(async (docRef) => {
         toast({ title: t.common.success, description: t.projects.create_success });
         setIsCreateDialogOpen(false);
+        
+        // Notificar al equipo asignado
+        if (newProject.assignedTeamId !== 'no-team') {
+          notifyTeamMembers(
+            newProject.assignedTeamId, 
+            "Nuevo Proyecto Asignado", 
+            `Se te ha asignado el proyecto: ${newProject.Pry_Nombre_Proyecto}`
+          );
+        }
+
         setNewProject({
           Pry_Nombre_Proyecto: "",
           clientId: "",
@@ -195,6 +268,16 @@ export default function ProjectsPage() {
       .then(() => {
         toast({ title: t.common.success });
         setIsTeamDialogOpen(false);
+        
+        // Notificar al equipo asignado
+        if (teamId !== 'no-team') {
+          const projectName = firestoreProjects?.find(p => p.id === projectId)?.Pry_Nombre_Proyecto || "Proyecto";
+          notifyTeamMembers(
+            teamId, 
+            "Proyecto Reasignado", 
+            `Se te ha reasignado el proyecto: ${projectName}`
+          );
+        }
       })
       .catch((e) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -205,8 +288,110 @@ export default function ProjectsPage() {
       });
   };
 
+  // --- Admin: Open manage dialog ---
+  const openManageDialog = (project: any) => {
+    setManagedProject(project);
+    setManagedStatus(project.Pry_Estado || "Pendiente");
+    setManagedProgress(project.progreso || 0);
+
+    // Load checklist items from project or from template
+    if (project.checklistItems && project.checklistItems.length > 0) {
+      setChecklistItems(project.checklistItems);
+    } else {
+      // Try to get template based on service type
+      const templateKey = project.serviceType === 'Mantenimiento' ? 'Mantenimiento' : 'Instalación';
+      const template = checklistTemplates?.find(c => c.id === templateKey);
+      if (template?.items && template.items.length > 0) {
+        setChecklistItems(template.items.map((item: any) => ({
+          name: typeof item === 'string' ? item : (item.name || 'Tarea'),
+          done: false
+        })));
+      } else {
+        setChecklistItems([]);
+      }
+    }
+    setIsManageDialogOpen(true);
+  };
+
+  // --- Admin: Save project management changes ---
+  const handleSaveManagement = async () => {
+    if (!db || !managedProject) return;
+    setSavingManage(true);
+
+    const docRef = doc(db, "proyectos", managedProject.id);
+    const prevStatus = managedProject.Pry_Estado || "Pendiente";
+    const data: any = {
+      Pry_Estado: managedStatus,
+      progreso: managedProgress,
+      checklistItems: checklistItems,
+      updatedAt: serverTimestamp(),
+    };
+
+    // If status changed to Finalizado, set completion date
+    if (managedStatus === 'Finalizado' && prevStatus !== 'Finalizado') {
+      data.fecha_finalizacion = new Date().toISOString();
+      data.progreso = 100;
+    }
+
+    try {
+      await updateDoc(docRef, data);
+
+      // Log points history if status advanced
+      if (prevStatus !== managedStatus) {
+        const pointsCol = collection(db, "puntos_historial");
+        const pointsForStatus = managedStatus === 'EnProceso' ? 25 : managedStatus === 'Finalizado' ? 100 : 0;
+        if (pointsForStatus > 0) {
+          await addDoc(pointsCol, {
+            projectId: managedProject.id,
+            projectName: managedProject.Pry_Nombre_Proyecto,
+            teamId: managedProject.assignedTeamId || 'no-team',
+            action: `Estado cambiado: ${prevStatus} → ${managedStatus}`,
+            points: pointsForStatus,
+            timestamp: new Date().toISOString(),
+            createdAt: serverTimestamp(),
+          }).catch(() => {}); // Non-critical
+        }
+      }
+
+      toast({ title: t.common.success, description: `Proyecto actualizado a ${managedStatus}` });
+      setIsManageDialogOpen(false);
+    } catch (e: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'update',
+        requestResourceData: data
+      }));
+    } finally {
+      setSavingManage(false);
+    }
+  };
+
+  // --- Toggle checklist item ---
+  const toggleChecklistItem = (index: number) => {
+    const updated = [...checklistItems];
+    updated[index] = { ...updated[index], done: !updated[index].done };
+    setChecklistItems(updated);
+    // Auto-calculate progress from checklist
+    const doneCount = updated.filter(i => i.done).length;
+    const newProgress = updated.length > 0 ? Math.round((doneCount / updated.length) * 100) : managedProgress;
+    setManagedProgress(newProgress);
+  };
+
+  const toggleOpChecklistItem = (index: number) => {
+    const updated = [...opChecklistItems];
+    updated[index] = { ...updated[index], done: !updated[index].done };
+    setOpChecklistItems(updated);
+  };
+
   const handleStartDay = (project: any) => {
     if (!user || !db) return;
+    
+    // Validar checklist completo
+    if (opChecklistItems.length > 0 && !opChecklistItems.every(i => i.done)) {
+      toast({ variant: "destructive", title: "Checklist incompleto", description: "Debes completar todas las tareas para iniciar." });
+      return;
+    }
+
     setLoading(true);
     const userRef = doc(db, "users", user.uid);
     const data = {
@@ -215,7 +400,8 @@ export default function ProjectsPage() {
         [project.id]: {
           checklist_completado: true,
           timestamp_inicio: new Date().toISOString(),
-          en_curso: true
+          en_curso: true,
+          checklistSnapshot: opChecklistItems
         }
       }
     };
@@ -235,10 +421,50 @@ export default function ProjectsPage() {
       .finally(() => setLoading(false));
   };
 
-  const handleFinishDayAndReport = (project: any) => {
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setReportPhotos(prev => [...prev, { name: file.name, dataUrl: ev.target?.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
+  const removePhoto = (index: number) => {
+    setReportPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddUsedMaterial = (matId: string) => {
+    const mat = allMaterials?.find(m => m.id === matId);
+    if (!mat) return;
+    setUsedMaterials(prev => {
+      const existing = prev.find(p => p.id === matId);
+      if (existing) return prev;
+      return [...prev, { id: matId, name: mat.Mat_Nombre, qty: 1 }];
+    });
+  };
+
+  const updateUsedMaterialQty = (id: string, qty: number) => {
+    setUsedMaterials(prev => prev.map(m => m.id === id ? { ...m, qty: Math.max(1, qty) } : m));
+  };
+
+  const removeUsedMaterial = (id: string) => {
+    setUsedMaterials(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleFinishDayAndReport = async (project: any) => {
     if (!user || !db || !profile) return;
     if (!reportContent) {
-      toast({ variant: "destructive", title: t.common.error, description: t.projects.placeholder_notes });
+      toast({ variant: "destructive", title: t.common.error, description: "Por favor escribe las notas del reporte." });
+      return;
+    }
+    if (reportPhotos.length === 0) {
+      toast({ variant: "destructive", title: "Fotos requeridas", description: "Debes subir al menos una evidencia fotográfica." });
       return;
     }
 
@@ -254,51 +480,83 @@ export default function ProjectsPage() {
       status: "Pendiente",
       timestamp: new Date().toISOString(),
       createdAt: serverTimestamp(),
-      imageUrl: project.imageUrl || "https://picsum.photos/seed/report-final/800/600"
+      photoEvidence: reportPhotos,
+      usedMaterials: usedMaterials,
+      imageUrl: reportPhotos[0].dataUrl
     };
 
-    addDoc(reportsCol, reportData)
-      .then(() => {
-        const currentPoints = profile.puntos || 0;
-        const currentLevel = profile.level || 1;
-        const newPoints = currentPoints + 50;
-        let newLevel = currentLevel;
-        if (newPoints >= currentLevel * 200) newLevel = currentLevel + 1;
+    try {
+      // 1. Crear el reporte
+      await addDoc(reportsCol, reportData);
 
-        const userRef = doc(db, "users", user.uid);
-        const userDataUpdate = {
-          projectStatus: {
-            ...profile?.projectStatus,
-            [project.id]: {
-              checklist_completado: false,
-              en_curso: false,
-              ultimo_reporte: new Date().toISOString()
-            }
-          },
-          puntos: newPoints,
-          level: newLevel
-        };
+      // 2. Descontar Stock
+      for (const mat of usedMaterials) {
+        const matRef = doc(db, "materiales", mat.id);
+        const currentMat = allMaterials?.find(m => m.id === mat.id);
+        if (currentMat) {
+          const newStock = (currentMat.Mat_Stock_Disponible || 0) - mat.qty;
+          await updateDoc(matRef, { Mat_Stock_Disponible: Math.max(0, newStock) });
+        }
+      }
 
-        updateDoc(userRef, userDataUpdate).catch((err) => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: userRef.path,
-            operation: 'update',
-            requestResourceData: userDataUpdate
-          }));
+      // 3. Actualizar puntos y nivel del usuario
+      const currentPoints = profile.puntos || 0;
+      const currentLevel = profile.level || 1;
+      const newPoints = currentPoints + 50;
+      let newLevel = currentLevel;
+      if (newPoints >= currentLevel * 200) newLevel = currentLevel + 1;
+
+      const userRef = doc(db, "users", user.uid);
+      const userDataUpdate = {
+        projectStatus: {
+          ...profile?.projectStatus,
+          [project.id]: {
+            checklist_completado: false,
+            en_curso: false,
+            ultimo_reporte: new Date().toISOString()
+          }
+        },
+        puntos: newPoints,
+        level: newLevel
+      };
+      await updateDoc(userRef, userDataUpdate);
+
+      // 3. ACTUALIZAR ESTADO DEL PROYECTO A FINALIZADO
+      const projectRef = doc(db, "proyectos", project.id);
+      await updateDoc(projectRef, {
+        Pry_Estado: "Finalizado",
+        progreso: 100,
+        fecha_finalizacion: new Date().toISOString()
+      });
+
+      // 4. NOTIFICAR A ADMINISTRADORES
+      const admins = employees?.filter(u => u.rol === 'admin'); // Usando employees o allUsers si está disponible
+      admins?.forEach(admin => {
+        createNotification({
+          userId: admin.id,
+          title: "Proyecto Finalizado",
+          message: `${profile.nombre} ha terminado el proyecto ${project.Pry_Nombre_Proyecto}.`,
+          type: 'report'
         });
+      });
 
-        toast({ title: t.projects.day_finished, description: "+50 pts" });
-        setIsSheetOpen(false);
-        setReportContent("");
-      })
-      .catch((e) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: reportsCol.path,
-          operation: 'create',
-          requestResourceData: reportData
-        }));
-      })
-      .finally(() => setLoading(false));
+      // 5. EVALUAR MEDALLAS/LOGROS
+      const { checkAndAwardAchievements } = await import("@/lib/gamification");
+      const newBadges = await checkAndAwardAchievements(db, user.uid, profile);
+      if (newBadges && newBadges.length > 0) {
+        toast({ title: "¡Nueva Medalla!", description: `Has ganado: ${newBadges.join(', ')}`, variant: "default" });
+      }
+
+      toast({ title: "Proyecto Finalizado", description: "El reporte se envió y el proyecto se marcó como terminado." });
+      setIsSheetOpen(false);
+      setReportContent("");
+      setReportPhotos([]);
+    } catch (e: any) {
+      console.error("Error al finalizar:", e);
+      toast({ variant: "destructive", title: t.common.error });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAiDraft = async (projectName: string) => {
@@ -483,7 +741,7 @@ export default function ProjectsPage() {
                         {project.serviceType?.toUpperCase()}
                       </Badge>
                       
-                      {isAdmin && (
+                      {isAdmin && project.Pry_Estado !== 'Finalizado' && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
@@ -542,19 +800,33 @@ export default function ProjectsPage() {
 
                   <CardFooter className="p-0 border-t border-border">
                     {isAdmin ? (
-                      <div className="grid grid-cols-2 w-full">
+                      <div className="grid grid-cols-3 w-full">
+                        {project.Pry_Estado === 'Finalizado' ? (
+                          <div className="h-10 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase text-emerald-500 border-r border-border">
+                            <CheckCircle2 className="h-3 w-3" /> Finalizado
+                          </div>
+                        ) : (
+                          <Button 
+                            variant="ghost" 
+                            className="h-10 text-[10px] font-bold border-r border-border rounded-none uppercase gap-1.5 hover:bg-accent/10 text-accent"
+                            onClick={() => openManageDialog(project)}
+                          >
+                            <Settings2 className="h-3 w-3" /> Gestionar
+                          </Button>
+                        )}
                         <Dialog open={isTeamDialogOpen && selectedProject?.id === project.id} onOpenChange={(open) => {
                           setIsTeamDialogOpen(open);
                           if (open) setSelectedProject(project);
                         }}>
                           <DialogTrigger asChild>
-                            <Button variant="ghost" className="h-10 text-[10px] font-bold border-r border-border rounded-none uppercase gap-2 hover:bg-muted">
+                            <Button variant="ghost" className="h-10 text-[10px] font-bold border-r border-border rounded-none uppercase gap-1.5 hover:bg-muted">
                               <Users className="h-3 w-3" /> {t.nav.teams}
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="w-[95vw] max-h-[90vh] overflow-y-auto sm:max-w-xs bg-card border-border">
                             <DialogHeader>
                               <DialogTitle className="text-sm font-bold uppercase tracking-widest">{t.teams.manage_leader}</DialogTitle>
+                              <DialogDescription>Asignar equipo al proyecto.</DialogDescription>
                             </DialogHeader>
                             <div className="py-4">
                               <Label className="text-[10px] font-bold uppercase text-muted-foreground mb-2 block">{t.projects.team_assigned}</Label>
@@ -577,7 +849,7 @@ export default function ProjectsPage() {
                         </Dialog>
                         <Button 
                           variant="ghost" 
-                          className="h-10 text-[10px] font-bold rounded-none uppercase text-accent gap-2 hover:bg-accent/10"
+                          className="h-10 text-[10px] font-bold rounded-none uppercase gap-1.5 hover:bg-muted"
                           onClick={() => router.push(`/reports?projectId=${project.id}`)}
                         >
                           <ClipboardList className="h-3 w-3" /> {t.nav.reports}
@@ -586,7 +858,25 @@ export default function ProjectsPage() {
                     ) : (
                       <Sheet open={isSheetOpen && selectedProject?.id === project.id} onOpenChange={(open) => {
                         setIsSheetOpen(open);
-                        if (open) setSelectedProject(project);
+                        if (open) {
+                          setSelectedProject(project);
+                          // Cargar checklist dinámico al abrir
+                          if (project.checklistItems && project.checklistItems.length > 0) {
+                            setOpChecklistItems(project.checklistItems);
+                          } else {
+                            const templateKey = project.serviceType === 'Mantenimiento' ? 'Mantenimiento' : 'Instalación';
+                            const template = checklistTemplates?.find(c => c.id === templateKey);
+                            if (template?.items) {
+                              setOpChecklistItems(template.items.map((it: any) => ({
+                                name: typeof it === 'string' ? it : (it.name || 'Tarea'),
+                                done: false
+                              })));
+                            } else {
+                              setOpChecklistItems([]);
+                            }
+                          }
+                          setReportPhotos([]);
+                        }
                       }}>
                         <SheetTrigger asChild>
                           <Button 
@@ -611,30 +901,40 @@ export default function ProjectsPage() {
                           <div className="space-y-6 pb-20 text-foreground">
                             {!isEnCurso ? (
                               <div className="space-y-6">
-                                <div className="space-y-4">
-                                  {[
-                                    { key: 'epp_completo', label: t.projects.epp_label },
-                                    { key: 'seguridad_area', label: t.projects.area_label },
-                                    { key: 'herramientas_listas', label: t.projects.tools_label },
-                                  ].map((item) => (
-                                    <div key={item.key} className="flex items-center justify-between p-4 bg-muted/30 rounded-2xl border border-border">
-                                      <Label className="text-xs font-bold leading-tight max-w-[70%] text-foreground">{item.label}</Label>
-                                      <Switch 
-                                        checked={(checklist as any)[item.key]} 
-                                        onCheckedChange={(v) => setChecklist({...checklist, [item.key]: v})} 
-                                      />
-                                    </div>
-                                  ))}
-                                  {project.serviceType === 'Mantenimiento' && (
-                                    <div className="p-4 bg-accent/5 rounded-2xl border border-accent/20">
-                                      <p className="text-[10px] font-bold text-accent uppercase mb-2">Protocolo de Mantenimiento</p>
-                                      <p className="text-xs text-muted-foreground italic">Recuerda tomar fotos antes y después de la limpieza.</p>
-                                    </div>
-                                  )}
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between px-1">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Tareas Obligatorias</Label>
+                                    <Badge variant="outline" className="text-[10px] font-bold">
+                                      {opChecklistItems.filter(i => i.done).length}/{opChecklistItems.length}
+                                    </Badge>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {opChecklistItems.length > 0 ? opChecklistItems.map((item, idx) => (
+                                      <div 
+                                        key={idx} 
+                                        onClick={() => toggleOpChecklistItem(idx)}
+                                        className={cn(
+                                          "flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer",
+                                          item.done 
+                                            ? "bg-emerald-500/10 border-emerald-500/30 shadow-inner" 
+                                            : "bg-muted/30 border-border hover:border-accent/30"
+                                        )}
+                                      >
+                                        <Label className={cn("text-xs font-bold leading-tight max-w-[80%] cursor-pointer transition-colors", item.done ? "text-emerald-500" : "text-foreground")}>
+                                          {item.name}
+                                        </Label>
+                                        {item.done ? (
+                                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                        ) : (
+                                          <Circle className="h-5 w-5 text-muted-foreground/30" />
+                                        )}
+                                      </div>
+                                    )) : null}
+                                  </div>
                                 </div>
                                 <Button 
                                   className="w-full bg-accent hover:bg-accent/90 text-white font-black h-16 text-lg rounded-2xl shadow-xl shadow-accent/20"
-                                  disabled={!checklist.epp_completo || !checklist.seguridad_area || !checklist.herramientas_listas || loading}
+                                  disabled={(opChecklistItems.length > 0 && !opChecklistItems.every(i => i.done)) || loading}
                                   onClick={() => handleStartDay(project)}
                                 >
                                   {loading ? t.common.loading : t.projects.confirm_start}
@@ -658,26 +958,91 @@ export default function ProjectsPage() {
                                   </div>
                                   <Textarea 
                                     placeholder={t.projects.placeholder_notes}
-                                    className="min-h-[180px] text-sm rounded-2xl p-4 bg-muted/20"
+                                    className="min-h-[120px] text-sm rounded-2xl p-4 bg-muted/20"
                                     value={reportContent}
                                     onChange={(e) => setReportContent(e.target.value)}
                                   />
-                                  
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="aspect-square w-full rounded-2xl bg-muted/20 border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-accent/40 transition-colors cursor-pointer">
-                                      <Camera className="h-6 w-6" />
-                                      <span className="text-[9px] font-bold uppercase tracking-tighter">{t.projects.photo_work}</span>
+
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Materiales Usados</Label>
+                                      <Select onValueChange={handleAddUsedMaterial}>
+                                        <SelectTrigger className="w-[180px] h-8 text-[10px] bg-muted/30 border-border">
+                                          <SelectValue placeholder="Añadir material..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {allMaterials?.map(m => (
+                                            <SelectItem key={m.id} value={m.id} className="text-xs">
+                                              {m.Mat_Nombre} (Stock: {m.Mat_Stock_Disponible})
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
                                     </div>
-                                    <div className="aspect-square w-full rounded-2xl bg-muted/20 border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-accent/40 transition-colors cursor-pointer">
+
+                                    <div className="space-y-2">
+                                      {usedMaterials.map(mat => (
+                                        <div key={mat.id} className="flex items-center justify-between p-3 bg-muted/10 rounded-xl border border-border">
+                                          <span className="text-xs font-bold">{mat.name}</span>
+                                          <div className="flex items-center gap-3">
+                                            <input 
+                                              type="number" 
+                                              value={mat.qty} 
+                                              onChange={(e) => updateUsedMaterialQty(mat.id, parseInt(e.target.value))}
+                                              className="w-12 bg-transparent text-center text-xs font-bold border-b border-accent/20 focus:border-accent outline-none"
+                                            />
+                                            <button onClick={() => removeUsedMaterial(mat.id)} className="text-destructive"><X className="h-4 w-4" /></button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  
+                                  <input 
+                                    type="file" 
+                                    multiple 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    ref={photoInputRef}
+                                    onChange={handlePhotoUpload}
+                                  />
+
+                                  {reportPhotos.length > 0 && (
+                                    <div className="grid grid-cols-4 gap-2 border-b border-border pb-4">
+                                      {reportPhotos.map((photo, idx) => (
+                                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                                          <Image src={photo.dataUrl} alt="" fill className="object-cover" />
+                                          <button 
+                                            onClick={() => removePhoto(idx)}
+                                            className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                          >
+                                            <X className="h-2 w-2" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div 
+                                      onClick={() => photoInputRef.current?.click()}
+                                      className="aspect-square w-full rounded-2xl bg-muted/20 border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-accent/40 transition-colors cursor-pointer"
+                                    >
                                       <Camera className="h-6 w-6" />
-                                      <span className="text-[9px] font-bold uppercase tracking-tighter">{t.projects.photo_material}</span>
+                                      <span className="text-[9px] font-bold uppercase tracking-tighter">Añadir Evidencia</span>
+                                    </div>
+                                    <div className="bg-muted/10 p-4 rounded-2xl border border-border flex flex-col justify-center">
+                                      <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Total Fotos</p>
+                                      <p className={cn("text-xl font-black", reportPhotos.length > 0 ? "text-accent" : "text-muted-foreground/30")}>
+                                        {reportPhotos.length}
+                                      </p>
                                     </div>
                                   </div>
                                 </div>
 
                                 <Button 
                                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-16 text-lg rounded-2xl shadow-xl shadow-emerald-900/20"
-                                  disabled={!reportContent || loading}
+                                  disabled={!reportContent || reportPhotos.length === 0 || loading}
                                   onClick={() => handleFinishDayAndReport(project)}
                                 >
                                   {loading ? t.common.loading : t.projects.confirm_finish}
@@ -701,6 +1066,92 @@ export default function ProjectsPage() {
             <h3 className="text-lg font-bold text-foreground uppercase tracking-tighter">{t.common.no_results}</h3>
           </div>
         )}
+
+        {/* ====== ADMIN: PROJECT MANAGEMENT DIALOG ====== */}
+        <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
+          <DialogContent className="w-[95vw] max-h-[90vh] overflow-y-auto bg-card border-border sm:max-w-xl">
+            {managedProject && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold text-accent flex items-center gap-2">
+                    <Settings2 className="h-5 w-5" /> {managedProject.Pry_Nombre_Proyecto}
+                  </DialogTitle>
+                  <DialogDescription>Gestión de ejecución del proyecto — Estado, avance y checklist de servicio.</DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-6 py-4">
+                  {/* Status Change */}
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Estado del Proyecto</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: 'Pendiente', label: 'Pendiente', color: 'bg-yellow-500', icon: Circle },
+                        { value: 'EnProceso', label: 'En Proceso', color: 'bg-emerald-500', icon: TrendingUp },
+                        { value: 'Finalizado', label: 'Finalizado', color: 'bg-primary', icon: CheckCircle2 },
+                      ].map((s) => (
+                        <button
+                          key={s.value}
+                          onClick={() => {
+                            setManagedStatus(s.value);
+                            if (s.value === 'Pendiente') setManagedProgress(0);
+                            if (s.value === 'EnProceso' && managedProgress < 1) setManagedProgress(1);
+                            if (s.value === 'Finalizado') setManagedProgress(100);
+                          }}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                            managedStatus === s.value 
+                              ? "border-accent bg-accent/10" 
+                              : "border-border hover:border-accent/30 bg-muted/20"
+                          )}
+                        >
+                          <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-white", s.color)}>
+                            <s.icon className="h-4 w-4" />
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider">{s.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Progress Slider */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Avance del Proyecto</Label>
+                      <Badge variant="outline" className="text-accent font-bold text-sm border-accent/30">{managedProgress}%</Badge>
+                    </div>
+                    <Slider
+                      value={[managedProgress]}
+                      onValueChange={(val) => setManagedProgress(val[0])}
+                      max={100}
+                      step={5}
+                      className="w-full"
+                      disabled={managedStatus === 'Finalizado' || managedStatus === 'Pendiente'}
+                    />
+                  </div>
+
+                  {/* Info Summary */}
+                  <div className="bg-muted/20 rounded-xl border border-border p-4 text-xs text-muted-foreground space-y-1">
+                    <div className="flex items-center gap-2"><Building2 className="h-3 w-3 text-accent" /><strong className="text-foreground">Cliente:</strong> {managedProject.clientName || 'N/A'}</div>
+                    <div className="flex items-center gap-2"><MapPin className="h-3 w-3 text-accent" /><strong className="text-foreground">Ubicación:</strong> {managedProject.ubicacion || 'N/A'}</div>
+                    <div className="flex items-center gap-2"><Zap className="h-3 w-3 text-accent" /><strong className="text-foreground">Tipo:</strong> {managedProject.serviceType || 'N/A'}</div>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button variant="outline" className="w-full border-border" onClick={() => setIsManageDialogOpen(false)}>{t.common.cancel}</Button>
+                  <Button 
+                    className="w-full bg-accent hover:bg-accent/90 text-white font-bold h-11 gap-2"
+                    onClick={handleSaveManagement}
+                    disabled={savingManage}
+                  >
+                    {savingManage ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Guardar Cambios
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

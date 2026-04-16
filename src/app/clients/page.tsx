@@ -100,6 +100,19 @@ export default function ClientsPage() {
 
   const handleCreateClient = async () => {
     if (!db) return;
+    
+    // Validaciones
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!newClient.Cl_Correo || !emailRegex.test(newClient.Cl_Correo)) {
+      toast({ variant: "destructive", title: "Error", description: "Formato de correo electrónico inválido" });
+      return;
+    }
+
+    if (!newClient.Cl_Telefono || !/^\d{10}$/.test(newClient.Cl_Telefono)) {
+      toast({ variant: "destructive", title: "Error", description: "El teléfono debe tener 10 dígitos numéricos" });
+      return;
+    }
+
     setLoading(true);
     try {
       await addDoc(collection(db, "clientes"), {

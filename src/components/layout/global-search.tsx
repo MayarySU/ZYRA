@@ -34,7 +34,15 @@ export function GlobalSearch() {
   const isAdmin = profile?.rol === 'admin';
 
   // Consultas base para todas las entidades - Solo se activan si hay un usuario autenticado
-  const projectsQuery = useMemoFirebase(() => (db && user) ? collection(db, "proyectos") : null, [db, user]);
+  const projectsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    if (isAdmin) return collection(db, "proyectos");
+    // Para técnicos, la búsqueda es limitada. Como no tenemos myTeams aquí fácilmente sin duplicar query, 
+    // lo ideal sería no listar todo o usar una consulta permitida.
+    // Una opción es no permitir búsqueda de proyectos global a técnicos si las reglas son estrictas,
+    // o simplemente no disparar la query si no es admin.
+    return isAdmin ? collection(db, "proyectos") : null; 
+  }, [db, user, isAdmin]);
   const clientsQuery = useMemoFirebase(() => (db && isAdmin) ? collection(db, "clientes") : null, [db, isAdmin]);
   const employeesQuery = useMemoFirebase(() => (db && isAdmin) ? collection(db, "users") : null, [db, isAdmin]);
   const reportsQuery = useMemoFirebase(() => {
