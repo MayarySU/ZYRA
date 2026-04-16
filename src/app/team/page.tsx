@@ -90,7 +90,7 @@ export default function TeamPage() {
   }, [db, user]);
 
   const { data: teams, isLoading: teamsLoading } = useCollection(teamsQuery);
-  const { data: employees } = useCollection(employeesQuery);
+  const { data: employees, isLoading: employeesLoading } = useCollection(employeesQuery);
 
   // Filtrar empleados que tengan un nombre válido y no sean admins
   const validEmployees = useMemo(() => {
@@ -111,6 +111,7 @@ export default function TeamPage() {
     const colRef = collection(db, "teams");
     const data = {
       ...newTeam,
+      leaderName: newTeam.leaderId ? newTeam.leaderName : "",
       createdAt: serverTimestamp(),
     };
 
@@ -131,12 +132,22 @@ export default function TeamPage() {
   };
 
   const handleToggleMember = (empId: string) => {
-    setNewTeam(prev => ({
-      ...prev,
-      members: prev.members.includes(empId)
+    setNewTeam(prev => {
+      const isRemoving = prev.members.includes(empId);
+      const newMembers = isRemoving
         ? prev.members.filter(id => id !== empId)
-        : [...prev.members, empId]
-    }));
+        : [...prev.members, empId];
+      
+      // Validation: If removing the current leader, clear the leader fields
+      const shouldClearLeader = isRemoving && empId === prev.leaderId;
+      
+      return {
+        ...prev,
+        members: newMembers,
+        leaderId: shouldClearLeader ? "" : prev.leaderId,
+        leaderName: shouldClearLeader ? "" : prev.leaderName
+      };
+    });
   };
 
   const openEditDialog = (team: any) => {
@@ -153,12 +164,22 @@ export default function TeamPage() {
   };
 
   const handleToggleEditMember = (empId: string) => {
-    setEditTeamData((prev: any) => ({
-      ...prev,
-      members: prev.members.includes(empId)
+    setEditTeamData((prev: any) => {
+      const isRemoving = prev.members.includes(empId);
+      const newMembers = isRemoving
         ? prev.members.filter((id: string) => id !== empId)
-        : [...prev.members, empId]
-    }));
+        : [...prev.members, empId];
+
+      // Validation: If removing the current leader, clear the leader fields
+      const shouldClearLeader = isRemoving && empId === prev.leaderId;
+
+      return {
+        ...prev,
+        members: newMembers,
+        leaderId: shouldClearLeader ? "" : prev.leaderId,
+        leaderName: shouldClearLeader ? "" : prev.leaderName
+      };
+    });
   };
 
   const handleUpdateTeam = async () => {
@@ -170,7 +191,9 @@ export default function TeamPage() {
     
     const updateData = {
       ...editTeamData,
-      leaderName: (leader?.nombre || leader?.Emp_Nombre) || editTeamData.leaderName
+      leaderName: editTeamData.leaderId 
+        ? ((leader?.nombre || leader?.Emp_Nombre) || editTeamData.leaderName)
+        : ""
     };
 
     try {
@@ -235,16 +258,19 @@ export default function TeamPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.leader}</Label>
                       <Select value={newTeam.leaderId} onValueChange={(val) => {
                         const emp = validEmployees?.find(e => e.id === val);
                         setNewTeam({ ...newTeam, leaderId: val, leaderName: (emp?.nombre || emp?.Emp_Nombre) || "Técnico Zyra" });
-                      }}>
-                        <SelectTrigger className="bg-white/5 border-white/10 h-10"><SelectValue /></SelectTrigger>
+                      }} disabled={newTeam.members.length === 0}>
+                        <SelectTrigger className="bg-white/5 border-white/10 h-10">
+                          <SelectValue placeholder={newTeam.members.length === 0 ? "Primero agrega integrantes" : "Selecciona un líder"} />
+                        </SelectTrigger>
                         <SelectContent className="bg-card border-white/10 text-white">
-                          {validEmployees.map(emp => (
-                            <SelectItem key={emp.id} value={emp.id}>{emp.nombre || emp.Emp_Nombre}</SelectItem>
-                          ))}
+                          {validEmployees
+                            .filter(emp => newTeam.members.includes(emp.id))
+                            .map(emp => (
+                              <SelectItem key={emp.id} value={emp.id}>{emp.nombre || emp.Emp_Nombre}</SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -264,7 +290,11 @@ export default function TeamPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" disabled={!newTeam.name || loading} onClick={handleCreateTeam}>
+                  <Button 
+                    className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" 
+                    disabled={!newTeam.name || (newTeam.members.length > 0 && !newTeam.leaderId) || loading} 
+                    onClick={handleCreateTeam}
+                  >
                     {loading ? t.common.loading : t.common.save}
                   </Button>
                 </DialogFooter>
@@ -288,31 +318,60 @@ export default function TeamPage() {
                   </div>
                   <CardTitle className="text-lg md:text-xl font-bold text-white mt-3 md:mt-4">{team.name}</CardTitle>
                   <p className="text-[10px] text-accent font-bold uppercase tracking-widest">{team.type || "Instalación"}</p>
-                  <CardDescription className="text-muted-foreground flex items-center gap-2 text-xs mt-1 md:mt-0">
-                    <Crown className="h-3 w-3 text-yellow-500 shrink-0" /> <span className="truncate">{t.teams.leader}: {team.leaderName}</span>
-                  </CardDescription>
+                  {team.leaderId && employees?.some(e => e.id === team.leaderId) && team.members?.includes(team.leaderId) ? (
+                    <CardDescription className="text-muted-foreground flex items-center gap-2 text-xs mt-1 md:mt-0">
+                      <Crown className="h-3 w-3 text-yellow-500 shrink-0" /> 
+                      <span className="truncate">{t.teams.leader}: {team.leaderName}</span>
+                    </CardDescription>
+                  ) : (
+                    <div className="h-4" /> // Spacing if no leader
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
                     <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">{t.teams.members}</p>
                     <p className="text-lg font-bold text-white flex items-center justify-center gap-2">
-                      {team.members?.length || 0} <UserCheck className="h-4 w-4 text-accent" />
+                      {team.members?.filter((id: string) => employees?.some(e => e.id === id)).length || 0} 
+                      <UserCheck className="h-4 w-4 text-accent" />
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
-                    <p className="text-[9px] uppercase font-black text-muted-foreground tracking-widest ml-1 mb-2">Cuadrilla Activa</p>
-                    {team.members?.map((memberId: string) => {
-                      const member = employees?.find(e => e.id === memberId);
-                      return (
-                        <div key={memberId} className="flex items-center justify-between p-2.5 rounded-xl bg-white/2 border border-white/5 group/member hover:bg-accent/5 transition-colors">
-                          <div className="flex items-center gap-3 truncate">
-                            <div className="h-6 w-6 rounded-full bg-accent/10 flex items-center justify-center text-[9px] font-bold text-accent border border-accent/20">
-                              {(member?.nombre || member?.Emp_Nombre || "?").substring(0,2).toUpperCase()}
+                    <p className="text-[10px] uppercase font-black text-accent tracking-[0.2em] ml-1 mb-3">
+                      {t?.teams?.members || "Integrantes"}
+                    </p>
+                    {Array.isArray(team?.members) && team.members.map((memberId: any) => {
+                      if (!memberId) return null;
+                      
+                      const employeesList = Array.isArray(employees) ? employees : [];
+                      const member = employeesList.find(e => e.id === memberId);
+                      
+                      // If it's still loading, show a subtle hint, otherwise only show if member is found
+                      if (!member) {
+                        if (employeesLoading) {
+                          return (
+                            <div key={memberId.toString()} className="flex items-center gap-3 p-3 rounded-2xl bg-white/2 animate-pulse mb-2">
+                              <div className="h-8 w-8 rounded-xl bg-white/10" />
+                              <div className="h-3 w-24 bg-white/10 rounded" />
                             </div>
-                            <span className="text-xs font-bold text-white/80 truncate">{member?.nombre || member?.Emp_Nombre || "Sincronizando..."}</span>
+                          );
+                        }
+                        return null; // Skip if not found and not loading
+                      }
+                      
+                      const memberName = member.nombre || member.Emp_Nombre || member.email || "Técnico";
+                      
+                      return (
+                        <div key={memberId.toString()} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/member hover:bg-accent/10 transition-all shadow-sm mb-2">
+                          <div className="flex items-center gap-3 truncate">
+                            <div className="h-8 w-8 rounded-xl bg-accent/20 flex items-center justify-center text-[10px] font-black text-accent border border-accent/30 group-hover/member:scale-110 transition-transform">
+                              {memberName.substring(0, 2).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-bold text-white group-hover/member:text-accent transition-colors truncate">
+                              {memberName}
+                            </span>
                           </div>
-                          <ChevronRight className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover/member:opacity-100 transition-opacity" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover/member:text-accent group-hover/member:translate-x-1 transition-all" />
                         </div>
                       );
                     })}
@@ -366,12 +425,20 @@ export default function TeamPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs uppercase font-bold text-muted-foreground">{t.teams.leader}</Label>
-                  <Select value={editTeamData?.leaderId} onValueChange={(val) => setEditTeamData({...editTeamData, leaderId: val})}>
-                    <SelectTrigger className="bg-white/5 border-white/10 h-10"><SelectValue /></SelectTrigger>
+                  <Select 
+                    value={editTeamData?.leaderId} 
+                    onValueChange={(val) => setEditTeamData({...editTeamData, leaderId: val})}
+                    disabled={editTeamData?.members.length === 0}
+                  >
+                    <SelectTrigger className="bg-white/5 border-white/10 h-10">
+                      <SelectValue placeholder={editTeamData?.members.length === 0 ? "Primero agrega integrantes" : "Selecciona un líder"} />
+                    </SelectTrigger>
                     <SelectContent className="bg-card border-white/10 text-white">
-                      {validEmployees.map(emp => (
-                        <SelectItem key={emp.id} value={emp.id}>{emp.nombre || emp.Emp_Nombre}</SelectItem>
-                      ))}
+                      {validEmployees
+                        .filter(emp => editTeamData?.members.includes(emp.id))
+                        .map(emp => (
+                          <SelectItem key={emp.id} value={emp.id}>{emp.nombre || emp.Emp_Nombre}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -398,7 +465,7 @@ export default function TeamPage() {
               <Button 
                 className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" 
                 onClick={handleUpdateTeam}
-                disabled={loading}
+                disabled={loading || !editTeamData?.name || (editTeamData?.members?.length > 0 && !editTeamData?.leaderId)}
               >
                 {loading ? t.common.loading : t.common.save}
               </Button>

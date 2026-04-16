@@ -266,15 +266,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 gap-4 md:contents">
-          <Card className="flex flex-col items-center justify-center p-4 border-border">
-            <div className="h-10 w-10 rounded-full bg-orange-500/10 flex items-center justify-center mb-2 shadow-[0_0_10px_rgba(249,115,22,0.1)]">
-              <Flame className="h-5 w-5 text-orange-500" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground">{racha}</h3>
-            <p className="text-[9px] font-bold text-orange-500 uppercase tracking-tighter">{t.dashboard.streak}</p>
-          </Card>
-
+        <div className="grid grid-cols-1 gap-4 md:contents">
           <Card className="flex flex-col items-center justify-center p-4 border-border">
             <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center mb-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
