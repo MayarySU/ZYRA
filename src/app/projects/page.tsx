@@ -429,61 +429,66 @@ export default function ProjectsPage() {
     const currentTasks = project.checklistItems || [];
     const totalItems = currentTasks.length;
     const finishedItems = currentTasks.filter((i:any) => i.done).length;
-    const calculatedProgress = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : project.progreso || 0;
+    const checklistProgress = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
+    const projectProgresoOriginal = project.progreso || 0;
 
     setLoading(true);
-    const userRef = doc(db, "users", currentUid);
-    const data = {
-      projectStatus: {
-        ...profile?.projectStatus,
-        [project.id]: {
-          checklist_completado: true,
-          timestamp_inicio: new Date().toISOString(),
-          en_curso: true,
-          checklistSnapshot: currentTasks
-        }
-      }
-    };
 
-    updateDoc(userRef, data)
-      .then(async () => {
-        // 1. Create an INITIAL REPORT so the progress bar moves immediately
-        try {
-          await addDoc(collection(db, "reports"), {
-            projectId: project.id,
-            Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
-            employeeId: currentUid,
-            employeeName: currentProfileName,
-            content: "Inicio de jornada con verificación de materiales.",
-            progressAtTime: calculatedProgress,
-            checklistSnapshot: currentTasks,
-            timestamp: new Date().toISOString(),
-            createdAt: serverTimestamp(),
-            type: 'start_day_sync' // Internal tag to identify this as a sync report
-          });
-        } catch (reportErr: any) {
-          console.warn("Initial sync report failed due to permissions:", reportErr.message);
-        }
+    const assignedTeam = teams?.find((t:any) => t.id === project.assignedTeamId);
+    let targetUids = [currentUid];
+    if (assignedTeam) {
+      targetUids = Array.from(new Set([
+        currentUid,
+        ...(assignedTeam.members || []),
+        assignedTeam.leaderId
+      ].filter(Boolean)));
+    }
 
-        // 2. Attempt a MINIMAL update to projects (might fail due to permissions, but we try)
-        try {
-          const projectRef = doc(db, "proyectos", project.id);
-          await updateDoc(projectRef, {
-            Pry_Estado: "EnProceso",
-            progreso: calculatedProgress
-          });
-        } catch (projErr: any) {
-          console.warn("Minimal sync failed due to permissions:", projErr.message);
-        }
+    try {
+      // 1. Update all users in the team
+      await Promise.all(targetUids.map(uid => {
+        const userRef = doc(db, "users", uid);
+        return updateDoc(userRef, {
+          [`projectStatus.${project.id}`]: {
+            checklist_completado: false,
+            timestamp_inicio: new Date().toISOString(),
+            en_curso: true,
+            checklistSnapshot: currentTasks
+          }
+        }).catch(e => console.warn(`Error actualizando usuario ${uid}:`, e.message));
+      }));
 
-        toast({ title: t.projects.day_started, description: `Iniciado al ${calculatedProgress}% y sincronizado.` });
-        setIsSheetOpen(false);
-      })
-      .catch((e) => {
-        console.warn("User update permission denied:", e.message);
-        toast({ variant: "destructive", title: "Error de Permisos", description: "Firebase requiere actualización de reglas de seguridad para continuar." });
-      })
-      .finally(() => setLoading(false));
+      // 2. Initial reports for everyone
+      await Promise.all(targetUids.map(uid => {
+        return addDoc(collection(db, "reports"), {
+          projectId: project.id,
+          Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
+          employeeId: uid,
+          employeeName: uid === currentUid ? currentProfileName : "Miembro del Equipo",
+          content: "Inicio de jornada en equipo.",
+          progressAtTime: projectProgresoOriginal,
+          checklistProgress: checklistProgress,
+          checklistSnapshot: currentTasks,
+          timestamp: new Date().toISOString(),
+          createdAt: serverTimestamp(),
+          type: 'start_day_sync'
+        }).catch(e => console.warn("Error en Sync Report: ", e.message));
+      }));
+
+      try {
+        const projectRef = doc(db, "proyectos", project.id);
+        await updateDoc(projectRef, {
+          Pry_Estado: project.Pry_Estado === "Pendiente" ? "EnProceso" : project.Pry_Estado
+        });
+      } catch (projErr) {}
+
+      toast({ title: t.projects.day_started, description: `Jornada iniciada para todo el equipo.` });
+      setIsSheetOpen(false);
+    } catch(e:any) {
+        toast({ variant: "destructive", title: "Error", description: "Ocurrió un problema al iniciar la jornada." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   async function handleToggleOpItem(project: any, idx: number) {
@@ -506,119 +511,94 @@ export default function ProjectsPage() {
 
   const handleFinishDayAndReport = async (project: any) => {
     if (!user?.uid || !db || !profile) return;
+    
+    if (reportPhotos.length === 0) {
+      toast({ title: "Faltan Fotos", description: "Debes subir al menos una foto de evidencia obligatoriamente para finalizar.", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
 
     try {
       const currentTasks = project.checklistItems || [];
       const totalItems = currentTasks.length;
       const finishedItems = currentTasks.filter((i:any) => i.done).length;
-      const calculatedProgress = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : project.progreso || 0;
+      const checklistProgress = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
+      const projectProgresoOriginal = project.progreso || 0;
 
       const currentUid = user.uid;
       const currentProfile = profile;
+      const assignedTeam = teams?.find((t:any) => t.id === project.assignedTeamId);
+      let targetUids = [currentUid];
 
-      // Find team details for the report
-      const assignedTeam = teams?.find(t => t.id === project.assignedTeamId);
+      if (assignedTeam) {
+        targetUids = Array.from(new Set([
+          currentUid,
+          ...(assignedTeam.members || []),
+          assignedTeam.leaderId
+        ].filter(Boolean)));
+      }
 
-      // 1. Create Report in "reports" collection
-      const reportData = {
-        // Project Metadata (sync with ReportsPage)
+      const baseReportData = {
         projectId: project.id,
         projectName: project.Pry_Nombre_Proyecto || "Sin nombre",
         clientName: project.clientName || "N/A",
         ubicacion: project.ubicacion || "N/A",
         serviceType: project.serviceType || "N/A",
         projectStatus: project.Pry_Estado || "N/A",
-        projectProgress: calculatedProgress,
-        
-        // Team Metadata
+        projectProgress: projectProgresoOriginal,
         assignedTeamId: project.assignedTeamId || "no-team",
         teamName: assignedTeam?.name || "Sin equipo asignado",
         teamType: assignedTeam?.type || "N/A",
         teamLeader: assignedTeam?.leaderId || null,
         teamMembers: assignedTeam?.members || [],
-        
-        // Report specific data
         content: reportContent || "Reporte de avance diario",
         authorName: currentProfile.nombre || "Técnico Zyra",
-        employeeId: currentUid,
         status: "Pendiente",
         timestamp: new Date().toISOString(),
         createdAt: serverTimestamp(),
         photoEvidence: reportPhotos,
-        progressAtTime: calculatedProgress,
+        progressAtTime: projectProgresoOriginal,
+        checklistProgress: checklistProgress,
         checklistSnapshot: currentTasks
       };
-      // 1. Create Report in "reports" collection
-      try {
-        await addDoc(collection(db, "reports"), reportData);
-      } catch (reportErr: any) {
-        console.error("Error creating report:", reportErr);
-        throw new Error("No tienes permiso para crear reportes. " + reportErr.message);
-      }
 
-      // 2. Update Project (MINIMAL update for dashboard sync)
-      let projectUpdateSuccess = true;
-      try {
-        const projectRef = doc(db, "proyectos", project.id);
-        await updateDoc(projectRef, {
-          progreso: calculatedProgress,
-          Pry_Estado: calculatedProgress === 100 ? "Finalizado" : "EnProceso"
-        });
-      } catch (projErr: any) {
-        console.warn("Minimal project update failed:", projErr);
-        projectUpdateSuccess = false;
-      }
+      await Promise.all(targetUids.map(uid => {
+        return addDoc(collection(db, "reports"), {
+          ...baseReportData,
+          employeeId: uid,
+          employeeName: uid === currentUid ? baseReportData.authorName : "Miembro del Equipo",
+        }).catch(e => console.warn(e));
+      }));
 
-      // 3. Update User (Gamification & Status) - CRITICAL for clearing 'en_curso'
+      await Promise.all(targetUids.map(uid => {
+        const userRef = doc(db, "users", uid);
+        return updateDoc(userRef, {
+           workingOn: null,
+          [`projectStatus.${project.id}`]: {
+            ...profile?.projectStatus?.[project.id],
+            checklist_completado: checklistProgress === 100, 
+            en_curso: false,
+            ultimo_reporte: new Date().toISOString(),
+            lastCalculatedProgress: checklistProgress
+          }
+        }).catch(e => console.warn(e));
+      }));
+
       try {
         const userRef = doc(db, "users", currentUid);
-        const currentPoints = currentProfile.puntos || 0;
-        const currentLevel = currentProfile.level || 1;
-        
-        let newPoints = currentPoints;
-        if (calculatedProgress > (project.progreso || 0)) newPoints += 50;
-        
-        let newLevel = currentLevel;
-        if (newPoints >= currentLevel * 200) newLevel = currentLevel + 1;
+        const newPoints = (currentProfile.puntos || 0) + 50;
+        const newLevel = newPoints >= (currentProfile.level || 1) * 200 ? (currentProfile.level || 1) + 1 : (currentProfile.level || 1);
+        await updateDoc(userRef, { puntos: newPoints, level: newLevel });
+      } catch (e) {}
 
-        await updateDoc(userRef, {
-          workingOn: null, // Clear active project reference
-          projectStatus: { 
-            ...(currentProfile?.projectStatus || {}), 
-            [project.id]: { 
-              checklist_completado: calculatedProgress === 100, 
-              en_curso: false, // Force false even if project update failed
-              ultimo_reporte: new Date().toISOString(),
-              lastCalculatedProgress: calculatedProgress
-            } 
-          },
-          puntos: newPoints,
-          level: newLevel
-        });
-      } catch (userErr) {
-        console.error("Error updating points/status:", userErr);
-      }
-
-      if (projectUpdateSuccess) {
-        toast({ title: t.common.success, description: "Reporte guardado y progreso actualizado." });
-      } else {
-        toast({ 
-          title: "Reporte Enviado", 
-          description: "Tu reporte se guardó correctamente. El Administrador verificará el avance próximamente.",
-          variant: "default" 
-        });
-      }
+      toast({ title: t.common.success, description: "Reportes generados para el equipo y jornada finalizada." });
+      
       setIsSheetOpen(false);
       setReportContent("");
       setReportPhotos([]);
     } catch (err: any) {
-      console.error("Critical Save error:", err);
-      toast({ 
-        title: "Error de Guardado", 
-        description: err.message || "No se pudo procesar la solicitud.", 
-        variant: "destructive" 
-      });
+      toast({ title: "Error", description: "No se pudo finalizar la jornada.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -815,13 +795,6 @@ export default function ProjectsPage() {
                           }
                         }
 
-                        // If NOT in course (meaning we are about to start the day), force all items to be unchecked
-                        // so the employee MUST verify them today.
-                        if (!isEnCurso && currentTasks.some((t:any) => t.done)) {
-                          currentTasks = currentTasks.map((t: any) => ({ ...t, done: false }));
-                          needsUpdate = true;
-                        }
-
                         setOpChecklistItems(currentTasks);
 
                         if (needsUpdate && db) {
@@ -883,6 +856,34 @@ export default function ProjectsPage() {
                               </div>
                             ) : (
                               <div className="space-y-8 pt-4 border-t border-white/5">
+                                <div className="space-y-4">
+                                  <Label className="text-xs font-black uppercase tracking-widest text-accent">Evidencia Fotográfica (Obligatorio)</Label>
+                                  <div className="flex flex-wrap gap-4">
+                                    {reportPhotos.map((photo, i) => (
+                                      <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-white/10 group shadow-lg">
+                                        <Image src={photo.dataUrl} alt="Foto" fill className="object-cover" />
+                                        <Button 
+                                          variant="destructive" 
+                                          size="icon" 
+                                          className="absolute inset-0 m-auto h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={() => setReportPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                                          title="Eliminar Foto"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                    <button 
+                                      onClick={() => photoInputRef.current?.click()}
+                                      className="w-24 h-24 rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-muted-foreground hover:border-accent hover:text-accent transition-all bg-white/5"
+                                    >
+                                      <Camera className="h-6 w-6 mb-1" />
+                                      <span className="text-[10px] font-black tracking-wider">SUBIR FOTO</span>
+                                    </button>
+                                  </div>
+                                  <input type="file" ref={photoInputRef} className="hidden" accept="image/*" multiple onChange={handlePhotoUpload} />
+                                </div>
+
                                 <div className="space-y-4">
                                   <Label className="text-xs font-black uppercase tracking-widest text-accent">Observaciones y Resumen de Avance</Label>
                                   <Textarea 
