@@ -44,6 +44,7 @@ import {
   Tooltip,
 } from "recharts";
 import { useI18n } from "@/components/providers/i18n-provider";
+import { calcLevel } from "@/lib/gamification";
 import { collection, query, where } from "firebase/firestore";
 import { startOfDay, subWeeks, isAfter, format, startOfWeek, subDays } from "date-fns";
 import { es } from "date-fns/locale";
@@ -328,11 +329,11 @@ function AdminDashboard({ projects, reports, allUsers, materials }: any) {
 // ─────────────────────────────────────────────────
 function EmployeeDashboard({ profile, reports, projects }: any) {
   const puntos   = profile?.puntos  || 0;
-  const nivel    = profile?.nivel   || 1;
+  const nivel    = calcLevel(puntos); // siempre calculado desde los puntos reales
   const racha    = profile?.racha   || 0;
   const logros   = profile?.logros  || [];
   const targetPts = nivel * 200;
-  const pct      = Math.min((puntos / targetPts) * 100, 100);
+  const pct      = Math.min(((puntos % 200) / 200) * 100, 100);
 
   // Level-up celebration
   const prevNivelRef = useRef<number>(nivel);
