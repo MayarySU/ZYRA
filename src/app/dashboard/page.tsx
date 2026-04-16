@@ -436,20 +436,23 @@ function EmployeeDashboard({ profile, reports, projects }: any) {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {logros.map((logro: any) => {
-                  const cfg = MEDAL_CONFIG[logro.nombre as string] || { color: "text-accent bg-accent/10 border-accent/20", icon: "⭐", label: logro.nombre };
                   const done = logro.completado;
+                  const icon = logro.emoji || "⭐";
+                  const label = logro.nombre || logro.id || "Logro";
                   return (
                     <div
                       key={logro.id}
                       className={cn(
                         "flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all",
-                        done ? cn("bg-card", cfg.color) : "bg-muted/10 border-border grayscale opacity-30"
+                        done
+                          ? "bg-accent/10 border-accent/30 text-accent"
+                          : "bg-muted/10 border-border grayscale opacity-30"
                       )}
                     >
-                      <span className="text-3xl">{cfg.icon}</span>
+                      <span className="text-3xl">{icon}</span>
                       <div className="text-center">
                         <p className={cn("text-[10px] font-black uppercase tracking-widest", done ? "text-foreground" : "text-muted-foreground")}>
-                          {cfg.label}
+                          {label}
                         </p>
                         {done && <span className="text-[8px] text-accent font-bold uppercase">Obtenida</span>}
                       </div>
