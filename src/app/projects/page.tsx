@@ -223,9 +223,14 @@ export default function ProjectsPage() {
   const reportsQuery = useMemoFirebase(() => {
     if (!db || !profile) return null;
     if (isAdmin) return collection(db, "reports");
-    // Technicians see their own reports (or team reports if needed later)
+    
+    // Technicians see reports generated for their assigned teams
+    if (myTeams && myTeams.length > 0) {
+      const teamIds = myTeams.map(t => t.id);
+      return query(collection(db, "reports"), where("assignedTeamId", "in", teamIds));
+    }
     return query(collection(db, "reports"), where("employeeId", "==", user?.uid));
-  }, [db, isAdmin, profile, user?.uid]);
+  }, [db, isAdmin, profile, user?.uid, myTeams]);
   const { data: reports } = useCollection(reportsQuery);
 
   // --- Handlers ---
@@ -455,23 +460,21 @@ export default function ProjectsPage() {
         });
       } catch(e) {}
 
-      // Generar reportes iniciales para todo el equipo para el TimeTracking y Visibilidad (Todo usuario autenticado puede instertar en 'reports')
-      const reportPromises = targetUids.map(uid => {
-        return addDoc(collection(db, "reports"), {
-          projectId: project.id,
-          Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
-          employeeId: uid,
-          employeeName: uid === currentUid ? currentProfileName : "Miembro del Equipo",
-          content: "Inicio de jornada en equipo.",
-          progressAtTime: projectProgresoOriginal,
-          checklistProgress: checklistProgress,
-          checklistSnapshot: currentTasks,
-          timestamp: new Date().toISOString(),
-          createdAt: serverTimestamp(),
-          type: 'start_day_sync'
-        }).catch(e => console.warn("Error en Sync Report: ", e.message));
-      });
-      await Promise.all(reportPromises);
+      // Generar UN reporte inicial para todo el equipo para el TimeTracking y Visibilidad (Todo usuario autenticado puede instertar en 'reports')
+      await addDoc(collection(db, "reports"), {
+        projectId: project.id,
+        Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
+        employeeId: currentUid,
+        employeeName: currentProfileName,
+        assignedTeamId: project.assignedTeamId || "no-team", // Clave para la query general
+        content: "Inicio de jornada en equipo.",
+        progressAtTime: projectProgresoOriginal,
+        checklistProgress: checklistProgress,
+        checklistSnapshot: currentTasks,
+        timestamp: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        type: 'start_day_sync'
+      }).catch(e => console.warn("Error en Sync Report: ", e.message));
 
       // Cambiamos el proyecto en DB a "EnProceso" para que TODOS lo vean En Curso al mismo tiempo
       try {
@@ -561,14 +564,12 @@ export default function ProjectsPage() {
         checklistSnapshot: currentTasks
       };
 
-      const reportPromises = targetUids.map(uid => {
-        return addDoc(collection(db, "reports"), {
-          ...baseReportData,
-          employeeId: uid,
-          employeeName: uid === currentUid ? baseReportData.authorName : "Miembro del Equipo",
-        }).catch(e => console.warn(e));
-      });
-      await Promise.all(reportPromises);
+      // Crear un SÓLO reporte para todo el equipo (La query de reportes se encargará de mostrarlo a todos basado en assignedTeamId)
+      await addDoc(collection(db, "reports"), {
+        ...baseReportData,
+        employeeId: currentUid,
+        employeeName: currentProfile.nombre || "Técnico Zyra",
+      }).catch(e => console.warn(e));
 
       // Cambiamos estado de PORYECTO a 'EnRevision' para TODO el equipo
       try {

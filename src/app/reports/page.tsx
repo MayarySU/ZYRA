@@ -78,12 +78,24 @@ function ReportsContent() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   // Queries
+  const userTeamsQuery = useMemoFirebase(() => {
+    if (!db || !user || isAdmin) return null;
+    return query(collection(db, "teams"), where("members", "array-contains", user.uid));
+  }, [db, user, isAdmin]);
+  const { data: myTeams } = useCollection(userTeamsQuery);
+
   const reportsQuery = useMemoFirebase(() => {
     if (!db || !profile) return null;
     let baseRef = collection(db, "reports");
     if (isAdmin) return baseRef;
+    
+    if (myTeams && myTeams.length > 0) {
+      const teamIds = myTeams.map(t => t.id);
+      return query(baseRef, where("assignedTeamId", "in", teamIds));
+    }
+    
     return query(baseRef, where("employeeId", "==", user?.uid || ""));
-  }, [db, isAdmin, profile, user]);
+  }, [db, isAdmin, profile, user, myTeams]);
 
   const projectsQuery = useMemoFirebase(() => {
     if (!db || !profile) return null;
