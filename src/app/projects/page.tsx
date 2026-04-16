@@ -33,6 +33,7 @@ import { useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { doc, collection, addDoc, query, where, serverTimestamp, updateDoc, deleteDoc, getDoc, setDoc, increment, getDocs } from "firebase/firestore";
 import { recordAction } from "@/lib/gamification";
+import { sendNotification, sendNotificationToMany } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -637,12 +638,51 @@ export default function ProjectsPage() {
       // Otorgar medallas y actualizar stats del empleado
       try {
         const isCorrection = !!project.lastRejectedReportId;
+        let gamResult = null;
         if (isCorrection) {
-          await recordAction(db, currentUid, "correction_submitted", 10);
+          gamResult = await recordAction(db, currentUid, "correction_submitted", 10);
+          // Notificar al propio empleado
+          await sendNotification(db, {
+            userId: currentUid,
+            type: "report",
+            title: "Corrección Enviada 🔄",
+            message: `Tu corrección del proyecto "${project.Pry_Nombre_Proyecto}" fue enviada al administrador para revisión.`,
+          });
         } else {
-          await recordAction(db, currentUid, "report_submitted", 10);
+          gamResult = await recordAction(db, currentUid, "report_submitted", 10);
           if (reportPhotos.length > 0) {
             await recordAction(db, currentUid, "photo_uploaded", 0);
+          }
+          // Notificar al propio empleado
+          await sendNotification(db, {
+            userId: currentUid,
+            type: "report",
+            title: "Reporte Enviado 📤",
+            message: `Tu reporte del proyecto "${project.Pry_Nombre_Proyecto}" fue enviado. El administrador lo revisará pronto.`,
+          });
+        }
+        // Notificar a todos los admins (query users with rol=admin)
+        if (db) {
+          const adminsSnap = await getDocs(query(collection(db, "users"), where("rol", "==", "admin")));
+          const adminIds = adminsSnap.docs.map(d => d.id);
+          if (adminIds.length > 0) {
+            const isCorrection2 = !!project.lastRejectedReportId;
+            await sendNotificationToMany(db, adminIds, {
+              type: "report",
+              title: isCorrection2 ? "Corrección de Reporte Recibida 🔄" : "Nuevo Reporte Pendiente 📄",
+              message: `${currentProfile.nombre || "Un técnico"} envió un ${isCorrection2 ? "reporte corregido" : "reporte"} del proyecto "${project.Pry_Nombre_Proyecto}". Requiere tu revisión.`,
+            });
+          }
+        }
+        // Notificar medallas ganadas
+        if (gamResult?.newMedals?.length) {
+          for (const medal of gamResult.newMedals) {
+            await sendNotification(db, {
+              userId: currentUid,
+              type: "achievement",
+              title: `${medal.emoji} ¡Medalla Desbloqueada: ${medal.nombre}!`,
+              message: medal.descripcion,
+            });
           }
         }
       } catch (e) { console.warn("Gamification error:", e); }
