@@ -168,31 +168,45 @@ function ReportsContent() {
         // 1. Cambiar estado del proyecto
         const projectRef = doc(db, "proyectos", targetReport.projectId);
         await updateDoc(projectRef, { Pry_Estado: "Finalizado" });
-        // 2. Sumar puntos al empleado, recalcular nivel y otorgar medallas
-        if (targetReport.employeeId) {
-          const result = await recordAction(db, targetReport.employeeId, "project_approved", 50).catch(() => null);
-          // Notificar al empleado
-          await sendNotification(db, {
-            userId: targetReport.employeeId,
-            type: "report",
-            title: "Reporte Aprobado ✅",
-            message: `¡Tu reporte del proyecto "${targetReport.projectName || "Sin nombre"}" fue aprobado! +50 puntos ganados.`,
-          });
-          if (result?.leveledUp) {
+
+        // 2. Recopilar UIDs de TODO el equipo (sin duplicados)
+        const allUids: string[] = Array.from(new Set([
+          targetReport.employeeId,
+          targetReport.teamLeader,
+          ...(targetReport.teamMembers || []),
+        ].filter(Boolean)));
+
+        // 3. Premiar a cada miembro
+        for (const uid of allUids) {
+          try {
+            const result = await recordAction(db, uid, "project_approved", 50);
+            // Notificación de aprobación
             await sendNotification(db, {
-              userId: targetReport.employeeId,
-              type: "level",
-              title: `🎉 ¡Subiste al Nivel ${result.newNivel}!`,
-              message: "Sigue completando proyectos para desbloquear nuevas medallas y recompensas.",
+              userId: uid,
+              type: "report",
+              title: "Reporte Aprobado ✅",
+              message: `¡El proyecto "${targetReport.projectName || "Sin nombre"}" fue aprobado! +50 puntos ganados.`,
             });
-          }
-          for (const medal of (result?.newMedals || [])) {
-            await sendNotification(db, {
-              userId: targetReport.employeeId,
-              type: "achievement",
-              title: `${medal.emoji} Medalla Desbloqueada: ${medal.nombre}`,
-              message: medal.descripcion,
-            });
+            // Notificación de subida de nivel
+            if (result?.leveledUp) {
+              await sendNotification(db, {
+                userId: uid,
+                type: "level",
+                title: `🎉 ¡Subiste al Nivel ${result.newNivel}!`,
+                message: "Sigue completando proyectos para desbloquear nuevas medallas y recompensas.",
+              });
+            }
+            // Notificación de nuevas medallas
+            for (const medal of (result?.newMedals || [])) {
+              await sendNotification(db, {
+                userId: uid,
+                type: "achievement",
+                title: `${medal.emoji} Medalla Desbloqueada: ${medal.nombre}`,
+                message: medal.descripcion,
+              });
+            }
+          } catch (err) {
+            console.warn(`No se pudo premiar al miembro ${uid}:`, err);
           }
         }
       }
