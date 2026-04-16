@@ -445,21 +445,18 @@ export default function ProjectsPage() {
     }
 
     try {
-      // 1. Update all users in the team
-      await Promise.all(targetUids.map(uid => {
-        const userRef = doc(db, "users", uid);
-        return updateDoc(userRef, {
+      // Solo actualizamos NUESTRO perfil (para quitar previous errors de firesotre "insufficient permissions"), el estado cooperativo principal vive ahora en "proyectos"
+      try {
+        const userRef = doc(db, "users", currentUid);
+        await updateDoc(userRef, {
           [`projectStatus.${project.id}`]: {
-            checklist_completado: false,
             timestamp_inicio: new Date().toISOString(),
-            en_curso: true,
-            checklistSnapshot: currentTasks
           }
-        }).catch(e => console.warn(`Error actualizando usuario ${uid}:`, e.message));
-      }));
+        });
+      } catch(e) {}
 
-      // 2. Initial reports for everyone
-      await Promise.all(targetUids.map(uid => {
+      // Generar reportes iniciales para todo el equipo para el TimeTracking y Visibilidad (Todo usuario autenticado puede instertar en 'reports')
+      const reportPromises = targetUids.map(uid => {
         return addDoc(collection(db, "reports"), {
           projectId: project.id,
           Pry_Nombre_Proyecto: project.Pry_Nombre_Proyecto,
@@ -473,12 +470,14 @@ export default function ProjectsPage() {
           createdAt: serverTimestamp(),
           type: 'start_day_sync'
         }).catch(e => console.warn("Error en Sync Report: ", e.message));
-      }));
+      });
+      await Promise.all(reportPromises);
 
+      // Cambiamos el proyecto en DB a "EnProceso" para que TODOS lo vean En Curso al mismo tiempo
       try {
         const projectRef = doc(db, "proyectos", project.id);
         await updateDoc(projectRef, {
-          Pry_Estado: project.Pry_Estado === "Pendiente" ? "EnProceso" : project.Pry_Estado
+          Pry_Estado: "EnProceso"
         });
       } catch (projErr) {}
 
@@ -524,8 +523,7 @@ export default function ProjectsPage() {
       const totalItems = currentTasks.length;
       const finishedItems = currentTasks.filter((i:any) => i.done).length;
       const checklistProgress = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
-      const projectProgresoOriginal = project.progreso || 0;
-
+      
       const currentUid = user.uid;
       const currentProfile = profile;
       const assignedTeam = teams?.find((t:any) => t.id === project.assignedTeamId);
@@ -545,8 +543,8 @@ export default function ProjectsPage() {
         clientName: project.clientName || "N/A",
         ubicacion: project.ubicacion || "N/A",
         serviceType: project.serviceType || "N/A",
-        projectStatus: project.Pry_Estado || "N/A",
-        projectProgress: projectProgresoOriginal,
+        projectStatus: "EnRevision", // Se va a enviar a revisión
+        projectProgress: 100, // Marcamos el 100% de avance
         assignedTeamId: project.assignedTeamId || "no-team",
         teamName: assignedTeam?.name || "Sin equipo asignado",
         teamType: assignedTeam?.type || "N/A",
@@ -558,41 +556,40 @@ export default function ProjectsPage() {
         timestamp: new Date().toISOString(),
         createdAt: serverTimestamp(),
         photoEvidence: reportPhotos,
-        progressAtTime: projectProgresoOriginal,
+        progressAtTime: 100,
         checklistProgress: checklistProgress,
         checklistSnapshot: currentTasks
       };
 
-      await Promise.all(targetUids.map(uid => {
+      const reportPromises = targetUids.map(uid => {
         return addDoc(collection(db, "reports"), {
           ...baseReportData,
           employeeId: uid,
           employeeName: uid === currentUid ? baseReportData.authorName : "Miembro del Equipo",
         }).catch(e => console.warn(e));
-      }));
+      });
+      await Promise.all(reportPromises);
 
-      await Promise.all(targetUids.map(uid => {
-        const userRef = doc(db, "users", uid);
-        return updateDoc(userRef, {
-           workingOn: null,
-          [`projectStatus.${project.id}`]: {
-            ...profile?.projectStatus?.[project.id],
-            checklist_completado: checklistProgress === 100, 
-            en_curso: false,
-            ultimo_reporte: new Date().toISOString(),
-            lastCalculatedProgress: checklistProgress
-          }
-        }).catch(e => console.warn(e));
-      }));
+      // Cambiamos estado de PORYECTO a 'EnRevision' para TODO el equipo
+      try {
+        const projectRef = doc(db, "proyectos", project.id);
+        await updateDoc(projectRef, {
+          Pry_Estado: "EnRevision",
+          progreso: 100
+        });
+      } catch (projErr) {
+        console.warn(projErr);
+      }
 
+      // Limpiamos nuestra actividad
       try {
         const userRef = doc(db, "users", currentUid);
         const newPoints = (currentProfile.puntos || 0) + 50;
         const newLevel = newPoints >= (currentProfile.level || 1) * 200 ? (currentProfile.level || 1) + 1 : (currentProfile.level || 1);
-        await updateDoc(userRef, { puntos: newPoints, level: newLevel });
+        await updateDoc(userRef, { workingOn: null, puntos: newPoints, level: newLevel });
       } catch (e) {}
 
-      toast({ title: t.common.success, description: "Reportes generados para el equipo y jornada finalizada." });
+      toast({ title: t.common.success, description: "Reportes generados para el equipo y enviando a aprobación." });
       
       setIsSheetOpen(false);
       setReportContent("");
@@ -679,6 +676,7 @@ export default function ProjectsPage() {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="Pendiente">Pendiente</SelectItem>
                   <SelectItem value="EnProceso">En Proceso</SelectItem>
+                  <SelectItem value="EnRevision">En Revisión</SelectItem>
                   <SelectItem value="Finalizado">Finalizado</SelectItem>
                 </SelectContent>
               </Select>
@@ -688,19 +686,10 @@ export default function ProjectsPage() {
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredProjects?.map((project: any) => {
-            const isEnCurso = profile?.projectStatus?.[project.id]?.en_curso;
+            const isEnCurso = project.Pry_Estado === 'EnProceso';
+            const displayStatus = project.Pry_Estado || 'Pendiente';
+            const displayProgress = project.progreso || 0;
             const assignedTeam = teams?.find(t => t.id === project.assignedTeamId);
-
-            // Calculate "Virtual" Progress from latest report
-            const projectReports = reports?.filter(r => r.projectId === project.id) || [];
-            const latestReport = projectReports.length > 0 
-              ? [...projectReports].sort((a,b) => (b.timestamp || "").localeCompare(a.timestamp || ""))[0]
-              : null;
-            
-            const displayProgress = latestReport ? (latestReport.progressAtTime || 0) : (project.progreso || 0);
-            const displayStatus = latestReport 
-              ? (latestReport.progressAtTime === 100 ? 'Finalizado' : 'EnProceso') 
-              : project.Pry_Estado;
 
             return (
               <Card key={project.id} className="border-border bg-card shadow-lg hover:shadow-xl transition-all overflow-hidden flex flex-col relative group">
@@ -710,9 +699,10 @@ export default function ProjectsPage() {
                     <Badge className={cn(
                       "font-bold uppercase tracking-widest text-white border-none", 
                       displayStatus === 'Finalizado' ? "bg-emerald-500" : 
+                      displayStatus === 'EnRevision' ? "bg-orange-500" :
                       displayStatus === 'EnProceso' ? "bg-accent" : "bg-yellow-500"
                     )}>
-                      {displayStatus}
+                      {displayStatus === "EnRevision" ? "EN REVISIÓN" : displayStatus}
                     </Badge>
                     {isAdmin && (
                       <AlertDialog>
@@ -769,9 +759,13 @@ export default function ProjectsPage() {
                       <Button variant="ghost" className="h-12 rounded-none text-accent font-bold border-r border-border" onClick={() => openManageDialog(project)}><Settings2 className="h-4 w-4 mr-2" /> Gestionar</Button>
                       <Button variant="ghost" className="h-12 rounded-none text-foreground font-bold" onClick={() => router.push(`/reports?projectId=${project.id}`)}><ClipboardList className="h-4 w-4 mr-2" /> Reportes</Button>
                     </div>
-                  ) : project.Pry_Estado === 'Finalizado' ? (
+                  ) : displayStatus === 'Finalizado' ? (
                     <Button disabled className="w-full h-12 rounded-none font-bold bg-muted text-muted-foreground cursor-not-allowed">
                       <CheckCircle2 className="h-4 w-4 mr-2" /> Proyecto Cerrado
+                    </Button>
+                  ) : displayStatus === 'EnRevision' ? (
+                    <Button disabled className="w-full h-12 rounded-none font-bold bg-orange-500/10 text-orange-500 cursor-not-allowed">
+                      <CheckCircle2 className="h-4 w-4 mr-2" /> A la espera de aprobación
                     </Button>
                   ) : (
                     <Sheet open={isSheetOpen && selectedProject?.id === project.id} onOpenChange={(o) => { 
@@ -922,7 +916,7 @@ export default function ProjectsPage() {
                 <DialogHeader><DialogTitle className="text-xl font-bold text-accent">{managedProject.Pry_Nombre_Proyecto}</DialogTitle></DialogHeader>
                 <div className="space-y-6 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label className="text-xs uppercase font-bold text-muted-foreground">Estado</Label><Select value={managedStatus} onValueChange={setManagedStatus}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Pendiente">Pendiente</SelectItem><SelectItem value="EnProceso">En Proceso</SelectItem><SelectItem value="Finalizado">Finalizado</SelectItem></SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-xs uppercase font-bold text-muted-foreground">Estado</Label><Select value={managedStatus} onValueChange={setManagedStatus}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Pendiente">Pendiente</SelectItem><SelectItem value="EnProceso">En Proceso</SelectItem><SelectItem value="EnRevision">En Revisión</SelectItem><SelectItem value="Finalizado">Finalizado</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-xs uppercase font-bold text-muted-foreground">Equipo (EQ)</Label><Select value={managedTeamId} onValueChange={setManagedTeamId}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no-team">SIN EQUIPO ASIGNADO</SelectItem>{teams?.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="space-y-2"><div className="flex justify-between text-xs font-bold uppercase mb-2"><span>Progreso Estructura</span><span className="text-accent">{managedProgress}%</span></div><Slider value={[managedProgress]} onValueChange={(v) => setManagedProgress(v[0])} max={100} step={5} /></div>
