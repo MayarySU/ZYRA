@@ -705,6 +705,38 @@ export default function ProjectsPage() {
                     <div className="space-y-2"><Label className="text-[10px] uppercase font-bold text-muted-foreground">Servicio</Label><Select value={newProject.serviceType} onValueChange={(val) => setNewProject({ ...newProject, serviceType: val })}><SelectTrigger className="h-11 bg-muted/50"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Instalación">{t.teams.installation}</SelectItem><SelectItem value="Mantenimiento">{t.teams.maintenance}</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-[10px] uppercase font-bold text-muted-foreground">Equipo (EQ)</Label><Select value={newProject.assignedTeamId} onValueChange={(val) => setNewProject({ ...newProject, assignedTeamId: val })}><SelectTrigger className="h-11 bg-muted/50"><SelectValue placeholder="Seleccionar Equipo" /></SelectTrigger><SelectContent><SelectItem value="no-team">SIN EQUIPO ASIGNADO</SelectItem>{teams?.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
                   </div>
+                  {/* Address field */}
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Dirección de Obra</Label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewProject({ ...newProject, addressType: "client" })}
+                        className={`flex-1 text-xs py-2 px-3 rounded-lg border font-bold transition-colors ${newProject.addressType === "client" ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:border-accent/40"}`}
+                      >
+                        📍 Del Cliente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewProject({ ...newProject, addressType: "custom" })}
+                        className={`flex-1 text-xs py-2 px-3 rounded-lg border font-bold transition-colors ${newProject.addressType === "custom" ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:border-accent/40"}`}
+                      >
+                        ✏️ Personalizada
+                      </button>
+                    </div>
+                    {newProject.addressType === "client" ? (
+                      <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2 h-11 flex items-center">
+                        {clients?.find(c => c.id === newProject.clientId)?.Cl_Direccion || "Selecciona un cliente para autocompletar"}
+                      </div>
+                    ) : (
+                      <Input
+                        placeholder="Calle, Número, Colonia, Ciudad..."
+                        value={newProject.customAddress}
+                        onChange={(e) => setNewProject({ ...newProject, customAddress: e.target.value })}
+                        className="h-11 bg-muted/50"
+                      />
+                    )}
+                  </div>
                 </div>
                 <DialogFooter><Button className="w-full bg-accent text-white" onClick={handleCreateProject} disabled={loading || !newProject.Pry_Nombre_Proyecto || !newProject.clientId}>{t.common.create}</Button></DialogFooter>
               </DialogContent>
