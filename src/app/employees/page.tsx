@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useFirestore, useCollection, useUser, useMemoFirebase, useAuth } from "@/firebase";
 import { firebaseConfig } from "@/firebase/config";
-import { initializeApp, deleteApp } from "firebase/app";
+import { initializeApp, deleteApp, getApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { collection, setDoc, doc, serverTimestamp, deleteDoc, query, where, getDocs, writeBatch } from "firebase/firestore";
 import {
@@ -134,7 +134,11 @@ export default function EmployeesPage() {
     let secondaryApp;
     try {
       const appName = `secondary-reg-${Date.now()}`;
-      secondaryApp = initializeApp(firebaseConfig, appName);
+      // Importante: Usamos la configuración de la app por defecto porque en producción
+      // Firebase App Hosting inyecta dinámicamente las credenciales (incluyendo apiKey)
+      // mientras que firebaseConfig local puede estar vacío.
+      const defaultApp = getApp();
+      secondaryApp = initializeApp(defaultApp.options, appName);
       const secondaryAuth = getAuth(secondaryApp);
 
       // 2. Create Auth user
