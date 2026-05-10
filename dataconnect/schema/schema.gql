@@ -1,0 +1,16 @@
+type Equipo @table {
+  nombre: String!
+  totalProyectos: Int!
+}
+
+type Cliente @table {
+  nombre: String!
+  correo: String!
+}
+
+type Proyecto @table {
+  nombre: String!
+  estado: String
+  equipo: Equipo!
+  cliente: Cliente!
+}

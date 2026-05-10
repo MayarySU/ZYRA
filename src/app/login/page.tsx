@@ -12,8 +12,8 @@ import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const auth = useAuth();
-  const [email, setEmail] = useState("admin@zyra.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -72,7 +72,7 @@ export default function LoginPage() {
               <div className="space-y-3">
                 <Input
                   type="email"
-                  placeholder="admin@zyra.com"
+                  placeholder="usuario@empresa.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-zinc-900/50 border-zinc-800 text-white h-12 px-4 rounded-xl focus-visible:ring-accent/50 placeholder:text-zinc-700 transition-all"

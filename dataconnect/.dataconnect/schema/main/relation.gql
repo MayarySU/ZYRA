@@ -1,0 +1,235 @@
+extend type Cliente {
+  """
+  ✨ List `Proyecto` objects in a one-to-many relationship (where `Proyecto`.`cliente` is this object).
+  """
+  proyectos_on_cliente(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Proyecto_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Proyecto_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Proyecto_Having
+  ): [Proyecto!]! @fdc_generated(from: "Proyecto.cliente", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "Cliente", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `Cliente` table.
+  """
+  _count: Int! @fdc_generated(from: "Cliente.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Cliente` table where the `correo` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  correo_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Cliente.correo", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Cliente` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Cliente.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Cliente` table where the `nombre` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  nombre_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Cliente.nombre", purpose: QUERY_COUNT)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Cliente.id", purpose: ENTITY_ID)
+}
+extend type Equipo {
+  """
+  ✨ List `Proyecto` objects in a one-to-many relationship (where `Proyecto`.`equipo` is this object).
+  """
+  proyectos_on_equipo(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Proyecto_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Proyecto_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Proyecto_Having
+  ): [Proyecto!]! @fdc_generated(from: "Proyecto.equipo", purpose: QUERY_MULTIPLE_ONE_TO_MANY)
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "Equipo", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `Equipo` table.
+  """
+  _count: Int! @fdc_generated(from: "Equipo.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Equipo` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Equipo.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Equipo` table where the `nombre` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  nombre_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Equipo.nombre", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Equipo` table where the `totalProyectos` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  totalProyectos_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Equipo.totalProyectos", purpose: QUERY_COUNT)
+  """
+  ✨ Sum the `totalProyectos` field in the `Equipo` table.
+  """
+  totalProyectos_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Int @fdc_generated(from: "Equipo.totalProyectos", purpose: QUERY_SUM)
+  """
+  ✨ Average the `totalProyectos` field in the `Equipo` table.
+  """
+  totalProyectos_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "Equipo.totalProyectos", purpose: QUERY_AVG)
+  """
+  ✨ Minimum of the `totalProyectos` field in the `Equipo` table.
+  """
+  totalProyectos_min: Int @fdc_generated(from: "Equipo.totalProyectos", purpose: QUERY_MIN)
+  """
+  ✨ Maximum of the `totalProyectos` field in the `Equipo` table.
+  """
+  totalProyectos_max: Int @fdc_generated(from: "Equipo.totalProyectos", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Equipo.id", purpose: ENTITY_ID)
+}
+extend type Proyecto {
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "Proyecto", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `Proyecto` table.
+  """
+  _count: Int! @fdc_generated(from: "Proyecto.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Proyecto` table where the `clienteId` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  clienteId_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Proyecto.clienteId", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Proyecto` table where the `equipoId` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  equipoId_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Proyecto.equipoId", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Proyecto` table where the `estado` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  estado_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Proyecto.estado", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Proyecto` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Proyecto.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `Proyecto` table where the `nombre` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  nombre_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "Proyecto.nombre", purpose: QUERY_COUNT)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "Proyecto.id", purpose: ENTITY_ID)
+}

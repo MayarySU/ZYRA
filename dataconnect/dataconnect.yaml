@@ -1,0 +1,13 @@
+specVersion: "v1"
+serviceId: "studio-162226445-90191-service"
+location: "us-east4"
+schemas:
+  - source: "./schema"
+    datasource:
+      postgresql:
+        database: "studio-162226445-90191-database"
+        cloudSql:
+          instanceId: "studio-162226445-90191-instance"
+          # schemaValidation: "STRICT"     # STRICT mode makes Postgres schema match Data Connect exactly.
+          # schemaValidation: "COMPATIBLE" # COMPATIBLE mode makes Postgres schema compatible with Data Connect.
+connectorDirs: ["./example"]

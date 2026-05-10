@@ -1,0 +1,338 @@
+extend type Mutation {
+  """
+  ✨ Insert a single `Cliente` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  cliente_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Cliente_Data!
+  ): Cliente_KeyOutput! @fdc_generated(from: "Cliente", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `Equipo` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  equipo_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Equipo_Data!
+  ): Equipo_KeyOutput! @fdc_generated(from: "Equipo", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `Proyecto` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  proyecto_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Proyecto_Data!
+  ): Proyecto_KeyOutput! @fdc_generated(from: "Proyecto", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert `Cliente` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  cliente_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Cliente_Data!]!
+  ): [Cliente_KeyOutput!]! @fdc_generated(from: "Cliente", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `Equipo` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  equipo_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Equipo_Data!]!
+  ): [Equipo_KeyOutput!]! @fdc_generated(from: "Equipo", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `Proyecto` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  proyecto_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Proyecto_Data!]!
+  ): [Proyecto_KeyOutput!]! @fdc_generated(from: "Proyecto", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert or update a single `Cliente` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Cliente`.
+  """
+  cliente_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Cliente_Data!
+  ): Cliente_KeyOutput! @fdc_generated(from: "Cliente", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `Equipo` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Equipo`.
+  """
+  equipo_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Equipo_Data!
+  ): Equipo_KeyOutput! @fdc_generated(from: "Equipo", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `Proyecto` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Proyecto`.
+  """
+  proyecto_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Proyecto_Data!
+  ): Proyecto_KeyOutput! @fdc_generated(from: "Proyecto", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update `Cliente` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Cliente`.
+  """
+  cliente_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Cliente_Data!]!
+  ): [Cliente_KeyOutput!]! @fdc_generated(from: "Cliente", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `Equipo` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Equipo`.
+  """
+  equipo_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Equipo_Data!]!
+  ): [Equipo_KeyOutput!]! @fdc_generated(from: "Equipo", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `Proyecto` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Proyecto`.
+  """
+  proyecto_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Proyecto_Data!]!
+  ): [Proyecto_KeyOutput!]! @fdc_generated(from: "Proyecto", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Update a single `Cliente` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Cliente` or `null` if not found.
+  """
+  cliente_update(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Cliente_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Cliente_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Cliente_Data!
+  ): Cliente_KeyOutput @fdc_generated(from: "Cliente", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `Equipo` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Equipo` or `null` if not found.
+  """
+  equipo_update(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Equipo_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Equipo_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Equipo_Data!
+  ): Equipo_KeyOutput @fdc_generated(from: "Equipo", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `Proyecto` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Proyecto` or `null` if not found.
+  """
+  proyecto_update(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Proyecto_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Proyecto_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Proyecto_Data!
+  ): Proyecto_KeyOutput @fdc_generated(from: "Proyecto", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update `Cliente` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  cliente_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Cliente_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Cliente_Data!
+  ): Int! @fdc_generated(from: "Cliente", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `Equipo` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  equipo_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Equipo_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Equipo_Data!
+  ): Int! @fdc_generated(from: "Equipo", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `Proyecto` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  proyecto_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Proyecto_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Proyecto_Data!
+  ): Int! @fdc_generated(from: "Proyecto", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Delete a single `Cliente` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  cliente_delete(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Cliente_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Cliente_FirstRow
+  ): Cliente_KeyOutput @fdc_generated(from: "Cliente", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `Equipo` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  equipo_delete(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Equipo_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Equipo_FirstRow
+  ): Equipo_KeyOutput @fdc_generated(from: "Equipo", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `Proyecto` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  proyecto_delete(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Proyecto_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Proyecto_FirstRow
+  ): Proyecto_KeyOutput @fdc_generated(from: "Proyecto", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete `Cliente` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  cliente_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Cliente_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Cliente", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `Equipo` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  equipo_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Equipo_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Equipo", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `Proyecto` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  proyecto_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Proyecto_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Proyecto", purpose: DELETE_MULTIPLE)
+}

@@ -1,0 +1,635 @@
+"""
+✨ `Cliente_KeyOutput` returns the primary key fields of table type `Cliente`.
+
+It has the same format as `Cliente_Key`, but is only used as mutation return value.
+"""
+scalar Cliente_KeyOutput
+"""
+✨ `Equipo_KeyOutput` returns the primary key fields of table type `Equipo`.
+
+It has the same format as `Equipo_Key`, but is only used as mutation return value.
+"""
+scalar Equipo_KeyOutput
+"""
+✨ `Proyecto_KeyOutput` returns the primary key fields of table type `Proyecto`.
+
+It has the same format as `Proyecto_Key`, but is only used as mutation return value.
+"""
+scalar Proyecto_KeyOutput
+"""
+✨ Generated data input type for table 'Cliente'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Cliente_Data {
+  """
+  ✨ Generated from Field `Cliente`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Cliente`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Cliente`.`correo` of type `String!`
+  """
+  correo: String
+  """
+  ✨ `_expr` server value variant of `correo` (✨ Generated from Field `Cliente`.`correo` of type `String!`)
+  """
+  correo_expr: String_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Cliente`.`nombre` of type `String!`
+  """
+  nombre: String
+  """
+  ✨ `_expr` server value variant of `nombre` (✨ Generated from Field `Cliente`.`nombre` of type `String!`)
+  """
+  nombre_expr: String_Expr @fdc_forbiddenInVariables
+}
+"""
+✨ Generated filter input type for table 'Cliente'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Cliente_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Cliente_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Cliente_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Cliente_Filter!]
+  """
+  ✨ Generated from Field `Cliente`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `Cliente`.`correo` of type `String!`
+  """
+  correo: String_Filter
+  """
+  ✨ Generated from Field `Cliente`.`nombre` of type `String!`
+  """
+  nombre: String_Filter
+  """
+  ✨ Generated from Field `Cliente`.`proyectos_on_cliente` of type `[Proyecto!]!`
+  """
+  proyectos_on_cliente: Proyecto_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'Cliente'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Cliente_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Cliente_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Cliente_Filter
+}
+"""
+✨ Generated having input type for table 'Cliente'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Cliente_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Cliente_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Cliente_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Cliente_Having!]
+  """
+  ✨ Generated from Field `Cliente`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Cliente`.`correo_count` of type `Int!`
+  """
+  correo_count: Int_Filter
+  """
+  ✨ Generated from Field `Cliente`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Cliente`.`nombre_count` of type `Int!`
+  """
+  nombre_count: Int_Filter
+}
+"""
+✨ Generated key input type for table 'Cliente'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Cliente_Key {
+  """
+  ✨ Generated from Field `Cliente`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Cliente`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr @fdc_forbiddenInVariables
+}
+"""
+✨ Generated list filter input type for table 'Cliente'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Cliente_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Cliente_Filter
+}
+"""
+✨ Generated order input type for table 'Cliente'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Cliente_Order {
+  """
+  ✨ Generated from Field `Cliente`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Cliente`.`correo` of type `String!`
+  """
+  correo: OrderDirection
+  """
+  ✨ Generated from Field `Cliente`.`nombre` of type `String!`
+  """
+  nombre: OrderDirection
+  """
+  ✨ Generated from Field `Cliente`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Cliente`.`correo_count` of type `Int!`
+  """
+  correo_count: OrderDirection
+  """
+  ✨ Generated from Field `Cliente`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Cliente`.`nombre_count` of type `Int!`
+  """
+  nombre_count: OrderDirection
+}
+"""
+✨ Generated data input type for table 'Equipo'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Equipo_Data {
+  """
+  ✨ Generated from Field `Equipo`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Equipo`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Equipo`.`nombre` of type `String!`
+  """
+  nombre: String
+  """
+  ✨ `_expr` server value variant of `nombre` (✨ Generated from Field `Equipo`.`nombre` of type `String!`)
+  """
+  nombre_expr: String_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos` of type `Int!`
+  """
+  totalProyectos: Int
+  """
+  ✨ `_expr` server value variant of `totalProyectos` (✨ Generated from Field `Equipo`.`totalProyectos` of type `Int!`)
+  """
+  totalProyectos_expr: Int_Expr @fdc_forbiddenInVariables
+  """
+  ✨ `_update` server value variant of `totalProyectos` (✨ Generated from Field `Equipo`.`totalProyectos` of type `Int!`)
+  """
+  totalProyectos_update: [Int_Update!] @fdc_forbiddenInVariables
+}
+"""
+✨ Generated filter input type for table 'Equipo'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Equipo_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Equipo_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Equipo_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Equipo_Filter!]
+  """
+  ✨ Generated from Field `Equipo`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `Equipo`.`nombre` of type `String!`
+  """
+  nombre: String_Filter
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos` of type `Int!`
+  """
+  totalProyectos: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`proyectos_on_equipo` of type `[Proyecto!]!`
+  """
+  proyectos_on_equipo: Proyecto_ListFilter
+}
+"""
+✨ Generated first-row input type for table 'Equipo'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Equipo_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Equipo_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Equipo_Filter
+}
+"""
+✨ Generated having input type for table 'Equipo'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Equipo_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Equipo_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Equipo_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Equipo_Having!]
+  """
+  ✨ Generated from Field `Equipo`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`nombre_count` of type `Int!`
+  """
+  nombre_count: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_count` of type `Int!`
+  """
+  totalProyectos_count: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_sum` of type `Int`
+  """
+  totalProyectos_sum: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_avg` of type `Float`
+  """
+  totalProyectos_avg: Float_Filter
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_min` of type `Int`
+  """
+  totalProyectos_min: Int_Filter
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_max` of type `Int`
+  """
+  totalProyectos_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'Equipo'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Equipo_Key {
+  """
+  ✨ Generated from Field `Equipo`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Equipo`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr @fdc_forbiddenInVariables
+}
+"""
+✨ Generated list filter input type for table 'Equipo'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Equipo_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Equipo_Filter
+}
+"""
+✨ Generated order input type for table 'Equipo'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Equipo_Order {
+  """
+  ✨ Generated from Field `Equipo`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`nombre` of type `String!`
+  """
+  nombre: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos` of type `Int!`
+  """
+  totalProyectos: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`nombre_count` of type `Int!`
+  """
+  nombre_count: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_count` of type `Int!`
+  """
+  totalProyectos_count: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_sum` of type `Int`
+  """
+  totalProyectos_sum: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_avg` of type `Float`
+  """
+  totalProyectos_avg: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_min` of type `Int`
+  """
+  totalProyectos_min: OrderDirection
+  """
+  ✨ Generated from Field `Equipo`.`totalProyectos_max` of type `Int`
+  """
+  totalProyectos_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'Proyecto'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Proyecto_Data {
+  """
+  ✨ Generated from Field `Proyecto`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Proyecto`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Proyecto`.`clienteId` of type `UUID!`
+  """
+  clienteId: UUID
+  """
+  ✨ `_expr` server value variant of `clienteId` (✨ Generated from Field `Proyecto`.`clienteId` of type `UUID!`)
+  """
+  clienteId_expr: UUID_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Proyecto`.`equipoId` of type `UUID!`
+  """
+  equipoId: UUID
+  """
+  ✨ `_expr` server value variant of `equipoId` (✨ Generated from Field `Proyecto`.`equipoId` of type `UUID!`)
+  """
+  equipoId_expr: UUID_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Proyecto`.`cliente` of type `Cliente!`
+  """
+  cliente: Cliente_Key @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Proyecto`.`equipo` of type `Equipo!`
+  """
+  equipo: Equipo_Key @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Proyecto`.`estado` of type `String`
+  """
+  estado: String
+  """
+  ✨ `_expr` server value variant of `estado` (✨ Generated from Field `Proyecto`.`estado` of type `String`)
+  """
+  estado_expr: String_Expr @fdc_forbiddenInVariables
+  """
+  ✨ Generated from Field `Proyecto`.`nombre` of type `String!`
+  """
+  nombre: String
+  """
+  ✨ `_expr` server value variant of `nombre` (✨ Generated from Field `Proyecto`.`nombre` of type `String!`)
+  """
+  nombre_expr: String_Expr @fdc_forbiddenInVariables
+}
+"""
+✨ Generated filter input type for table 'Proyecto'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Proyecto_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Proyecto_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Proyecto_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Proyecto_Filter!]
+  """
+  ✨ Generated from Field `Proyecto`.`id` of type `UUID!`
+  """
+  id: UUID_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`clienteId` of type `UUID!`
+  """
+  clienteId: UUID_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`equipoId` of type `UUID!`
+  """
+  equipoId: UUID_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`cliente` of type `Cliente!`
+  """
+  cliente: Cliente_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`equipo` of type `Equipo!`
+  """
+  equipo: Equipo_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`estado` of type `String`
+  """
+  estado: String_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`nombre` of type `String!`
+  """
+  nombre: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'Proyecto'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Proyecto_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Proyecto_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Proyecto_Filter
+}
+"""
+✨ Generated having input type for table 'Proyecto'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Proyecto_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Proyecto_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Proyecto_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Proyecto_Having!]
+  """
+  ✨ Generated from Field `Proyecto`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`clienteId_count` of type `Int!`
+  """
+  clienteId_count: Int_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`equipoId_count` of type `Int!`
+  """
+  equipoId_count: Int_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`estado_count` of type `Int!`
+  """
+  estado_count: Int_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Proyecto`.`nombre_count` of type `Int!`
+  """
+  nombre_count: Int_Filter
+}
+"""
+✨ Generated key input type for table 'Proyecto'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Proyecto_Key {
+  """
+  ✨ Generated from Field `Proyecto`.`id` of type `UUID!`
+  """
+  id: UUID
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Proyecto`.`id` of type `UUID!`)
+  """
+  id_expr: UUID_Expr @fdc_forbiddenInVariables
+}
+"""
+✨ Generated list filter input type for table 'Proyecto'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Proyecto_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Proyecto_Filter
+}
+"""
+✨ Generated order input type for table 'Proyecto'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Proyecto_Order {
+  """
+  ✨ Generated from Field `Proyecto`.`id` of type `UUID!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`clienteId` of type `UUID!`
+  """
+  clienteId: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`equipoId` of type `UUID!`
+  """
+  equipoId: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`cliente` of type `Cliente!`
+  """
+  cliente: Cliente_Order
+  """
+  ✨ Generated from Field `Proyecto`.`equipo` of type `Equipo!`
+  """
+  equipo: Equipo_Order
+  """
+  ✨ Generated from Field `Proyecto`.`estado` of type `String`
+  """
+  estado: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`nombre` of type `String!`
+  """
+  nombre: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`clienteId_count` of type `Int!`
+  """
+  clienteId_count: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`equipoId_count` of type `Int!`
+  """
+  equipoId_count: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`estado_count` of type `Int!`
+  """
+  estado_count: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Proyecto`.`nombre_count` of type `Int!`
+  """
+  nombre_count: OrderDirection
+}

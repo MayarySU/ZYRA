@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "943256965880",
+    "firebase_url": "https://studio-162226445-90191-default-rtdb.firebaseio.com",
+    "project_id": "studio-162226445-90191",
+    "storage_bucket": "studio-162226445-90191.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:943256965880:android:c5e80ba8f93e08918a210d",
+        "android_client_info": {
+          "package_name": "ZYRACOMMAND_1.M23"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "943256965880-m0t6q5t8oflrf43eg7m08sk8i6vpe428.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXSPGBNEHV6QdgsxzwZCBqtTFrJYhIHME"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "943256965880-m0t6q5t8oflrf43eg7m08sk8i6vpe428.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

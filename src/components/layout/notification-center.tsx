@@ -13,7 +13,7 @@ import { collection, query, where, orderBy, doc, writeBatch, limit } from "fireb
 import { cn } from "@/lib/utils";
 import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 
 interface NotifItem {
   id: string;
@@ -26,10 +26,10 @@ interface NotifItem {
 
 // ─── Icon per type ────────────────────────────────
 function NotifIcon({ type, status }: { type: string; status?: string }) {
-  if (type === "team")        return <Users className="h-4 w-4 text-blue-400" />;
-  if (type === "level")       return <Zap className="h-4 w-4 text-yellow-400" />;
+  if (type === "team") return <Users className="h-4 w-4 text-blue-400" />;
+  if (type === "level") return <Zap className="h-4 w-4 text-yellow-400" />;
   if (type === "achievement") return <Trophy className="h-4 w-4 text-amber-400" />;
-  if (status === "Aprobado")  return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+  if (status === "Aprobado") return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
   if (status === "Rechazado") return <XCircle className="h-4 w-4 text-red-400" />;
   return <FileText className="h-4 w-4 text-accent" />;
 }
@@ -61,14 +61,23 @@ export function NotificationCenter() {
     return collection(db, "reports"); // todos los reportes, sin filtro adicional
   }, [db, isAdmin]);
 
-  const { data: empReports }   = useCollection(empReportsQuery);
+  const { data: empReports } = useCollection(empReportsQuery);
   const { data: adminReports } = useCollection(adminReportsQuery);
 
   // ── Local read-tracking (session only) ───────────
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  const markRead  = (id: string) => setReadIds(prev => new Set([...prev, id]));
-  const markAll   = () => setReadIds(new Set(notifications.map(n => n.id)));
-  const clearAll  = () => setReadIds(new Set(notifications.map(n => n.id)));
+  const [isOpen, setIsOpen] = useState(false);
+  const notificationsRef = useRef<NotifItem[]>([]);
+
+  const markRead = (id: string) => setReadIds(prev => new Set([...prev, id]));
+  const markAllRead = (notifications?: NotifItem[]) => setReadIds(new Set(notificationsRef.current.map(n => n.id)));
+  const clearAll = () => markAllRead();
+
+  // Auto-mark all as read when the popover opens
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open) markAllRead();
+  };
 
   // ── Build notification list ───────────────────────
   const notifications: NotifItem[] = useMemo(() => {
@@ -164,10 +173,13 @@ export function NotificationCenter() {
       .slice(0, 30);
   }, [isAdmin, adminReports, empReports, profile, readIds]);
 
+  // Keep ref in sync so handleOpenChange always reads the latest list
+  notificationsRef.current = notifications;
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative hover:bg-white/10 transition-colors">
           <Bell className="h-5 w-5 text-muted-foreground" />
@@ -193,7 +205,7 @@ export function NotificationCenter() {
           </div>
           <div className="flex gap-1">
             {unreadCount > 0 && (
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={markAll} title="Marcar todo como leído">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => markAllRead(notifications)} title="Marcar todo como leído">
                 <CheckCheck className="h-3.5 w-3.5" />
               </Button>
             )}
@@ -222,7 +234,7 @@ export function NotificationCenter() {
                     <div className={cn("mt-0.5 p-2 rounded-lg shrink-0", !notif.read ? "bg-accent/10" : "bg-muted/20")}>
                       <NotifIcon type={notif.type} status={
                         notif.title.includes("aprobado") ? "Aprobado" :
-                        notif.title.includes("rechazado") ? "Rechazado" : undefined
+                          notif.title.includes("rechazado") ? "Rechazado" : undefined
                       } />
                     </div>
                     <div className="space-y-0.5 min-w-0">

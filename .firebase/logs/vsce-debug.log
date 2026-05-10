@@ -1,0 +1,93 @@
+[debug] [2026-04-21T21:08:21.139Z] [Firebase Plugin] Activating Firebase extension.
+[debug] [2026-04-21T21:08:28.938Z] [Firebase Plugin] requireAuthWrapper
+[debug] [2026-04-21T21:08:28.945Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-21T21:08:28.947Z] > authorizing via signed-in user (mayaryrubio09@gmail.com)
+[debug] [2026-04-21T21:08:28.958Z] Checked if tokens are valid: false, expires at: 1776355204431
+[debug] [2026-04-21T21:08:28.959Z] Checked if tokens are valid: false, expires at: 1776355204431
+[debug] [2026-04-21T21:08:28.961Z] > refreshing access token with scopes: []
+[debug] [2026-04-21T21:08:28.967Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-04-21T21:08:28.968Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-21T21:08:29.006Z] [Firebase Plugin] VSCode notification server listening on port 40001
+[info] [Firebase Plugin] Starting SQL Connect toolkit (version 3.4.5) on port 50001
+[info] i  dataconnect: downloading dataconnect-emulator-3.4.5.exe... {"metadata":{"emulator":{"name":"dataconnect"},"message":"downloading dataconnect-emulator-3.4.5.exe..."}}
+[debug] [2026-04-21T21:08:29.853Z] >>> [apiv2][query] GET https://storage.googleapis.com/firemat-preview-drop/emulator/dataconnect-emulator-windows-amd64-v3.4.5 
+[debug] [2026-04-21T21:08:29.979Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-04-21T21:08:29.979Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-21T21:08:30.024Z] [Firebase Plugin] User found:  mayaryrubio09@gmail.com
+[info] [Firebase Plugin] (Core:Project) New user detected, fetching projects
+[debug] [2026-04-21T21:08:30.028Z] Checked if tokens are valid: true, expires at: 1776809308980
+[debug] [2026-04-21T21:08:30.030Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2026-04-21T21:08:30.239Z] <<< [apiv2][status] GET https://storage.googleapis.com/firemat-preview-drop/emulator/dataconnect-emulator-windows-amd64-v3.4.5 200
+[debug] [2026-04-21T21:08:30.240Z] <<< [apiv2][body] GET https://storage.googleapis.com/firemat-preview-drop/emulator/dataconnect-emulator-windows-amd64-v3.4.5 [stream]
+[debug] [2026-04-21T21:08:30.730Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-04-21T21:08:30.731Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[debug] [2026-04-21T21:08:32.939Z] 'fdc build' failed with error: Unable to build your SQL Connect schema and connectors (exit code 1): E0421 14:08:32.836516   42360 cmd.go:43] Error loading data connect config: could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"'fdc build' failed with error: Unable to build your SQL Connect schema and connectors (exit code 1): E0421 14:08:32.836516   42360 cmd.go:43] Error loading data connect config: could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:08:32.942Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"dataconnect"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2026-04-21T21:08:32.943Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"dataconnect"},"message":"Ignoring unsupported arg: port"}}
+[debug] [2026-04-21T21:08:32.943Z] Starting SQL Connect Emulator with command {"binary":"C:\\Users\\Mayar\\.cache\\firebase\\emulators\\dataconnect-emulator-3.4.5.exe","args":["--logtostderr","-v=2","dev","--listen=localhost:50001","--config_dir=c:\\Users\\Mayar\\ZYRA\\dataconnect","--enable_output_schema_extensions=true","--enable_output_generated_sdk=true"],"optionalArgs":["listen","config_dir","enable_output_schema_extensions","enable_output_generated_sdk"],"joinArgs":true,"shell":false,"port":9399} {"metadata":{"emulator":{"name":"dataconnect"},"message":"Starting SQL Connect Emulator with command {\"binary\":\"C:\\\\Users\\\\Mayar\\\\.cache\\\\firebase\\\\emulators\\\\dataconnect-emulator-3.4.5.exe\",\"args\":[\"--logtostderr\",\"-v=2\",\"dev\",\"--listen=localhost:50001\",\"--config_dir=c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\",\"--enable_output_schema_extensions=true\",\"--enable_output_generated_sdk=true\"],\"optionalArgs\":[\"listen\",\"config_dir\",\"enable_output_schema_extensions\",\"enable_output_generated_sdk\"],\"joinArgs\":true,\"shell\":false,\"port\":9399}"}}
+[info] i  dataconnect: SQL Connect Emulator logging to dataconnect-debug.log {"metadata":{"emulator":{"name":"dataconnect"},"message":"SQL Connect Emulator logging to \u001b[1mdataconnect-debug.log\u001b[22m"}}
+[debug] [2026-04-21T21:08:33.129Z] E0421 14:08:33.047981   33412 dev.go:83] Failed to load initial config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:08:33.047981   33412 dev.go:83] Failed to load initial config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:08:33.130Z] E0421 14:08:33.129158   33412 watch.go:116] watchAllDir unable to walk dir `c:\Users\Mayar\ZYRA\dataconnect`: GetFileAttributesEx c:\Users\Mayar\ZYRA\dataconnect: The system cannot find the file specified.
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:08:33.129158   33412 watch.go:116] watchAllDir unable to walk dir `c:\\Users\\Mayar\\ZYRA\\dataconnect`: GetFileAttributesEx c:\\Users\\Mayar\\ZYRA\\dataconnect: The system cannot find the file specified.\n"}}
+[debug] [2026-04-21T21:08:33.151Z] I0421 14:08:33.151357   33412 dev.go:104] Listening on address (HTTP + gRPC): 127.0.0.1:50001
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0421 14:08:33.151357   33412 dev.go:104] Listening on address (HTTP + gRPC): 127.0.0.1:50001\n"}}
+[error] [Firebase Plugin] error:  {}
+[debug] [2026-04-21T21:08:43.130Z] E0421 14:08:43.129858   33412 watch.go:40] Failed to load config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:08:43.129858   33412 watch.go:40] Failed to load config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:08:53.130Z] E0421 14:08:53.130195   33412 watch.go:40] Failed to load config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:08:53.130195   33412 watch.go:40] Failed to load config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:09:03.130Z] E0421 14:09:03.130086   33412 watch.go:40] Failed to load config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:09:03.130086   33412 watch.go:40] Failed to load config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:09:13.130Z] E0421 14:09:13.130426   33412 watch.go:40] Failed to load config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:09:13.130426   33412 watch.go:40] Failed to load config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:09:23.131Z] E0421 14:09:23.130771   33412 watch.go:40] Failed to load config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:09:23.130771   33412 watch.go:40] Failed to load config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[debug] [2026-04-21T21:09:33.130Z] E0421 14:09:33.130268   33412 watch.go:116] watchAllDir unable to walk dir `c:\Users\Mayar\ZYRA\dataconnect`: GetFileAttributesEx c:\Users\Mayar\ZYRA\dataconnect: The system cannot find the file specified.
+E0421 14:09:33.130268   33412 watch.go:40] Failed to load config from "c:\\Users\\Mayar\\ZYRA\\dataconnect": could not find dataconnect.yaml in `c:\Users\Mayar\ZYRA\dataconnect`
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"E0421 14:09:33.130268   33412 watch.go:116] watchAllDir unable to walk dir `c:\\Users\\Mayar\\ZYRA\\dataconnect`: GetFileAttributesEx c:\\Users\\Mayar\\ZYRA\\dataconnect: The system cannot find the file specified.\nE0421 14:09:33.130268   33412 watch.go:40] Failed to load config from \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\": could not find dataconnect.yaml in `c:\\Users\\Mayar\\ZYRA\\dataconnect`\n"}}
+[info] [Firebase Plugin] Stopping SQL Connect toolkit
+[warn] !  SQL Connect Emulator has exited upon receiving signal: SIGINT 
+[debug] [2026-04-22T03:49:08.088Z] [Firebase Plugin] Activating Firebase extension.
+[info] [Firebase Plugin] Checked firebase-tools, is up to date!
+[debug] [2026-04-22T03:49:12.653Z] [Firebase Plugin] requireAuthWrapper
+[debug] [2026-04-22T03:49:12.663Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-22T03:49:12.664Z] > authorizing via signed-in user (mayaryrubio09@gmail.com)
+[debug] [2026-04-22T03:49:12.666Z] Checked if tokens are valid: false, expires at: 1776809308980
+[debug] [2026-04-22T03:49:12.667Z] Checked if tokens are valid: false, expires at: 1776809308980
+[debug] [2026-04-22T03:49:12.667Z] > refreshing access token with scopes: []
+[debug] [2026-04-22T03:49:12.669Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-04-22T03:49:12.669Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-22T03:49:12.680Z] [Firebase Plugin] VSCode notification server listening on port 40001
+[info] [Firebase Plugin] Starting SQL Connect toolkit (version 3.4.5) on port 50001
+[debug] [2026-04-22T03:49:13.650Z] I0421 20:49:13.591624     984 control.go:100] [projects/emulator/locations/emulator/services/studio-162226445-90191-service 6374] UpdateResources(): done
+Main schema: sources: schema\schema.gql [238B] 
+Connector "example": sources: 
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0421 20:49:13.591624     984 control.go:100] [projects/emulator/locations/emulator/services/studio-162226445-90191-service 6374] UpdateResources(): done\nMain schema: sources: schema\\schema.gql [238B] \nConnector \"example\": sources: \n"}}
+[debug] [2026-04-22T03:49:13.651Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"dataconnect"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2026-04-22T03:49:13.651Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"dataconnect"},"message":"Ignoring unsupported arg: port"}}
+[debug] [2026-04-22T03:49:13.652Z] Starting SQL Connect Emulator with command {"binary":"C:\\Users\\Mayar\\.cache\\firebase\\emulators\\dataconnect-emulator-3.4.5.exe","args":["--logtostderr","-v=2","dev","--listen=localhost:50001","--config_dir=c:\\Users\\Mayar\\ZYRA\\dataconnect","--enable_output_schema_extensions=true","--enable_output_generated_sdk=true"],"optionalArgs":["listen","config_dir","enable_output_schema_extensions","enable_output_generated_sdk"],"joinArgs":true,"shell":false,"port":9399} {"metadata":{"emulator":{"name":"dataconnect"},"message":"Starting SQL Connect Emulator with command {\"binary\":\"C:\\\\Users\\\\Mayar\\\\.cache\\\\firebase\\\\emulators\\\\dataconnect-emulator-3.4.5.exe\",\"args\":[\"--logtostderr\",\"-v=2\",\"dev\",\"--listen=localhost:50001\",\"--config_dir=c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\",\"--enable_output_schema_extensions=true\",\"--enable_output_generated_sdk=true\"],\"optionalArgs\":[\"listen\",\"config_dir\",\"enable_output_schema_extensions\",\"enable_output_generated_sdk\"],\"joinArgs\":true,\"shell\":false,\"port\":9399}"}}
+[info] i  dataconnect: SQL Connect Emulator logging to dataconnect-debug.log {"metadata":{"emulator":{"name":"dataconnect"},"message":"SQL Connect Emulator logging to \u001b[1mdataconnect-debug.log\u001b[22m"}}
+[debug] [2026-04-22T03:49:14.011Z] I0421 20:49:13.725910   15496 load.go:31] Reloading schema and connectors...
+I0421 20:49:13.806504   15496 control.go:100] [projects/emulator/locations/emulator/services/studio-162226445-90191-service 1c34] UpdateResources(): done
+Main schema: sources: schema\schema.gql [238B] 
+Connector "example": sources: 
+E0421 20:49:13.816992   15496 load.go:95] Errors generating SDK: [connector "example"]: invalid Data Connect Connector no query found in connector
+I0421 20:49:13.824169   15496 collector.go:107] schema extensions wrote into "c:\\Users\\Mayar\\ZYRA\\dataconnect\\.dataconnect\\schema"
+Generated sources: main\mutation.gql [10180B] main\implicit.gql [1267B] main\input.gql [18541B] main\relation.gql [8088B] main\query.gql [3787B] prelude.gql [82799B] 
+I0421 20:49:13.824169   15496 load.go:109] Finished reloading
+I0421 20:49:13.852788   15496 dev.go:104] Listening on address (HTTP + gRPC): 127.0.0.1:50001
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0421 20:49:13.725910   15496 load.go:31] Reloading schema and connectors...\nI0421 20:49:13.806504   15496 control.go:100] [projects/emulator/locations/emulator/services/studio-162226445-90191-service 1c34] UpdateResources(): done\nMain schema: sources: schema\\schema.gql [238B] \nConnector \"example\": sources: \nE0421 20:49:13.816992   15496 load.go:95] Errors generating SDK: [connector \"example\"]: invalid Data Connect Connector no query found in connector\nI0421 20:49:13.824169   15496 collector.go:107] schema extensions wrote into \"c:\\\\Users\\\\Mayar\\\\ZYRA\\\\dataconnect\\\\.dataconnect\\\\schema\"\nGenerated sources: main\\mutation.gql [10180B] main\\implicit.gql [1267B] main\\input.gql [18541B] main\\relation.gql [8088B] main\\query.gql [3787B] prelude.gql [82799B] \nI0421 20:49:13.824169   15496 load.go:109] Finished reloading\nI0421 20:49:13.852788   15496 dev.go:104] Listening on address (HTTP + gRPC): 127.0.0.1:50001\n"}}
+[debug] [2026-04-22T03:49:14.185Z] I0421 20:49:14.167022   15496 engine.go:209] [projects/emulator/locations/emulator/services/studio-162226445-90191-service 1c34] ExecuteGraphqlRead query IntrospectionQuery: succeeded. 
+ {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0421 20:49:14.167022   15496 engine.go:209] [projects/emulator/locations/emulator/services/studio-162226445-90191-service 1c34] ExecuteGraphqlRead query IntrospectionQuery: succeeded. \n"}}
+[debug] [2026-04-22T03:49:14.227Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-04-22T03:49:14.228Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-22T03:49:14.255Z] [Firebase Plugin] User found:  mayaryrubio09@gmail.com
+[info] [Firebase Plugin] (Core:Project) New user detected, fetching projects
+[debug] [2026-04-22T03:49:14.257Z] Checked if tokens are valid: true, expires at: 1776833353228
+[debug] [2026-04-22T03:49:14.258Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2026-04-22T03:49:14.714Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-04-22T03:49:14.714Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] [Firebase Plugin] Stopping SQL Connect toolkit
+[warn] !  SQL Connect Emulator has exited upon receiving signal: SIGINT 

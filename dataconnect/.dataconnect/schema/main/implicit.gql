@@ -1,0 +1,26 @@
+extend type Cliente {
+  """
+  ✨ Implicit primary key field. It's a UUID column default to a generated new value. See `@table` for how to customize it.
+  """
+  id: UUID! @default(expr: "uuidV4()") @fdc_generated(from: "Cliente", purpose: IMPLICIT_KEY_FIELD)
+}
+extend type Equipo {
+  """
+  ✨ Implicit primary key field. It's a UUID column default to a generated new value. See `@table` for how to customize it.
+  """
+  id: UUID! @default(expr: "uuidV4()") @fdc_generated(from: "Equipo", purpose: IMPLICIT_KEY_FIELD)
+}
+extend type Proyecto {
+  """
+  ✨ Implicit primary key field. It's a UUID column default to a generated new value. See `@table` for how to customize it.
+  """
+  id: UUID! @default(expr: "uuidV4()") @fdc_generated(from: "Proyecto", purpose: IMPLICIT_KEY_FIELD)
+  """
+  ✨ Implicit foreign key field based on `Proyecto`.`cliente`. It must match the value of `Cliente`.`id`. See `@ref` for how to customize it.
+  """
+  clienteId: UUID! @fdc_generated(from: "Proyecto.cliente", purpose: IMPLICIT_REF_FIELD)
+  """
+  ✨ Implicit foreign key field based on `Proyecto`.`equipo`. It must match the value of `Equipo`.`id`. See `@ref` for how to customize it.
+  """
+  equipoId: UUID! @fdc_generated(from: "Proyecto.equipo", purpose: IMPLICIT_REF_FIELD)
+}

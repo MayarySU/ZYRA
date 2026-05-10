@@ -1,0 +1,161 @@
+extend type Query {
+  """
+  ✨ Look up a single `Cliente` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  cliente(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Cliente_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Cliente_FirstRow
+  ): Cliente @fdc_generated(from: "Cliente", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Equipo` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  equipo(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Equipo_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Equipo_FirstRow
+  ): Equipo @fdc_generated(from: "Equipo", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Proyecto` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  proyecto(
+    """
+    The unique ID of the object.
+    """
+    id: UUID
+
+    """
+    The key used to identify the object.
+    """
+    key: Proyecto_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Proyecto_FirstRow
+  ): Proyecto @fdc_generated(from: "Proyecto", purpose: QUERY_SINGLE)
+  """
+  ✨ List `Cliente` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  clientes(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Cliente_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Cliente_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Cliente_Having
+  ): [Cliente!]! @fdc_generated(from: "Cliente", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Equipo` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  equipos(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Equipo_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Equipo_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Equipo_Having
+  ): [Equipo!]! @fdc_generated(from: "Equipo", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Proyecto` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  proyectos(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Proyecto_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Proyecto_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Proyecto_Having
+  ): [Proyecto!]! @fdc_generated(from: "Proyecto", purpose: QUERY_MULTIPLE)
+}
