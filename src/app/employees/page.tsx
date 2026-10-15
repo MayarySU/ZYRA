@@ -4,10 +4,10 @@ import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "../dashboard/layout";
 import {
   useEmpleados,
-  useCrearEmpleado,
-  useActualizarEmpleado,
   useEliminarEmpleado,
+  useRoles,
 } from "@/hooks/queries";
+import { crearEmpleadoConAcceso } from "@/app/actions/empleados";
 import type { Empleado } from "@/lib/data";
 import {
   Card, CardHeader, CardTitle, CardDescription
@@ -15,6 +15,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table";
@@ -39,9 +42,9 @@ export default function EmployeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: empleados = [], isLoading, isError } = useEmpleados();
-  const crear = useCrearEmpleado();
-  const actualizar = useActualizarEmpleado();
+  const { data: roles = [] } = useRoles();
   const eliminar = useEliminarEmpleado();
+  const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -50,7 +53,7 @@ export default function EmployeesPage() {
   const [generatedCredentials, setGeneratedCredentials] = useState({ email: "", password: "" });
 
   const [newEmployee, setNewEmployee] = useState({
-    nombre: "", correo: "", telefono: ""
+    nombre: "", correo: "", telefono: "", rol: "tecnico", password: ""
   });
 
   useEffect(() => {
@@ -69,8 +72,8 @@ export default function EmployeesPage() {
   }, [empleados, searchTerm]);
 
   const handleCreateEmployee = async () => {
-    if (!newEmployee.nombre || !newEmployee.correo || !newEmployee.telefono) {
-      toast({ variant: "destructive", title: "Error", description: "Todos los campos son obligatorios" });
+    if (!newEmployee.nombre || !newEmployee.correo) {
+      toast({ variant: "destructive", title: "Error", description: "El nombre y el correo son obligatorios" });
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -80,23 +83,29 @@ export default function EmployeesPage() {
     }
     if (!user) return;
 
+    setIsCreating(true);
     try {
-      const empleado = await crear.mutateAsync({
+      const res = await crearEmpleadoConAcceso({
         nombre: newEmployee.nombre,
         correo: newEmployee.correo,
         telefono: newEmployee.telefono,
+        rol: newEmployee.rol,
+        password: newEmployee.password,
       });
 
-      setGeneratedCredentials({
-        email: empleado.correo || newEmployee.correo,
-        password: "",
-      });
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Error al registrar", description: res.error });
+        return;
+      }
 
+      setGeneratedCredentials({ email: res.email, password: res.password });
       setIsCreateDialogOpen(false);
       setIsSuccessDialogOpen(true);
-      setNewEmployee({ nombre: "", correo: "", telefono: "" });
+      setNewEmployee({ nombre: "", correo: "", telefono: "", rol: "tecnico", password: "" });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error al registrar", description: e.message || "Error desconocido" });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -140,8 +149,8 @@ export default function EmployeesPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo Personal</Label>
-                    <Input type="email" placeholder="ejemplo@gmail.com" className="h-11 bg-muted/50 border-border"
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo de Acceso</Label>
+                    <Input type="email" placeholder="ejemplo@essesolar.com" className="h-11 bg-muted/50 border-border"
                       value={newEmployee.correo}
                       onChange={(e) => setNewEmployee({ ...newEmployee, correo: e.target.value })} />
                   </div>
@@ -152,12 +161,39 @@ export default function EmployeesPage() {
                       onChange={(e) => setNewEmployee({ ...newEmployee, telefono: e.target.value })} />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Rol</Label>
+                    <Select value={newEmployee.rol}
+                      onValueChange={(v) => setNewEmployee({ ...newEmployee, rol: v })}>
+                      <SelectTrigger className="h-11 bg-muted/50 border-border">
+                        <SelectValue placeholder="Selecciona un rol" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((r) => (
+                          <SelectItem key={r.id_rol} value={r.nombre_rol} className="capitalize">
+                            {r.nombre_rol}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Contraseña temporal</Label>
+                    <Input placeholder="Se genera si se deja vacío" className="h-11 bg-muted/50 border-border"
+                      value={newEmployee.password}
+                      onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })} />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Se creará una cuenta de acceso con este correo. Si dejas la contraseña vacía se generará una temporal.
+                </p>
               </div>
               <DialogFooter>
                 <Button className="bg-accent hover:bg-accent/90 text-white w-full h-12 text-lg font-bold rounded-xl"
-                  disabled={!newEmployee.nombre || !newEmployee.correo || !newEmployee.telefono || crear.isPending}
+                  disabled={!newEmployee.nombre || !newEmployee.correo || isCreating}
                   onClick={handleCreateEmployee}>
-                  {crear.isPending ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : "Crear Registro"}
+                  {isCreating ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : "Crear Acceso"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -197,7 +233,7 @@ export default function EmployeesPage() {
                     const totalPuntos = 0;
                     const nivel = Math.max(1, Math.floor(totalPuntos / 200) + 1);
 
-                    const displayEmail = `${emp.correo?.split('@')[0] || "usuario"}@zyra.com`;
+                    const displayEmail = emp.correo || "—";
 
                     return (
                       <TableRow key={emp.id_empleado} className="border-border hover:bg-muted/5 transition-colors group">
@@ -338,10 +374,10 @@ export default function EmployeesPage() {
                 {/* Data Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Email de Acceso (ID)</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Email de Acceso</p>
                     <div className="h-14 bg-[#f8f8fa] border border-slate-50 rounded-2xl flex items-center px-6 gap-3 group focus-within:border-accent/30 transition-all">
                       <Mail className="h-4 w-4 text-accent/50" />
-                      <span className="text-xs font-bold text-accent truncate">{`${selectedEmployee?.correo?.split('@')[0]}@zyra.com`}</span>
+                      <span className="text-xs font-bold text-accent truncate">{selectedEmployee?.correo || "—"}</span>
                     </div>
                   </div>
                   

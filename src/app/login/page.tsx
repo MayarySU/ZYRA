@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,17 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo continuar",
+        description: error,
+      });
+    }
+  }, [searchParams, toast]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +122,15 @@ function LoginForm() {
                 {loading ? "Cargando..." : "Iniciar Sesión"}
               </Button>
             </form>
+
+            <div className="text-center">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-bold text-zinc-500 transition-colors hover:text-accent"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
 
             <div className="pt-8 text-center">
               <p className="text-[9px] text-zinc-700 uppercase font-bold tracking-[0.2em]">

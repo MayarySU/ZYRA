@@ -279,3 +279,60 @@ Resultado de `npm run lint`: **0 errores**, 116 advertencias de las reglas
 anteriores (aceptadas y justificadas). `tsc`, `build` y `db:smoke` permanecen
 limpios. Orden de comprobación: `lint` → `typecheck` → `build` → `db:smoke`.
 
+## 11. Fase 3 — Auth Supabase: reset de contraseña y alta de empleado — COMPLETADO
+
+Se completaron los dos puntos que faltaban de la Fase 3 (auth).
+
+### 11.1 Recuperación de contraseña (email nativo de Supabase)
+
+Flujo PKCE con `@supabase/ssr`:
+
+- `AuthProvider`: nuevos métodos `resetPassword(email)` (llama a
+  `supabase.auth.resetPasswordForEmail` con `redirectTo = <origin>/auth/callback?next=/reset-password`)
+  y `updatePassword(newPassword)` (`supabase.auth.updateUser`).
+- `src/app/forgot-password/page.tsx`: solicita el correo y dispara el envío.
+- `src/app/auth/callback/route.ts`: intercambia el `code` por una sesión
+  (`exchangeCodeForSession`) y redirige a `next`.
+- `src/app/reset-password/page.tsx`: formulario de nueva contraseña (valida
+  longitud ≥ 8 y coincidencia); si no hay sesión de recuperación muestra "enlace
+  inválido o expirado".
+- Login: enlace "¿Olvidaste tu contraseña?" y aviso de errores del callback
+  (`?error=`).
+- Middleware: rutas separadas en "solo anónimas" (`/login`, `/forgot-password`)
+  y "acceso libre con o sin sesión" (`/auth`, `/reset-password`), para que un
+  usuario con sesión de recuperación no sea redirigido fuera de `/reset-password`.
+
+> **Requisito de configuración (dashboard de Supabase):** añadir
+> `<APP_URL>/auth/callback` a *Authentication → URL Configuration → Redirect
+> URLs* (y fijar el *Site URL*). Sin esto, el enlace del correo no redirige.
+
+### 11.2 Alta de empleado vía Admin API
+
+`src/app/actions/empleados.ts` (Server Action, solo servidor):
+
+- Verifica que el **llamador** tenga sesión y rol `admin` (si no, no autorizado).
+- Crea el usuario de Auth con la **Admin API** (`auth.admin.createUser`,
+  `email_confirm: true`) usando `createAdminClient()` (service key, nunca en el
+  cliente).
+- Inserta las filas `empleados` y `usuarios` (rol, `username = correo`).
+- Genera una **contraseña temporal** si el admin no especifica una.
+- **Rollback** ante fallos: elimina el empleado creado y el usuario de Auth para
+  no dejar cuentas huérfanas.
+- Devuelve un resultado discriminado (`{ ok: true, ... } | { ok: false, error }`)
+  para mostrar mensajes claros también en producción (donde los errores lanzados
+  se ocultan).
+
+Conexión con la UI: la página `employees` usa la acción (con selector de rol de
+`useRoles()` y campo de contraseña opcional) y muestra el diálogo de "Registro
+Exitoso" con el correo de acceso real y la contraseña temporal. Se muestran los
+correos reales (antes la UI mostraba `usuario@zyra.com` sintético, incorrecto
+porque el acceso es por correo real).
+
+### 11.3 Verificación
+
+- `npm run typecheck` limpio; `npm run build` OK (rutas `/forgot-password`,
+  `/reset-password`, `/auth/callback` generadas).
+- Prueba del mecanismo Admin API (script autolimpiante): `createUser` + lookup de
+  rol + `insert empleados` + `insert usuarios` → **ALL PASS**, con limpieza.
+- `npm run lint`: 0 errores.
+
