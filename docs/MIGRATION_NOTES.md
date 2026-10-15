@@ -578,3 +578,49 @@ DevTools → Network → *Offline*:
   **26/26 PASS** (la idempotencia por `operation_id` está cubierta a nivel DB:
   `generar_checklist`, `reportar_avance` y `finalizar_proyecto` idempotentes).
 
+## 16. Fase 8 — PWA instalable y offline — COMPLETADO
+
+### 16.1 Huecos encontrados
+
+Serwist ya estaba cableado (`withSerwist`, `src/app/sw.ts`, registro automático
+en el bundle cliente), pero faltaba lo que hace a una PWA realmente instalable y
+resiliente:
+
+1. **Sin fallback offline.** Una navegación a una ruta nunca visitada sin red
+   mostraba el error del navegador.
+2. **Manifest mínimo.** Sin `id`, `scope`, icono `maskable`, accesos directos ni
+   idioma.
+3. **Middleware interceptaba la página offline** (`/offline.html` no estaba
+   excluido del `matcher`), redirigiendo a `/login` en precache/visita directa.
+
+### 16.2 Cambios
+
+- **Fallback offline nativo** (`src/app/sw.ts`): se usa la opción `fallbacks`
+  de Serwist, que inyecta un `PrecacheFallbackPlugin` (`handlerDidError`) en las
+  estrategias de `runtimeCaching`. Para `request.destination === "document"` se
+  sirve `/offline.html` precacheado cuando ni la red ni la caché responden.
+- **`public/offline.html`**: página autocontenida (CSS inline, sin dependencias)
+  con la identidad ZYRA y botón de reintento; se precachea automáticamente al ser
+  un archivo de `public/` (el plugin de Next incluye `public/` en `__SW_MANIFEST`).
+- **Manifest** (`public/manifest.json`): `id`, `scope`, `display_override`,
+  `orientation`, `lang: "es"`, `categories`, icono `purpose: "maskable"` y
+  accesos directos a `/projects` y `/reports`.
+- **Middleware** (`src/middleware.ts`): el `matcher` excluye `offline.html`,
+  `sw.js`, `swe-worker-*.js`, `workbox-*.js` y `manifest.json`.
+
+### 16.3 Nota técnica (por qué no se cachean evidencias/mutaciones)
+
+Las rutas de Serwist se indexan por método HTTP y **por defecto `GET`**
+(`Route` usa `method || "GET"`). Por eso las **subidas `PUT` a R2** y las
+**RPC `POST`** no son interceptadas ni cacheadas por el SW. El fallback offline
+solo aplica a navegaciones de documento; los binarios de evidencia y las RPC
+siguen yendo directos a la red (o a la cola de la Fase 7 si no hay red).
+
+### 16.4 Verificación
+
+- `npm run typecheck` limpio · `npm run build` OK.
+- `public/sw.js` (generado) contiene `/offline.html` en la lista de precache y
+  `fallbacks:{entries:[{url:"/offline.html",matcher:…"document"…}]}`.
+- Registro del SW presente en el bundle cliente (`serviceWorker.register`).
+- `manifest.json` válido (3 iconos, 2 atajos).
+

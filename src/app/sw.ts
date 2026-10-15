@@ -17,6 +17,16 @@ const serwist = new Serwist({
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: defaultCache,
+  // Fallback offline: si una navegación (documento) no puede resolverse por red
+  // ni por caché, se sirve la página precacheada `/offline.html`.
+  fallbacks: {
+    entries: [
+      {
+        url: "/offline.html",
+        matcher: ({ request }) => request.destination === "document",
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();

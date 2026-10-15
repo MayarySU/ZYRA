@@ -9,8 +9,8 @@ export const config = {
   matcher: [
     /*
      * Todas las rutas excepto: API, archivos estáticos de Next, imágenes,
-     * favicon, manifest y el service worker de la PWA.
+     * favicon, manifest, la página offline y los workers de la PWA.
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.json|offline.html|sw.js|swe-worker-.*\\.js|workbox-.*\\.js|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
