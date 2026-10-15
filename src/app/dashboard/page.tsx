@@ -437,7 +437,7 @@ function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) 
       .slice(0, 8);
   }, [empleadoData, reportes]);
 
-  const nombre = empleadoData?.nombre || profile?.displayName || "Técnico";
+  const nombre = empleadoData?.nombre || profile?.nombre || "Técnico";
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-body">

@@ -13,15 +13,7 @@ import React, {
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-/** Medalla/logro (gamificación). Opcional hasta migrar la gamificación. */
-export interface Logro {
-  id: string;
-  nombre: string;
-  emoji?: string;
-  completado?: boolean;
-  obtainedAt?: string;
-}
+import { publicEnv } from "@/lib/env";
 
 /** Perfil de la app (fila de `usuarios` + rol + datos de `empleados`). */
 export interface Profile {
@@ -30,13 +22,10 @@ export interface Profile {
   username: string;
   rol: string;
   nombre: string;
-  displayName: string;
   email: string;
-  photoURL?: string;
   activo: boolean;
   nivel?: number;
   puntos?: number;
-  logros?: Logro[];
 }
 
 /** Usuario de Auth expuesto a la UI. */
@@ -83,7 +72,6 @@ async function cargarPerfil(userId: string, email: string | undefined): Promise<
       username: email ?? "",
       rol: "tecnico",
       nombre: email ?? "",
-      displayName: email ?? "",
       email: email ?? "",
       activo: true,
     };
@@ -99,7 +87,6 @@ async function cargarPerfil(userId: string, email: string | undefined): Promise<
     username: data.username,
     rol,
     nombre,
-    displayName: nombre,
     email: empleado?.correo ?? email ?? "",
     activo: data.activo,
   };
@@ -165,7 +152,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = useCallback(async (email: string) => {
     const supabase = getSupabaseBrowserClient();
-    const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`;
+    // URL base: primero NEXT_PUBLIC_APP_URL; si no está definida, el origen actual
+    // del navegador (solo disponible en cliente, que es donde se llama esto).
+    const base = publicEnv.appUrl ?? window.location.origin;
+    const redirectTo = `${base}/auth/callback?next=/reset-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
   }, []);

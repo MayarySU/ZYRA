@@ -22,4 +22,10 @@ export const publicEnv = {
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   ),
+  /**
+   * URL pública de la app (para enlaces de recuperación, etc.).
+   * Opcional: si no está definida se usa `window.location.origin` en el
+   * navegador. Se normaliza sin barra final.
+   */
+  appUrl: process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") || undefined,
 } as const;

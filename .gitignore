@@ -42,10 +42,6 @@ next-env.d.ts
 .env.local
 .env*.local
 
-# firebase (heredado)
-firebase-debug.log
-firestore-debug.log
-
 # Supabase (temp local)
 supabase/.temp/
 

@@ -336,3 +336,64 @@ porque el acceso es por correo real).
   rol + `insert empleados` + `insert usuarios` → **ALL PASS**, con limpieza.
 - `npm run lint`: 0 errores.
 
+## 12. Fase 4 — Capa de datos y limpieza de la capa anterior — COMPLETADO
+
+### 12.1 Auditoría
+
+Se auditó todo `src/` y la configuración en busca de dependencias de la capa
+anterior (Firebase / Express / Prisma) y de código muerto. Resultado:
+
+- **Sin dependencias funcionales reales**: no quedan `import` de `firebase`,
+  `prisma`, `express`, `genkit` ni `nodemailer`; no hay `fetch` al backend
+  anterior; la capa de datos (`src/lib/data/*`), los hooks (`src/hooks/queries/*`),
+  el cliente Supabase (browser/server/admin/middleware) y TanStack Query están
+  completos y en uso. Los campos de datos usan **snake_case** de PostgreSQL.
+- **Residuos detectados y eliminados** (abajo).
+
+### 12.2 Código muerto / de la capa anterior eliminado
+
+- `src/app/actions/email-actions.ts` — Server Action huérfano con `nodemailer`
+  (correo de la era Firebase). El reset ahora lo envía Supabase Auth.
+- `src/lib/notifications.ts`, `src/lib/activity-logger.ts` — stubs que apuntaban a
+  `POST /api/notifications` y `POST /api/activity-logs` del backend anterior; sin
+  importadores.
+- `src/lib/placeholder-images.ts` + `.json`, `src/app/lib/placeholder-images.json`
+  — datos placeholder vacíos, sin importadores.
+- `src/components/dashboard/stat-card.tsx` (y el directorio, ya vacío).
+- `docs/backend.json` (blueprint Firebase: `auth.providers`, `firestore.structure`,
+  entidades camelCase) y `docs/blueprint.md` (Firebase Storage / Cloud Functions).
+- Dependencia **`nodemailer`** desinstalada de `package.json`.
+
+### 12.3 Limpieza de la capa de Firebase en el perfil (`auth-provider`)
+
+El `Profile` conservaba campos de la era Firebase que nunca se poblaban:
+`displayName`, `photoURL`, `logros` y el tipo `Logro`. Se eliminaron y se
+actualizaron sus consumidores:
+- `src/app/dashboard/page.tsx`: `profile?.displayName` → `profile?.nombre`.
+- `src/components/layout/user-nav.tsx`: sin `AvatarImage` (no había foto); solo
+  `AvatarFallback`.
+- `src/app/profile/page.tsx`: `photoURL` → solo `newPhoto` local; y se quitó el
+  chequeo legado `user?.email === 'admin@zyra.com'` (el rol se lee de la BD).
+- `src/lib/gamification.ts`: export sin uso `getRankByPoints` eliminado.
+
+### 12.4 Config / entorno
+
+- `NEXT_PUBLIC_APP_URL`: pasa a usarse como **URL base** del enlace de
+  recuperación en `AuthProvider.resetPassword` (con *fallback* a
+  `window.location.origin` solo si la variable no está definida). En
+  `.env.local` se corrigió el puerto a **9002** (el script `dev` usa
+  `-p 9002`) y se eliminó el obsoleto `NEXT_PUBLIC_API_URL`.
+- `.gitignore`: eliminado el bloque `# firebase (heredado)`.
+- `tailwind.config.ts`: eliminado el glob `./src/pages/**` (no existe; App Router).
+
+### 12.5 Verificación
+
+- `npm run typecheck` limpio · `npm run lint` **0 errores** · `npm run build` OK ·
+  `npm run db:smoke` **19/19 PASS**.
+- Arranque de producción: rutas públicas (`/login`, `/forgot-password`,
+  `/reset-password`) → 200; módulos protegidos (`/dashboard`, `/employees`,
+  `/projects`, `/reports`, `/profile`, `/settings`, `/team`, `/clients`,
+  `/materials`) → 307 (redirección a login vía middleware).
+- Flujo de recuperación probado contra Supabase: `redirectTo =
+  http://localhost:9002/auth/callback?next=/reset-password` aceptado por la API.
+

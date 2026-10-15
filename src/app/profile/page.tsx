@@ -27,7 +27,7 @@ import { useI18n } from "@/components/providers/i18n-provider";
 import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
-  const { profile, user, loading: userLoading } = useAuth();
+  const { profile, loading: userLoading } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,7 +35,7 @@ export default function ProfilePage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [newPhoto, setNewPhoto] = useState<string | null>(null);
 
-  const isAdmin = profile?.rol === 'admin' || user?.email === 'admin@zyra.com';
+  const isAdmin = profile?.rol === 'admin';
 
   const handlePhotoClick = () => fileInputRef.current?.click();
 
@@ -87,7 +87,7 @@ export default function ProfilePage() {
             <Card className="border-border overflow-hidden flex flex-col items-center p-8 bg-card shadow-xl">
               <div className="relative group cursor-pointer" onClick={handlePhotoClick}>
                 <Avatar className="h-32 w-32 border-4 border-accent/20">
-                  <AvatarImage src={newPhoto || profile?.photoURL} alt="" className="object-cover" />
+                  <AvatarImage src={newPhoto || undefined} alt="" className="object-cover" />
                   <AvatarFallback className="bg-accent text-accent-foreground text-4xl font-black">
                     {profile?.nombre?.charAt(0) || "Z"}
                   </AvatarFallback>
