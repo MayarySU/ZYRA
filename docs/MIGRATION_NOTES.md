@@ -237,7 +237,7 @@ Se reemplazó `@ducanh2912/next-pwa` por **Serwist** (`@serwist/next`):
 Se eliminaron las dependencias y artefactos de workbox; la salida del SW
 (`public/sw.js`, `public/swe-worker-*.js`) queda en `.gitignore`.
 
-## 9. Limpieza final — EN CURSO
+## 9. Limpieza final — COMPLETADO
 
 - Eliminados: `backend/` (Express + Prisma + Railway), `firebase.json`,
   `firestore.rules`, `scratch/`, `.idx/`, `ACTION_PLAN.md` (obsoleto).
