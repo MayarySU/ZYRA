@@ -23,7 +23,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await authAPI.login({ email, password });
+      const response = (await authAPI.login({ email, password })) as { token: string; user: any };
       auth.login(response.token, response.user);
       toast({ title: "Sesión iniciada", description: "Cargando panel de control..." });
       router.push("/dashboard");

@@ -50,11 +50,11 @@ async function createAdmin() {
       });
     }
 
-    console.log('✅ Admin user ready!');
+    console.log('Admin user ready!');
     console.log('User: admin@zyra.com');
     console.log('Pass: admin123');
   } catch (e) {
-    console.error('❌ Error:', e.message);
+    console.error('Error:', e.message);
   } finally {
     await prisma.$disconnect();
   }

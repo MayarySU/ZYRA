@@ -131,7 +131,7 @@ export default function TeamPage() {
       });
       toast({ title: t.common.success, description: "Equipo creado correctamente" });
       setIsCreateDialogOpen(false);
-      setNewTeam({ Nombre_Equipo: "", integrantes: [], Tipo: "Instalación", ID_Lider: null });
+      setNewTeam({ Nombre_Equipo: "", integrantes: [], ID_Lider: null });
       loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });

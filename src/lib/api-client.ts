@@ -222,6 +222,26 @@ export const checklistsServicioAPI = {
 };
 
 // ─────────────────────────────────────────────────
+// SERVICIOS API
+// ─────────────────────────────────────────────────
+
+export const serviciosAPI = {
+  getAll: () => apiRequest('/servicios'),
+  
+  getById: (id: string | number) => apiRequest(`/servicios/${id}`),
+  
+  create: (data: any, token?: string) =>
+    apiRequest('/servicios', { method: 'POST', body: JSON.stringify(data), token }),
+  
+  update: (id: string | number, data: any, token?: string) =>
+    apiRequest(`/servicios/${id}`, { method: 'PUT', body: JSON.stringify(data), token }),
+  
+  delete: (id: string | number, token?: string) =>
+    apiRequest(`/servicios/${id}`, { method: 'DELETE', token }),
+};
+
+
+// ─────────────────────────────────────────────────
 // ALIASES (Compatibility)
 // ─────────────────────────────────────────────────
 
