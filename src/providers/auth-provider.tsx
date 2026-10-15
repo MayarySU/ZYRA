@@ -1,91 +1,196 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  ReactNode,
+} from "react";
+import { useRouter } from "next/navigation";
+import type { Session } from "@supabase/supabase-js";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-interface User {
+/** Medalla/logro (gamificación). Opcional hasta migrar la gamificación. */
+export interface Logro {
+  id: string;
+  nombre: string;
+  emoji?: string;
+  completado?: boolean;
+  obtainedAt?: string;
+}
+
+/** Perfil de la app (fila de `usuarios` + rol + datos de `empleados`). */
+export interface Profile {
+  id_usuario: string;
+  empleadoId: number | null;
+  username: string;
+  rol: string;
+  nombre: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  activo: boolean;
+  nivel?: number;
+  puntos?: number;
+  logros?: Logro[];
+}
+
+/** Usuario de Auth expuesto a la UI. */
+export interface AuthUser {
+  id: string;
   uid: string;
   email: string;
   displayName: string;
-  photoURL: string | null;
-  rol?: string;
-  empleadoId?: number;
 }
 
 interface AuthContextType {
-  user: User | null;
-  profile: any | null; // For compatibility with existing code
+  user: AuthUser | null;
+  profile: Profile | null;
   loading: boolean;
   isUserLoading: boolean;
-  login: (token: string, userData: User) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   getToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function cargarPerfil(userId: string, email: string | undefined): Promise<Profile> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select(
+      "id_usuario, empleado_id, username, activo, roles ( nombre_rol ), empleados ( nombre, correo )"
+    )
+    .eq("id_usuario", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("No se pudo cargar el perfil:", error.message);
+  }
+
+  if (!data) {
+    // Usuario de Auth sin fila en `usuarios`: sin rol asignado.
+    return {
+      id_usuario: userId,
+      empleadoId: null,
+      username: email ?? "",
+      rol: "tecnico",
+      nombre: email ?? "",
+      displayName: email ?? "",
+      email: email ?? "",
+      activo: true,
+    };
+  }
+
+  const rol = (data.roles as { nombre_rol?: string } | null)?.nombre_rol ?? "tecnico";
+  const empleado = data.empleados as { nombre?: string; correo?: string } | null;
+  const nombre = empleado?.nombre ?? data.username ?? email ?? "";
+
+  return {
+    id_usuario: data.id_usuario,
+    empleadoId: data.empleado_id,
+    username: data.username,
+    rol,
+    nombre,
+    displayName: nombre,
+    email: empleado?.correo ?? email ?? "",
+    activo: data.activo,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const tokenRef = useRef<string | null>(null);
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    // Check local storage for existing session on mount
-    const token = localStorage.getItem('zyra_token');
-    const userDataStr = localStorage.getItem('zyra_user');
+    const supabase = getSupabaseBrowserClient();
+    let activo = true;
 
-    if (token && userDataStr) {
-      try {
-        const userData = JSON.parse(userDataStr);
-        setUser(userData);
-      } catch (e) {
-        console.error('Failed to parse user data from local storage', e);
-        localStorage.removeItem('zyra_token');
-        localStorage.removeItem('zyra_user');
+    const aplicar = async (nueva: Session | null) => {
+      tokenRef.current = nueva?.access_token ?? null;
+      if (nueva?.user) {
+        const p = await cargarPerfil(nueva.user.id, nueva.user.email ?? undefined);
+        if (!activo) return;
+        setProfile(p);
+      } else {
+        if (!activo) return;
+        setProfile(null);
       }
-    }
-    setLoading(false);
+      if (!activo) return;
+      setSession(nueva);
+      setLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data }) => aplicar(data.session));
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, nueva) => {
+      // Diferido para no bloquear el lock interno de Supabase.
+      setTimeout(() => {
+        if (activo) void aplicar(nueva);
+      }, 0);
+    });
+
+    return () => {
+      activo = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  const login = (token: string, userData: User) => {
-    localStorage.setItem('zyra_token', token);
-    localStorage.setItem('zyra_user', JSON.stringify(userData));
-    setUser(userData);
-  };
+  const login = useCallback(async (email: string, password: string) => {
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
 
-  const logout = () => {
-    localStorage.removeItem('zyra_token');
-    localStorage.removeItem('zyra_user');
-    setUser(null);
-    router.push('/login');
-  };
+  const logout = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    tokenRef.current = null;
+    setSession(null);
+    setProfile(null);
+    router.push("/login");
+  }, [router]);
 
-  const getToken = () => {
-    return typeof window !== 'undefined' ? localStorage.getItem('zyra_token') : null;
-  };
+  const getToken = useCallback(() => tokenRef.current, []);
 
-  const contextValue: AuthContextType = {
-    user,
-    profile: user ? { ...user, nombre: user.displayName } : null,
-    loading,
-    isUserLoading: loading,
-    login,
-    logout,
-    getToken,
-  };
+  const user = useMemo<AuthUser | null>(() => {
+    if (!session?.user) return null;
+    return {
+      id: session.user.id,
+      uid: session.user.id,
+      email: session.user.email ?? "",
+      displayName: profile?.nombre ?? "",
+    };
+  }, [session, profile]);
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      profile,
+      loading,
+      isUserLoading: loading,
+      login,
+      logout,
+      getToken,
+    }),
+    [user, profile, loading, login, logout, getToken]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

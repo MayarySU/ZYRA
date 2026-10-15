@@ -136,3 +136,36 @@ Faltan en el modelo actual: `evidencias` (hoy es el string `Evidencias_URL`),
 
 `admin@essesolar.com` (contraseña temporal `ZyraAdmin2026!`, cambiar en
 producción). Se crea con `npm run seed:admin`.
+
+## 3. Autenticación (Supabase Auth) — COMPLETADO
+
+### Archivos
+
+| Archivo | Rol |
+|---|---|
+| `src/lib/supabase/middleware.ts` | `updateSession()`: refresca la sesión (cookies) y protege rutas. |
+| `src/middleware.ts` | Aplica `updateSession` con matcher (excluye API y estáticos). |
+| `src/providers/auth-provider.tsx` | Reescrito: sesión Supabase + perfil desde `usuarios`/`roles`/`empleados`. |
+| `src/app/login/page.tsx` | Usa `auth.login(email, password)` (Supabase) y respeta `?redirect`. |
+
+### Comportamiento
+
+- Sin sesión, toda ruta protegida redirige a `/login?redirect=<ruta>`; con
+  sesión, `/login` redirige a `/dashboard`; `/` redirige según sesión.
+- `AuthProvider` mantiene la interfaz previa (`user`, `profile`, `loading`,
+  `isUserLoading`, `login`, `logout`, `getToken`) para no romper a los
+  consumidores. `profile.rol` (`admin`/`tecnico`), `profile.empleadoId`,
+  `nombre`, `email` se cargan vía RLS (el usuario lee su propia fila).
+- `login`/`logout` ahora son asíncronos; `getToken()` devuelve el access token
+  de la sesión (compatibilidad temporal con `api-client.ts`).
+- Se eliminó el uso de `localStorage['zyra_token'/'zyra_user']` y de `authAPI`.
+
+### Verificación
+
+- `npm run typecheck` limpio; `npm run build` OK (18 rutas, middleware 93.7 kB).
+- Runtime (`next start`): `/` → 307 `/login`; `/dashboard` → 307
+  `/login?redirect=%2Fdashboard`; `/login` → 200.
+- El camino de datos (login + consulta de perfil bajo RLS) ya quedó validado por
+  `db:smoke`.
+- Corregido `npm run build` (usaba `NODE_ENV=production`, sintaxis Unix que
+  fallaba en Windows; `next build` lo fija solo).
