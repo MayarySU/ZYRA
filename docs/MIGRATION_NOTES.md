@@ -509,3 +509,72 @@ la descarga de **cualquier** `object_key`, incluidas evidencias de otros equipos
 - `npm run typecheck` limpio · `npm run build` OK (rutas
   `/api/upload/url`, `/api/upload/download`, `/api/upload/delete` generadas).
 
+## 15. Fase 7 — Offline-First real — COMPLETADO
+
+### 15.1 Huecos encontrados
+
+La base previa solo persistía la caché de TanStack Query. Dos problemas reales:
+
+1. **Idempotencia rota en reintentos.** Cada hook generaba el `p_operation_id`
+   *dentro* del `mutationFn`; al reintentar una mutación pausada se generaba uno
+   nuevo, por lo que el servidor **duplicaba** la operación.
+2. **No había outbox de fotos.** Una evidencia capturada sin red se perdía
+   (solo se subía si había conexión en el momento).
+3. Las acciones del operador (`await mutateAsync`) se **colgaban** sin conexión.
+
+### 15.2 Cambios
+
+- **Dexie v2** (`src/lib/offline/db.ts`): además de `kv`, tablas
+  `evidencias_pendientes` (blobs) y `outbox` (cola lógica).
+- **Idempotencia estable** (`src/hooks/queries/use-proyectos.ts`): nuevo helper
+  `useIdempotente` que genera **un `operation_id` único por invocación del
+  usuario** y lo guarda en las variables de la mutación, de modo que se
+  **reutiliza en cada reintento** y sobrevive a la persistencia. Reenviar tras
+  reconectar no duplica (`operaciones_procesadas` lo deduplica).
+- **Outbox de evidencias** (`src/lib/offline/evidencias-queue.ts` +
+  `src/lib/evidencias-client.ts`): `subirEvidencia` sube directo a R2 si hay red;
+  si no, guarda el blob en IndexedDB. `flushEvidenciasPendientes()` reintenta la
+  cola. Los errores de validación (MIME/permiso) **no** se encolan.
+- **`SyncProvider` real** (`src/components/providers/sync-provider.tsx`): al
+  reconectar reanuda mutaciones pausadas → vacía la cola de evidencias →
+  invalida la caché (reconciliación). Expone `isOnline` y `pending`.
+- **Indicador** (`src/components/layout/sync-status.tsx`): badge en el header con
+  estado de conexión y nº de operaciones pendientes.
+- **Checklist optimista** (`projects/page.tsx`): marcar/actualizar materiales
+  actualiza la caché al instante (`setQueryData`) y encola la mutación; sin red
+  la UI responde igual y sincroniza al volver. "Iniciar jornada" y "Enviar
+  reporte" usan `mutate` (no bloquean) con aviso cuando están offline.
+
+### 15.3 Política de conflictos (sin Last-Write-Wins global)
+
+El **servidor es la autoridad** de los estados y de los puntos: la máquina de
+estados de la Fase 5 rechaza transiciones inválidas y las RPC devuelven error,
+que se muestra al usuario. No se aplican escrituras "el último gana" sobre
+`proyectos.estado`: los cambios pasan por RPC que validan versión/estado y
+registran auditoría. Las mutaciones en conflicto permanecen en la cola y fallan
+de forma visible (estado de error de la mutación) sin sobrescribir el servidor.
+
+### 15.4 Protocolo E2E (manual, navegador)
+
+No hay runner de navegador en el repo; el flujo se verifica manualmente con
+DevTools → Network → *Offline*:
+
+1. Login como técnico → abrir un proyecto asignado.
+2. Poner *Offline* → marcar el checklist (responde al instante) →
+   "Iniciar jornada" → añadir una/otra evidencia y observaciones →
+   "Enviar reporte". Aparecen avisos de "se iniciará/enviará al reconectar".
+3. Cerrar la pestaña/app; reabrir **sin conexión** → los datos siguen (caché
+   persistida) y el badge muestra pendientes.
+4. Volver *Online* → se reanudan las mutaciones y se sube la evidencia; el admin
+   ve los cambios. Repetir el disparo de la misma operación (o reenvío) **no**
+   duplica (idempotencia por `operation_id`).
+5. Casos: sincronización interrumpida (se reintenta), operación duplicada
+   (deduplicada), conflicto de versión/estado (RPC rechaza), fallo de foto
+   (queda en cola con `ultimoError` e `intentos`).
+
+### 15.5 Verificación
+
+- `npm run typecheck` limpio · `npm run build` OK · `npm run db:smoke`
+  **26/26 PASS** (la idempotencia por `operation_id` está cubierta a nivel DB:
+  `generar_checklist`, `reportar_avance` y `finalizar_proyecto` idempotentes).
+

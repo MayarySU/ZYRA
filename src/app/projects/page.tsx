@@ -63,7 +63,10 @@ import {
   useAvanzarEstado,
 } from "@/hooks/queries";
 import type { ProyectoVista } from "@/lib/data/proyectos";
+import type { ChecklistDetalleVista } from "@/lib/data/proyectos";
 import { subirEvidencia as subirEvidenciaR2 } from "@/lib/evidencias-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/hooks/queries/keys";
 
 // Estados canónicos (español snake_case) → etiqueta de UI usada por la tarjeta.
 type DisplayStatus = "Pendiente" | "EnProceso" | "EnRevision" | "Finalizado" | "Rechazado" | "Cancelado";
@@ -453,6 +456,7 @@ function OperatorSheetBody({
   const checklistId = checklist?.id_checklist ?? null;
   const { data: detalle = [] } = useDetalleChecklist(checklistId);
 
+  const qc = useQueryClient();
   const actualizarDetalle = useActualizarDetalleChecklist();
   const iniciar = useIniciarProyecto(pid);
   const enviar = useEnviarReporte(pid);
@@ -476,43 +480,53 @@ function OperatorSheetBody({
     materiales.length === 0 ||
     (materiales.every((m) => m.done) && materiales.every((m) => (m.takenQuantity || 0) >= m.quantity));
 
-  const toggleMaterial = async (idx: number) => {
+  // Actualización optimista: el checklist responde al instante y, si no hay
+  // red, la mutación queda en cola (se sincroniza al reconectar sin duplicar).
+  const optimizarDetalle = (id: number, patch: Partial<ChecklistDetalleVista>) => {
+    qc.setQueryData<ChecklistDetalleVista[]>(qk.detalleChecklist(checklistId ?? 0), (old) =>
+      old?.map((d) => (d.id_checklist_detalle === id ? { ...d, ...patch } : d))
+    );
+  };
+
+  const toggleMaterial = (idx: number) => {
     const mat = materiales[idx];
     if (!mat) return;
     const nuevoDone = !mat.done;
-    try {
-      await actualizarDetalle.mutateAsync({
-        id: mat.id,
-        patch: {
-          marcado: nuevoDone,
-          cantidad_cargada: nuevoDone ? mat.takenQuantity || mat.quantity : 0,
-        },
-      });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
-    }
+    const patch = {
+      marcado: nuevoDone,
+      cantidad_cargada: nuevoDone ? mat.takenQuantity || mat.quantity : 0,
+    };
+    optimizarDetalle(mat.id, patch);
+    actualizarDetalle.mutate(
+      { id: mat.id, patch },
+      { onError: (e) => toast({ variant: "destructive", title: "Error", description: e.message }) }
+    );
   };
 
-  const updateQuantity = async (idx: number, qty: number) => {
+  const updateQuantity = (idx: number, qty: number) => {
     const mat = materiales[idx];
     if (!mat) return;
-    try {
-      await actualizarDetalle.mutateAsync({
-        id: mat.id,
-        patch: { cantidad_cargada: qty, marcado: qty >= mat.quantity },
-      });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
-    }
+    const patch = { cantidad_cargada: qty, marcado: qty >= mat.quantity };
+    optimizarDetalle(mat.id, patch);
+    actualizarDetalle.mutate(
+      { id: mat.id, patch },
+      { onError: (e) => toast({ variant: "destructive", title: "Error", description: e.message }) }
+    );
   };
 
-  const handleStartDay = async () => {
-    try {
-      await iniciar.mutateAsync();
-      toast({ title: t.projects.day_started });
+  const handleStartDay = () => {
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    iniciar.mutate(undefined, {
+      onSuccess: () => {
+        toast({ title: t.projects.day_started });
+        onClose();
+      },
+      onError: (e) =>
+        toast({ variant: "destructive", title: "Error al iniciar jornada", description: e.message }),
+    });
+    if (offline) {
+      toast({ title: "Sin conexión", description: "La jornada se iniciará al reconectar." });
       onClose();
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error al iniciar jornada", description: (e as Error).message });
     }
   };
 
@@ -552,19 +566,26 @@ function OperatorSheetBody({
   };
 
   const handleFinishDayAndReport = async () => {
-    try {
-      for (const photo of reportPhotos) {
-        await subirEvidenciaR2({
-          proyectoId: pid,
-          file: photo.file,
-          descripcion: reportContent || photo.name,
-        }).catch((e) => console.warn("Evidencia no subida:", e));
-      }
-      await enviar.mutateAsync(reportContent || "Avance diario");
-      toast({ title: t.common.success });
+    const offline = typeof navigator !== "undefined" && !navigator.onLine;
+    // Las evidencias se suben o se encolan (nunca bloquean sin conexión).
+    for (const photo of reportPhotos) {
+      await subirEvidenciaR2({
+        proyectoId: pid,
+        file: photo.file,
+        descripcion: reportContent || photo.name,
+      }).catch((e) => console.warn("Evidencia no subida:", e));
+    }
+    enviar.mutate(reportContent || "Avance diario", {
+      onSuccess: () => {
+        toast({ title: t.common.success });
+        onClose();
+      },
+      onError: (e) =>
+        toast({ variant: "destructive", title: "Error al enviar reporte", description: e.message }),
+    });
+    if (offline) {
+      toast({ title: "Sin conexión", description: "El reporte se enviará al reconectar." });
       onClose();
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error al enviar reporte", description: (e as Error).message });
     }
   };
 

@@ -1,13 +1,29 @@
 "use client";
 
 import { rpcRegistrarEvidencia } from "@/lib/data/rpc";
+import {
+  contarEvidenciasPendientes,
+  eliminarEvidenciaPendiente,
+  encolarEvidencia,
+  listarEvidenciasPendientes,
+  registrarIntentoFallido,
+} from "@/lib/offline/evidencias-queue";
 
 export type TipoEvidencia = "foto" | "documento" | "video";
+
+export interface SubidaEvidenciaResultado {
+  objectKey: string | null;
+  encolada: boolean;
+}
 
 function tipoDesdeMime(mime: string): TipoEvidencia {
   if (mime.startsWith("video/")) return "video";
   if (mime === "application/pdf") return "documento";
   return "foto";
+}
+
+function sinConexion(): boolean {
+  return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
 async function firmarSubida(
@@ -26,11 +42,8 @@ async function firmarSubida(
   return res.json();
 }
 
-/**
- * Sube una evidencia directamente navegador → R2 (URL prefirmada) y registra
- * su metadata en PostgreSQL con `registrar_evidencia`. Devuelve el `object_key`.
- */
-export async function subirEvidencia(input: {
+/** Subida directa navegador → R2 + registro de metadata (requiere red). */
+async function subirEvidenciaOnline(input: {
   proyectoId: number;
   file: File;
   descripcion?: string;
@@ -58,6 +71,61 @@ export async function subirEvidencia(input: {
 
   return key;
 }
+
+/**
+ * Sube una evidencia. Si no hay conexión (o falla por red), la encola en
+ * IndexedDB (`evidencias_pendientes`) para reintentarla al reconectar.
+ * Los errores de validación (MIME/permiso) NO se encolan: se propagan.
+ */
+export async function subirEvidencia(input: {
+  proyectoId: number;
+  file: File;
+  descripcion?: string;
+  avanceId?: number;
+}): Promise<SubidaEvidenciaResultado> {
+  if (sinConexion()) {
+    const id = await encolarEvidencia(input);
+    return { objectKey: null, encolada: !!id };
+  }
+  try {
+    const key = await subirEvidenciaOnline(input);
+    return { objectKey: key, encolada: false };
+  } catch (e) {
+    const esRed = e instanceof TypeError || sinConexion();
+    if (esRed) {
+      const id = await encolarEvidencia(input);
+      return { objectKey: null, encolada: !!id };
+    }
+    throw e;
+  }
+}
+
+/** Vacía la cola de evidencias pendientes (se llama al reconectar). */
+export async function flushEvidenciasPendientes(): Promise<{ ok: number; fail: number }> {
+  if (sinConexion()) return { ok: 0, fail: 0 };
+  const pendientes = await listarEvidenciasPendientes();
+  let ok = 0;
+  let fail = 0;
+  for (const p of pendientes) {
+    try {
+      const file = new File([p.blob], p.fileName, { type: p.contentType });
+      await subirEvidenciaOnline({
+        proyectoId: p.proyectoId,
+        file,
+        descripcion: p.descripcion,
+        avanceId: p.avanceId,
+      });
+      await eliminarEvidenciaPendiente(p.id);
+      ok++;
+    } catch (e) {
+      await registrarIntentoFallido(p.id, (e as Error).message);
+      fail++;
+    }
+  }
+  return { ok, fail };
+}
+
+export { contarEvidenciasPendientes };
 
 /** URL prefirmada temporal de lectura (solo si el usuario puede ver la evidencia). */
 export async function urlEvidencia(objectKey: string): Promise<string | null> {

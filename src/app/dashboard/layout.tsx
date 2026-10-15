@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 import { UserNav } from "@/components/layout/user-nav";
 import { NotificationCenter } from "@/components/layout/notification-center";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { SyncStatus } from "@/components/layout/sync-status";
 import { useAuth } from "@/providers/auth-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { ZyraLogo } from "@/components/brand/zyra-logo";
@@ -46,6 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-4">
+            <SyncStatus />
             <NotificationCenter />
             <UserNav />
           </div>

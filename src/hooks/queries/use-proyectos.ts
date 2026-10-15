@@ -1,10 +1,33 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type UseMutationOptions } from "@tanstack/react-query";
 import { qk } from "@/hooks/queries/keys";
 import * as py from "@/lib/data/proyectos";
 import * as rpc from "@/lib/data/rpc";
-import type { Tablas } from "@/lib/data/util";
+import { nuevoOperationId, type Tablas } from "@/lib/data/util";
+
+/**
+ * Envuelve `useMutation` generando un `operation_id` (idempotency key) ÚNICO
+ * por invocación del usuario. Las variables (y su operation_id) se conservan
+ * a través de los reintentos y de la persistencia offline, de modo que un
+ * reenvío tras reconectar NO duplica la operación en el servidor.
+ */
+function useIdempotente<TData, TVars = void>(
+  fn: (vars: TVars, opId: string) => Promise<TData>,
+  options?: Omit<UseMutationOptions<TData, Error, { vars: TVars; opId: string }>, "mutationFn">
+) {
+  const m = useMutation<TData, Error, { vars: TVars; opId: string }>({
+    mutationFn: ({ vars, opId }) => fn(vars, opId),
+    ...options,
+  });
+  return {
+    ...m,
+    mutate: (vars?: TVars, opts?: Parameters<typeof m.mutate>[1]) =>
+      m.mutate({ vars: vars as TVars, opId: nuevoOperationId() }, opts),
+    mutateAsync: (vars?: TVars, opts?: Parameters<typeof m.mutateAsync>[1]) =>
+      m.mutateAsync({ vars: vars as TVars, opId: nuevoOperationId() }, opts),
+  };
+}
 
 export function useProyectos() {
   return useQuery({ queryKey: qk.proyectos, queryFn: py.listarProyectos });
@@ -110,90 +133,92 @@ function useInvalidarProyecto(proyectoId: number) {
 
 export function useGenerarChecklist(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (opId?: string) => rpc.rpcGenerarChecklist(proyectoId, opId),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoGenerarChecklist>(
+    (_vars, opId) => rpc.rpcGenerarChecklist(proyectoId, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useValidarChecklist(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (checklistId: number) => rpc.rpcValidarChecklist(checklistId),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoValidarChecklist, number>(
+    (checklistId, opId) => rpc.rpcValidarChecklist(checklistId, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useIniciarProyecto(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (opId?: string) => rpc.rpcIniciarProyecto(proyectoId, opId),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoProyecto>(
+    (_vars, opId) => rpc.rpcIniciarProyecto(proyectoId, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useReportarAvance(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (input: { descripcion: string; porcentaje?: number }) =>
-      rpc.rpcReportarAvance(proyectoId, input.descripcion, input.porcentaje),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoAvance, { descripcion: string; porcentaje?: number }>(
+    (input, opId) => rpc.rpcReportarAvance(proyectoId, input.descripcion, input.porcentaje, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useRegistrarEvidencia(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (input: Omit<Parameters<typeof rpc.rpcRegistrarEvidencia>[0], "proyectoId">) =>
-      rpc.rpcRegistrarEvidencia({ ...input, proyectoId }),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<
+    rpc.ResultadoEvidencia,
+    Omit<Parameters<typeof rpc.rpcRegistrarEvidencia>[0], "proyectoId" | "operationId">
+  >(
+    (input, opId) => rpc.rpcRegistrarEvidencia({ ...input, proyectoId, operationId: opId }),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useEnviarReporte(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (comentarios?: string) => rpc.rpcEnviarReporte(proyectoId, comentarios),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoReporte, string | undefined>(
+    (comentarios, opId) => rpc.rpcEnviarReporte(proyectoId, comentarios, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useFinalizarProyecto(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (comentarios?: string) => rpc.rpcFinalizarProyecto(proyectoId, comentarios),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoProyecto, string | undefined>(
+    (comentarios, opId) => rpc.rpcFinalizarProyecto(proyectoId, comentarios, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useAvanzarEstado(proyectoId: number) {
   const invalidar = useInvalidarProyecto(proyectoId);
-  return useMutation({
-    mutationFn: (nuevoEstado: string) => rpc.rpcAvanzarEstado(proyectoId, nuevoEstado),
-    onSuccess: invalidar,
-  });
+  return useIdempotente<rpc.ResultadoProyecto, string>(
+    (nuevoEstado, opId) => rpc.rpcAvanzarEstado(proyectoId, nuevoEstado, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 // ── Reportes (aprobación/rechazo) ────────────────────────────────────
-export function useAprobarReporte() {
+function useInvalidarReportes() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (reporteId: number) => rpc.rpcAprobarReporte(reporteId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.reportes });
-      qc.invalidateQueries({ queryKey: qk.proyectos });
-    },
-  });
+  return () => {
+    qc.invalidateQueries({ queryKey: qk.reportes });
+    qc.invalidateQueries({ queryKey: qk.proyectos });
+  };
+}
+
+export function useAprobarReporte() {
+  const invalidar = useInvalidarReportes();
+  return useIdempotente<rpc.ResultadoReporte, number>(
+    (reporteId, opId) => rpc.rpcAprobarReporte(reporteId, opId),
+    { onSuccess: invalidar }
+  );
 }
 
 export function useRechazarReporte() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ reporteId, motivo }: { reporteId: number; motivo?: string }) =>
-      rpc.rpcRechazarReporte(reporteId, motivo),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.reportes });
-      qc.invalidateQueries({ queryKey: qk.proyectos });
-    },
-  });
+  const invalidar = useInvalidarReportes();
+  return useIdempotente<rpc.ResultadoReporte, { reporteId: number; motivo?: string }>(
+    ({ reporteId, motivo }, opId) => rpc.rpcRechazarReporte(reporteId, motivo, opId),
+    { onSuccess: invalidar }
+  );
 }
