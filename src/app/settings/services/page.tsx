@@ -24,11 +24,13 @@ import {
   Settings2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useServicios, useCrearServicio, useEliminarServicio } from "@/hooks/queries";
+import { useServicios, useCrearServicio, useEliminarServicio, useEmpresa } from "@/hooks/queries";
+import type { Servicio } from "@/lib/data";
 
 export default function ServicesManagementPage() {
   const { toast } = useToast();
   const { data: services = [], isLoading } = useServicios();
+  const { data: empresa } = useEmpresa();
   const crearServicio = useCrearServicio();
   const eliminarServicio = useEliminarServicio();
   const [isAdding, setIsAdding] = useState(false);
@@ -45,7 +47,7 @@ export default function ServicesManagementPage() {
       toast({ title: "Éxito", description: "Servicio creado correctamente" });
       setNewService({ tipo: "", descripcion: "" });
       setIsAdding(false);
-    } catch (error) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "No se pudo crear el servicio" });
     }
   };
@@ -55,7 +57,7 @@ export default function ServicesManagementPage() {
     try {
       await eliminarServicio.mutateAsync(id);
       toast({ title: "Eliminado", description: "El servicio ha sido eliminado" });
-    } catch (error) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el servicio" });
     }
   };
@@ -129,7 +131,7 @@ export default function ServicesManagementPage() {
                 <p className="text-muted-foreground font-medium animate-pulse">Cargando tus servicios...</p>
               </div>
             ) : services.length > 0 ? (
-              services.map((service: any) => (
+              services.map((service: Servicio) => (
                 <Card key={service.id_servicio} className="group border-border hover:border-accent/40 hover:shadow-2xl hover:shadow-accent/5 transition-all duration-300 overflow-hidden">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
@@ -160,7 +162,7 @@ export default function ServicesManagementPage() {
                       ID: {service.id_servicio}
                     </div>
                     <div className="px-2 py-1 bg-accent/5 rounded text-[10px] font-bold text-accent uppercase tracking-tight">
-                      {service.empresa?.Nombre || service.empresa?.nombre || "Empresa 1"}
+                      {empresa?.nombre || "Empresa 1"}
                     </div>
                   </CardFooter>
                 </Card>

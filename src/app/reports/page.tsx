@@ -4,25 +4,17 @@ import { useState, useMemo, useRef, Suspense, useEffect } from "react";
 import {
   Briefcase,
   Check,
-  X,
-  Clock,
   MapPin,
   Building2,
   Hash,
   Search,
   ArrowLeft,
-  Zap,
   Wrench,
-  AlertCircle,
   FileText,
-  Plus,
   Users,
   CalendarDays,
-  ImagePlus,
   Trash2,
   Loader2,
-  Download,
-  Eye,
   Camera,
   Edit3
 } from "lucide-react";
@@ -31,7 +23,6 @@ import { format, isValid } from "date-fns";
 import { es, enUS, zhCN } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,19 +37,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useI18n } from "@/components/providers/i18n-provider";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useReportes,
@@ -71,7 +51,7 @@ import {
 import { db } from "@/lib/data";
 
 function ReportsContent() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const { toast } = useToast();
   const { t, language } = useI18n();
   const searchParams = useSearchParams();
@@ -140,8 +120,8 @@ function ReportsContent() {
 
       toast({ title: t.common.success });
       setSelectedReportId(null);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: t.common.error, description: e?.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: t.common.error, description: e instanceof Error ? e.message : undefined });
     }
   };
 
@@ -181,8 +161,8 @@ function ReportsContent() {
       toast({ title: t.common.success, description: "Reporte reenviado exitosamente." });
       setEditMode(false);
       setSelectedReportId(null);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : undefined });
     } finally {
       setProcessingId(null);
     }
@@ -202,7 +182,7 @@ function ReportsContent() {
 
       queryClient.invalidateQueries({ queryKey: qk.reportes });
       toast({ title: t.common.success, description: "Reporte eliminado." });
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: t.common.error });
     } finally {
       setProcessingId(null);
@@ -215,7 +195,7 @@ function ReportsContent() {
     return es;
   };
 
-  const formatDate = (dateStr: any, pattern: string) => {
+  const formatDate = (dateStr: string | number | Date | null | undefined, pattern: string) => {
     if (!dateStr) return "-";
     const date = new Date(dateStr);
     return isValid(date) ? format(date, pattern, { locale: getLocale() }) : "-";

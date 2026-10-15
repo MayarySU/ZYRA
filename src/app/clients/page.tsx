@@ -8,8 +8,7 @@ import {
   Card, 
   CardHeader, 
   CardTitle, 
-  CardContent, 
-  CardDescription 
+  CardContent 
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,17 +53,13 @@ import {
   Briefcase,
   ExternalLink,
   ChevronRight,
-  Zap,
-  Wrench,
-  Trash2,
-  AlertTriangle
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
 import { useClientes, useCrearCliente, useEliminarCliente, useProyectos } from "@/hooks/queries";
+import type { Cliente } from "@/lib/data";
 
 export default function ClientsPage() {
   const { user, profile, loading: userLoading } = useAuth();
@@ -80,7 +75,7 @@ export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
 
   const [newClient, setNewClient] = useState({
     nombre: "",
@@ -135,7 +130,7 @@ export default function ClientsPage() {
         direccion: "",
         telefono: ""
       });
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: t.common.error, description: "Error al registrar cliente" });
     }
   };
@@ -145,12 +140,12 @@ export default function ClientsPage() {
     try {
       await eliminar.mutateAsync(clientId);
       toast({ title: t.common.success, description: "Cliente eliminado correctamente." });
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: t.common.error, description: "Error al eliminar el cliente." });
     }
   };
 
-  const handleViewProjects = (client: any) => {
+  const handleViewProjects = (client: Cliente) => {
     setSelectedClient(client);
     setIsProjectsDialogOpen(true);
   };

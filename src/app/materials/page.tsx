@@ -126,7 +126,7 @@ export default function MaterialsPage() {
       toast({ title: t.common.success, description: "Material agregado al catálogo" });
       setIsCreateDialogOpen(false);
       setNewMaterial({ nombre_material: "", unidad: "", stock_disponible: 0 });
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el material" });
     }
   };
@@ -136,7 +136,7 @@ export default function MaterialsPage() {
     try {
       await eliminar.mutateAsync(id);
       toast({ title: "Éxito", description: "Material eliminado" });
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar" });
     }
   };
@@ -149,7 +149,7 @@ export default function MaterialsPage() {
       toast({ title: t.common.success, description: "Stock actualizado correctamente" });
       setIsUpdateStockOpen(false);
       setStockToUpdate(null);
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el stock" });
     }
   };
@@ -215,7 +215,7 @@ export default function MaterialsPage() {
       toast({ title: t.common.success, description: "Plantilla actualizada" });
       setIsEditDialogOpen(false);
       setNewMaterialSelected(""); // Limpiar seleccion
-    } catch (e: any) {
+    } catch {
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la plantilla" });
     } finally {
       setIsSubmitting(false);

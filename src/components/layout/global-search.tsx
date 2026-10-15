@@ -28,7 +28,6 @@ import {
   useEmpleados,
 } from "@/hooks/queries";
 import { useAuth } from "@/providers/auth-provider";
-import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/providers/i18n-provider";
 
 export function GlobalSearch() {

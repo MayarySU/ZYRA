@@ -4,7 +4,6 @@ import { useAuth } from "@/providers/auth-provider";
 import { useToast } from "@/hooks/use-toast";
 import {
   Trophy,
-  Star,
   Zap,
   Briefcase,
   FileText,
@@ -16,12 +15,9 @@ import {
   XCircle,
   Award,
   Flame,
-  Shield,
-  ChevronRight,
   Activity,
   BarChart2,
   Package,
-  Wrench,
   Camera,
   ClipboardList
 } from "lucide-react";
@@ -40,25 +36,32 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   Tooltip,
 } from "recharts";
-import { useI18n } from "@/components/providers/i18n-provider";
 import { calcLevel } from "@/lib/gamification";
 import { startOfDay, isAfter, format, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { useProyectos, useReportes, useMateriales, useEmpleados } from "@/hooks/queries";
 import type { ProyectoVista, ReporteConProyecto, Material, Empleado } from "@/lib/data";
+import type { Profile } from "@/providers/auth-provider";
 
-// ─────────────────────────────────────────────────
-// MEDAL CONFIG
-// ─────────────────────────────────────────────────
-const MEDAL_CONFIG: Record<string, { color: string; icon: string; label: string }> = {
-  Novato: { color: "text-blue-400 bg-blue-500/10 border-blue-500/20", icon: "🥉", label: "Novato" },
-  Experto: { color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", icon: "🥈", label: "Experto" },
-  Elite: { color: "text-purple-400 bg-purple-500/10 border-purple-500/20", icon: "🥇", label: "Elite" },
-  Leyenda: { color: "text-amber-400 bg-amber-500/10 border-amber-500/20", icon: "👑", label: "Leyenda" },
+type PuntoHistorial = {
+  id_punto?: number | null;
+  motivo?: string | null;
+  proyecto_id?: number | null;
+  cantidad_puntos?: number | null;
+};
+
+type EmpleadoConPuntos = Empleado & { puntos?: PuntoHistorial[] };
+
+type HistItem = {
+  id: number | string;
+  type: "points" | "report";
+  label: string;
+  sub: string;
+  pts: string | null;
+  color: string;
+  date?: string | null;
 };
 
 // ─────────────────────────────────────────────────
@@ -100,8 +103,6 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: {
   empleados: Empleado[];
   materiales: Material[];
 }) {
-  const { t } = useI18n();
-
   const stats = useMemo(() => {
     const activeProjects = (proyectos || []).filter((p) => p.estado !== "finalizado").length;
     const finishedProjects = (proyectos || []).filter((p) => p.estado === "finalizado").length;
@@ -369,9 +370,14 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: {
 // ─────────────────────────────────────────────────
 // EMPLOYEE DASHBOARD
 // ─────────────────────────────────────────────────
-function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) {
+function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: {
+  profile: Profile | null;
+  reportes: ReporteConProyecto[];
+  proyectos: ProyectoVista[];
+  empleadoData: EmpleadoConPuntos | null;
+}) {
   const puntos = useMemo(() => {
-    return (empleadoData?.puntos || []).reduce((s: number, p: any) => {
+    return (empleadoData?.puntos || []).reduce((s: number, p: PuntoHistorial) => {
       const val = parseInt(p.cantidad_puntos?.toString() || "0");
       return s + (isNaN(val) ? 0 : val);
     }, 0);
@@ -382,13 +388,13 @@ function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) 
 
   // Sistema de Logros Dinámico
   const logros = useMemo(() => {
-    const list = [];
-    const approvedCount = (reportes || []).filter((r: any) => r.estado === "aprobado").length;
+    const list: string[] = [];
+    const approvedCount = (reportes || []).filter((r) => r.estado === "aprobado").length;
 
     if (approvedCount >= 1) list.push("first_report");
     if (approvedCount >= 5) list.push("photographer");
-    if ((reportes || []).some((r: any) => {
-      const proj = (proyectos || []).find((p: any) => p.id_proyecto === r.proyecto_id);
+    if ((reportes || []).some((r) => {
+      const proj = (proyectos || []).find((p) => p.id_proyecto === r.proyecto_id);
       return proj?.estado === "finalizado";
     })) list.push("project_master");
 
@@ -410,9 +416,9 @@ function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) 
 
   // History feed: actual points from database
   const historial = useMemo(() => {
-    const ptsHistory = (empleadoData?.puntos || [])
-      .map((p: any) => ({
-        id: p.id_punto,
+    const ptsHistory: HistItem[] = (empleadoData?.puntos || [])
+      .map((p) => ({
+        id: p.id_punto ?? 0,
         type: "points" as const,
         label: `✨ ${p.motivo || "Acción premiada"}`,
         sub: p.proyecto_id ? `Proyecto #${p.proyecto_id}` : "Actividad general",
@@ -421,9 +427,9 @@ function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) 
       }));
 
     // Fallback: also show recent reports even if they don't have points yet
-    const myReports = (reportes || [])
-      .filter((r: any) => !ptsHistory.some((p: any) => p.sub.includes(String(r.proyecto_id))))
-      .map((r: any) => ({
+    const myReports: HistItem[] = (reportes || [])
+      .filter((r) => !ptsHistory.some((p) => p.sub.includes(String(r.proyecto_id))))
+      .map((r) => ({
         id: r.id_reporte,
         type: "report" as const,
         label: r.estado === "aprobado" ? "✅ Reporte aprobado" : r.estado === "rechazado" ? "❌ Reporte rechazado" : "📤 Reporte enviado",
@@ -433,7 +439,7 @@ function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) 
         color: r.estado === "aprobado" ? "text-emerald-400" : r.estado === "rechazado" ? "text-red-400" : "text-yellow-400",
       }));
 
-    return [...ptsHistory]
+    return [...ptsHistory, ...myReports]
       .slice(0, 8);
   }, [empleadoData, reportes]);
 
@@ -535,7 +541,7 @@ function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) 
               </div>
             ) : (
               <div className="space-y-1">
-                {historial.map((item: any) => (
+                {historial.map((item) => (
                   <div key={item.id} className="flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0">
                     <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-accent" />
                     <div className="flex-1 min-w-0">
@@ -582,7 +588,7 @@ export default function DashboardPage() {
 
   const isAdmin = profile?.rol === 'admin';
 
-  const empleadoData = useMemo(() => {
+  const empleadoData = useMemo<EmpleadoConPuntos | null>(() => {
     if (!profile?.empleadoId) return null;
     return (empleados || []).find((e) => e.id_empleado === profile.empleadoId) ?? null;
   }, [empleados, profile?.empleadoId]);

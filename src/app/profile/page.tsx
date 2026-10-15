@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Camera,
   User,
@@ -23,13 +21,10 @@ import {
   Star
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useI18n } from "@/components/providers/i18n-provider";
-import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
   const { profile, loading: userLoading } = useAuth();
   const { toast } = useToast();
-  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isUpdating, setIsUpdating] = useState(false);
@@ -55,7 +50,7 @@ export default function ProfilePage() {
       await new Promise(resolve => setTimeout(resolve, 1000));
       toast({ title: "Perfil actualizado localmente" });
       setNewPhoto(null);
-    } catch (error: any) {
+    } catch {
       toast({ variant: "destructive", title: "Error al actualizar" });
     } finally {
       setIsUpdating(false);

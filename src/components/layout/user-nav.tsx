@@ -13,14 +13,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/providers/auth-provider";
-import { useRouter } from "next/navigation";
 import { Settings, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import { useI18n } from "@/components/providers/i18n-provider";
 
 export function UserNav() {
   const { profile, logout } = useAuth();
-  const router = useRouter();
   const { t } = useI18n();
 
   const handleSignOut = () => {

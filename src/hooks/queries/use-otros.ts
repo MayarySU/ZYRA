@@ -29,6 +29,14 @@ export function useReportesDeProyecto(proyectoId: number | null) {
 export function usePlantillas() {
   return useQuery({ queryKey: qk.plantillas, queryFn: cs.listarPlantillas });
 }
+export function useCrearPlantilla() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { nombre: string; servicio_id: number | null; empresa_id?: number }) =>
+      cs.crearPlantilla(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.plantillas }),
+  });
+}
 export function useActualizarPlantilla() {
   const qc = useQueryClient();
   return useMutation({
@@ -36,6 +44,13 @@ export function useActualizarPlantilla() {
       id: number;
       items: { material_id: number; cantidad_requerida: number }[];
     }) => cs.actualizarPlantillaMateriales(input.id, input.items),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.plantillas }),
+  });
+}
+export function useEliminarPlantilla() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => cs.eliminarPlantilla(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.plantillas }),
   });
 }

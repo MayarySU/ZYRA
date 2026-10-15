@@ -4,19 +4,16 @@
 import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useAuth } from "@/providers/auth-provider";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogTrigger,
   DialogDescription
 } from "@/components/ui/dialog";
@@ -45,7 +42,6 @@ import {
   Crown,
   Trash2,
   Wrench,
-  UserCheck,
   Settings2,
   ChevronRight,
   Loader2
@@ -62,6 +58,13 @@ import {
   useAgregarMiembroEquipo,
   useQuitarMiembroEquipo,
 } from "@/hooks/queries";
+import type { EquipoConMiembros, MiembroEquipo } from "@/lib/data";
+
+type EditTeamData = {
+  nombre_equipo: string;
+  integrantes: number[];
+  id_lider: number | null;
+};
 
 export default function TeamPage() {
   const { user, profile, loading: userLoading } = useAuth();
@@ -89,7 +92,7 @@ export default function TeamPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedTeam, setSelectedTeam] = useState<any>(null);
+  const [selectedTeam, setSelectedTeam] = useState<EquipoConMiembros | null>(null);
 
   const [newTeam, setNewTeam] = useState({
     nombre_equipo: "",
@@ -97,7 +100,7 @@ export default function TeamPage() {
     id_lider: null as number | null,
   });
 
-  const [editTeamData, setEditTeamData] = useState<any>({
+  const [editTeamData, setEditTeamData] = useState<EditTeamData>({
     nombre_equipo: "",
     integrantes: [],
     id_lider: null
@@ -141,8 +144,8 @@ export default function TeamPage() {
       toast({ title: t.common.success, description: "Equipo creado correctamente" });
       setIsCreateDialogOpen(false);
       setNewTeam({ nombre_equipo: "", integrantes: [], id_lider: null });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : undefined });
     }
   };
 
@@ -153,7 +156,7 @@ export default function TeamPage() {
         id: selectedTeam.id_equipo,
         patch: { nombre_equipo: editTeamData.nombre_equipo },
       });
-      const currentIds: number[] = selectedTeam.empleado_equipo?.map((m: any) => m.empleado_id) ?? [];
+      const currentIds: number[] = selectedTeam.empleado_equipo?.map((m: MiembroEquipo) => m.empleado_id) ?? [];
       const nextIds: number[] = editTeamData.integrantes ?? [];
       const toRemove = currentIds.filter((id) => !nextIds.includes(id));
       await Promise.all(
@@ -173,8 +176,8 @@ export default function TeamPage() {
       );
       toast({ title: t.common.success });
       setIsEditDialogOpen(false);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : undefined });
     }
   };
 
@@ -183,14 +186,14 @@ export default function TeamPage() {
     try {
       await eliminarEquipo.mutateAsync(id);
       toast({ title: t.common.success, description: "Equipo eliminado correctamente" });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : undefined });
     }
   };
 
   const toggleMember = (empId: number, isEdit = false) => {
     if (isEdit) {
-      setEditTeamData((prev: any) => ({
+      setEditTeamData((prev: EditTeamData) => ({
         ...prev,
         integrantes: prev.integrantes.includes(empId)
           ? prev.integrantes.filter((id: number) => id !== empId)
@@ -339,6 +342,16 @@ export default function TeamPage() {
           )}
         </div>
 
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-10"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar equipo..."
+          />
+        </div>
+
         <div className="grid gap-4 md:gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {filteredTeams.length > 0 ? (
             filteredTeams.map((team) => (
@@ -363,7 +376,7 @@ export default function TeamPage() {
                       <Crown className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500/20" />
                       <p className="text-[10px] font-bold text-muted-foreground italic">
                         Líder del Equipo: <span className="text-foreground not-italic">
-                          {team.empleado_equipo?.find((m: any) => m.es_lider)?.empleados?.nombre || "Sin asignar"}
+                          {team.empleado_equipo?.find((m) => m.es_lider)?.empleados?.nombre || "Sin asignar"}
                         </span>
                       </p>
                     </div>
@@ -382,7 +395,7 @@ export default function TeamPage() {
                 <CardContent className="space-y-4 pt-0">
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase font-black text-accent tracking-[0.2em] ml-1 mb-2">Integrantes</p>
-                    {team.empleado_equipo?.map((rel: any) => (
+                    {team.empleado_equipo?.map((rel) => (
                       <div key={rel.empleado_id} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/member hover:bg-white/10 transition-all cursor-default">
                         <div className="flex items-center gap-3 truncate">
                           <div className="h-9 w-9 rounded-full bg-accent/10 flex items-center justify-center text-[10px] font-black text-accent border border-accent/20">
@@ -406,8 +419,8 @@ export default function TeamPage() {
                         setSelectedTeam(team);
                         setEditTeamData({
                           nombre_equipo: team.nombre_equipo,
-                          id_lider: team.empleado_equipo?.find((m: any) => m.es_lider)?.empleado_id || null,
-                          integrantes: team.empleado_equipo?.map((m: any) => m.empleado_id) || []
+                          id_lider: team.empleado_equipo?.find((m) => m.es_lider)?.empleado_id || null,
+                          integrantes: team.empleado_equipo?.map((m) => m.empleado_id) || []
                         });
                         setIsEditDialogOpen(true);
                       }}

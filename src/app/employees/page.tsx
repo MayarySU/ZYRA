@@ -10,7 +10,7 @@ import {
 import { crearEmpleadoConAcceso } from "@/app/actions/empleados";
 import type { Empleado } from "@/lib/data";
 import {
-  Card, CardHeader, CardTitle, CardDescription
+  Card, CardHeader, CardTitle
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,6 @@ import {
   Users, Plus, Search, Mail, Phone, UserCircle, Loader2, Trash2, Star, Lock, Check, Zap, Copy, AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import Link from "next/link";
 
 export default function EmployeesPage() {
   const { user } = useAuth();
@@ -102,8 +101,8 @@ export default function EmployeesPage() {
       setIsCreateDialogOpen(false);
       setIsSuccessDialogOpen(true);
       setNewEmployee({ nombre: "", correo: "", telefono: "", rol: "tecnico", password: "" });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error al registrar", description: e.message || "Error desconocido" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al registrar", description: e instanceof Error ? e.message : "Error desconocido" });
     } finally {
       setIsCreating(false);
     }
@@ -114,8 +113,8 @@ export default function EmployeesPage() {
     try {
       await eliminar.mutateAsync(id);
       toast({ title: "Éxito", description: "Empleado eliminado correctamente" });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : undefined });
     }
   };
 

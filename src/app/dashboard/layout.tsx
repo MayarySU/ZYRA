@@ -8,14 +8,11 @@ import { NotificationCenter } from "@/components/layout/notification-center";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { SyncStatus } from "@/components/layout/sync-status";
 import { useAuth } from "@/providers/auth-provider";
-import { useI18n } from "@/components/providers/i18n-provider";
 import { ZyraLogo } from "@/components/brand/zyra-logo";
 import { Loader2 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { profile, loading, user } = useAuth();
-  const { t } = useI18n();
-  const isAdmin = profile?.rol === 'admin';
+  const { loading, user } = useAuth();
 
   // Si no hay usuario autenticado después de cargar, o estamos en el primer check de auth
   if (loading && !user) {

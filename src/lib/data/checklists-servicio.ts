@@ -1,5 +1,7 @@
-import { db } from "@/lib/data/util";
+import { db, unwrap } from "@/lib/data/util";
 import type { Tablas } from "@/lib/data/util";
+
+const EMPRESA_ID_DEFECTO = 1;
 
 export type ChecklistServicio = Tablas["checklist_servicio"]["Row"];
 export type ChecklistServicioDetalle = Tablas["checklist_servicio_detalle"]["Row"];
@@ -23,6 +25,29 @@ export async function listarPlantillas(): Promise<PlantillaConDetalle[]> {
     )
     .order("id_checklist_servicio")
     .returns<PlantillaConDetalle[]>()) as unknown as PlantillaConDetalle[];
+}
+
+export async function crearPlantilla(input: {
+  nombre: string;
+  servicio_id: number | null;
+  empresa_id?: number;
+}): Promise<ChecklistServicio> {
+  return unwrap(
+    await db()
+      .from("checklist_servicio")
+      .insert({
+        empresa_id: input.empresa_id ?? EMPRESA_ID_DEFECTO,
+        servicio_id: input.servicio_id,
+        nombre: input.nombre,
+      })
+      .select()
+      .single()
+  );
+}
+
+export async function eliminarPlantilla(id: number): Promise<void> {
+  const res = await db().from("checklist_servicio").delete().eq("id_checklist_servicio", id);
+  if (res.error) throw new Error(res.error.message);
 }
 
 /** Reemplaza los materiales de una plantilla (delete + insert). */

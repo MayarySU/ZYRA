@@ -624,3 +624,67 @@ siguen yendo directos a la red (o a la cola de la Fase 7 si no hay red).
 - Registro del SW presente en el bundle cliente (`serviceWorker.register`).
 - `manifest.json` válido (3 iconos, 2 atajos).
 
+## 17. Fase 9 — Cableado de UI y limpieza de ESLint — COMPLETADO
+
+### 17.1 Objetivo
+
+Alcance elegido por el usuario: **"Wire existing UI + clean all warnings"** — hacer
+funcionar controles ya presentes en la interfaz que no tenían acción, eliminar
+código muerto y llevar ESLint a **0 errores / 0 warnings**. Sin nuevas tablas de
+base de datos.
+
+Punto de partida: 16 archivos con **113 warnings** (0 errores). Predominaban
+imports/iconos sin usar, `any` explícitos y `catch (e: any)` con `e` sin usar.
+
+### 17.2 UI cableada (funcionalidad real)
+
+- **`src/app/team/page.tsx`**: existía el estado `searchTerm`/`filteredTeams` pero
+  **no había input**. Se añadió la barra de búsqueda de equipos (icono `Search`).
+  Se tiparon `selectedTeam` (`EquipoConMiembros | null`), `editTeamData`
+  (`EditTeamData`) y todos los `MiembroEquipo` en los mapas.
+- **`src/app/settings/checklists/page.tsx`**: era una vista **solo-lectura** con
+  botones inertes. Se reescribió como CRUD funcional sobre las tablas existentes
+  (`checklist_servicio` / `checklist_servicio_detalle`, RLS admin):
+  - **Editar** materiales y cantidades con `useActualizarPlantilla` + `useMateriales`.
+  - **Crear** plantilla (`nombre` + servicio opcional) con `useCrearPlantilla`.
+  - **Eliminar** plantilla con `useEliminarPlantilla` (AlertDialog de confirmación).
+- **`src/app/settings/services/page.tsx`**: mostraba `service.empresa?.…` que
+  nunca existió en el `select("*")` (siempre caía a "Empresa 1"). Ahora usa el hook
+  `useEmpresa()` para mostrar el nombre real de la empresa.
+- **`src/app/projects/page.tsx`**: la query `useReportes()` estaba sin usar. Se
+  muestran el **conteo de reportes por proyecto** en la tarjeta (solo admin).
+- **`src/app/dashboard/page.tsx`**: `myReports` se calculaba pero se descartaba.
+  Ahora se **fusiona con el historial** (`[...ptsHistory, ...myReports].slice(0,8)`)
+  como fallback de reportes sin puntos. Se eliminó la constante `MEDAL_CONFIG`
+  (muerta) y el `t` sin uso.
+
+### 17.3 Capa de datos / hooks añadidos
+
+- `src/lib/data/checklists-servicio.ts`: `crearPlantilla({nombre, servicio_id, empresa_id?})`
+  y `eliminarPlantilla(id)`.
+- `src/hooks/queries/use-otros.ts`: `useCrearPlantilla` y `useEliminarPlantilla`
+  (invalidan `qk.plantillas`).
+
+### 17.4 Errores de tipos corregidos (`strict`)
+
+- `src/hooks/use-toast.ts`: se reemplazó el objeto `actionTypes` por una unión de
+  literales; el tipo `Action` ahora usa `type: "ADD_TOAST" | …` directamente, lo
+  que restaura la unión discriminada del reducer (antes el `any` implícito rompía
+  el `switch`).
+- `src/components/ui/calendar.tsx`: los iconos pasan de `any` a
+  `React.SVGProps<SVGSVGElement>` y el objeto `components` se castea a
+  `React.ComponentProps<typeof DayPicker>["components"]` (react-day-picker v9).
+- `src/app/dashboard/page.tsx`: `EmployeeDashboard` deja de ser `any`; se tipan
+  `EmpleadoConPuntos`, `PuntoHistorial` e `HistItem`.
+- `src/app/clients/page.tsx`, `reports`, `employees`, `materials`, `profile`,
+  `team`, `settings/services`: `catch (e: any)` → `catch` / `e instanceof Error`,
+  y estado `any` → tipos reales (`Cliente`, `Servicio`).
+
+### 17.5 Verificación
+
+- `npm run lint` → **0 errores, 0 warnings** (`npx eslint .` sin salida, exit 0).
+- `npm run typecheck` limpio · `npm run build` OK (24 rutas generadas).
+- `npm run db:smoke` → **26/26 PASS** (sin cambios de esquema).
+- Sin nuevas migraciones ni tablas; solo inserciones/borrados sobre tablas ya
+  existentes protegidas por RLS admin.
+

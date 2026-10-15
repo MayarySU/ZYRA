@@ -366,6 +366,9 @@ export default function ProjectsPage() {
                   <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> {project.ubicacion}</div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="h-3 w-3" /> {clienteJson?.nombre}</div>
                   <div className="text-xs text-accent font-bold flex items-center gap-1"><Users className="h-3 w-3" /> {assignedTeam?.nombre_equipo || "Sin Equipo"}</div>
+                  {isAdmin && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1"><ClipboardList className="h-3 w-3" /> {reportes.filter((r) => r.proyecto_id === project.id_proyecto).length} reportes</div>
+                  )}
                   <div className="space-y-2 pt-2">
                     <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
                       <span className="text-muted-foreground">Progreso</span>
