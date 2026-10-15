@@ -79,3 +79,60 @@ Faltan en el modelo actual: `evidencias` (hoy es el string `Evidencias_URL`),
 - Nombres en PostgreSQL: **español snake_case minúsculas** (`proyectos.id_proyecto`, `reportes.evidencias` ya no como string).
 - Offline-First **real** con Dexie + outbox.
 - R2 privado; en PostgreSQL solo `object_key`.
+
+## 2. Backend de datos (Supabase) — COMPLETADO
+
+### Migraciones aplicadas (`supabase/migrations/`)
+
+| Archivo | Contenido |
+|---|---|
+| `0001_schema.sql` | 23 tablas + índices/constraints + trigger `set_actualizado_en`. |
+| `0002_views.sql` | `calcular_progreso()`, vistas `v_proyectos` y `v_checklist_detalle` (`security_invoker=true`). |
+| `0003_rls.sql` | Helpers (`mi_empleado_id`, `mi_empresa_id`, `es_admin`, `es_miembro_equipo`, `es_miembro_proyecto`) + RLS en las 23 tablas. |
+| `0004_functions.sql` | RPCs transaccionales + idempotencia. |
+
+### RPC (autoridad de negocio en la BD)
+
+`generar_checklist`, `validar_checklist`, `iniciar_proyecto`, `reportar_avance`,
+`registrar_evidencia`, `enviar_reporte`, `aprobar_reporte`, `rechazar_reporte`,
+`avanzar_estado`, `finalizar_proyecto`. Internas (sin `EXECUTE` para
+`authenticated`): `_otorgar_puntos`, `_idempotente_leer`, `_idempotente_guardar`.
+
+- Idempotencia: cada RPC mutadora acepta `p_operation_id uuid`; el resultado se
+  guarda en `operaciones_procesadas` y se devuelve en reintentos.
+- Puntos: `_otorgar_puntos` escribe en `puntos_historial` con índice único
+  parcial `(empleado_id, proyecto_id, tipo_evento) WHERE proyecto_id IS NOT NULL`.
+- Auditoría: cada RPC escribe en `audit_log`.
+- Estados de proyecto: `borrador, preparacion, checklist_pendiente,
+  listo_para_iniciar, en_proceso, pendiente_de_cierre, finalizado, cancelado,
+  rechazado`.
+
+### Scripts (`scripts/`)
+
+| Script | Uso | Descripción |
+|---|---|---|
+| `db/apply.mjs` | `npm run db:apply` / `db:seed` | Aplica migraciones (y seed con `--seed`) vía `pg` directo. |
+| `db/gen-types.mjs` | `npm run db:types` | Regenera `src/lib/supabase/types.generated.ts`. |
+| `db/inspect.mjs` | `npm run db:inspect` | Verificación de tablas/vistas/RLS/funciones/seed. |
+| `db/smoke.mjs` | `npm run db:smoke` | Ciclo de vida completo por RPC con RLS real. |
+| `seed-admin.mjs` | `npm run seed:admin -- <correo> <pass> [nombre]` | Crea usuario Auth + `empleados` + `usuarios` (rol admin). |
+
+### Verificación ejecutada
+
+- 4 migraciones aplicadas sin error; seed idempotente.
+- `db:inspect`: 23 tablas, 2 vistas, RLS 23/23, RPC `security definer`.
+- `db:smoke`: **19/19 PASS** (login → generar/marcar/validar checklist →
+  iniciar (descuento de stock) → avance → evidencia → reporte → aprobar →
+  finalizar → puntos → idempotencia → `_otorgar_puntos` bloqueado).
+- `npm run typecheck` limpio con tipos reales generados.
+
+### Tipos
+
+`src/lib/supabase/types.generated.ts` (autogenerado). `types.ts` reexpone
+`Database`, `Tables<T>`, `TablesInsert<T>`, `TablesUpdate<T>`, `Views<T>`,
+`ProyectoVista`, `ChecklistDetalleVista`.
+
+### Cuenta admin de desarrollo
+
+`admin@essesolar.com` (contraseña temporal `ZyraAdmin2026!`, cambiar en
+producción). Se crea con `npm run seed:admin`.

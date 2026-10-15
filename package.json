@@ -9,7 +9,13 @@
     "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:apply": "node scripts/db/apply.mjs",
+    "db:seed": "node scripts/db/apply.mjs --seed",
+    "db:inspect": "node scripts/db/inspect.mjs",
+    "db:smoke": "node scripts/db/smoke.mjs",
+    "db:types": "node scripts/db/gen-types.mjs",
+    "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
