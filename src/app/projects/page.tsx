@@ -59,6 +59,8 @@ import {
   useActualizarDetalleChecklist,
   useIniciarProyecto,
   useEnviarReporte,
+  useFinalizarProyecto,
+  useAvanzarEstado,
 } from "@/hooks/queries";
 import type { ProyectoVista } from "@/lib/data/proyectos";
 
@@ -83,6 +85,31 @@ function displayFromEstado(estado: string | null): DisplayStatus {
 }
 
 const PRE_START_STATES = ["borrador", "preparacion", "checklist_pendiente", "listo_para_iniciar"];
+
+// Acciones de estado permitidas desde la UI del admin. Las transiciones
+// críticas (iniciar, enviar a revisión, finalizar) se ejecutan con su RPC
+// dedicada; el resto usa avanzar_estado. Nunca se escribe estado directo.
+function accionesDesdeEstado(estado: string): { value: string; label: string }[] {
+  const base = [{ value: "sin_cambio", label: "Sin cambios" }];
+  switch (estado) {
+    case "borrador":
+      return [...base, { value: "preparacion", label: "Pasar a preparación" }, { value: "cancelado", label: "Cancelar" }];
+    case "preparacion":
+      return [...base, { value: "checklist_pendiente", label: "Pasar a checklist" }, { value: "borrador", label: "Volver a borrador" }, { value: "cancelado", label: "Cancelar" }];
+    case "checklist_pendiente":
+      return [...base, { value: "listo_para_iniciar", label: "Marcar listo para iniciar" }, { value: "preparacion", label: "Volver a preparación" }, { value: "cancelado", label: "Cancelar" }];
+    case "listo_para_iniciar":
+      return [...base, { value: "iniciar", label: "Iniciar proyecto" }, { value: "checklist_pendiente", label: "Volver a checklist" }, { value: "cancelado", label: "Cancelar" }];
+    case "en_proceso":
+      return [...base, { value: "enviar_reporte", label: "Enviar a revisión" }, { value: "cancelado", label: "Cancelar" }];
+    case "pendiente_de_cierre":
+      return [...base, { value: "finalizar", label: "Aprobar y finalizar" }, { value: "en_proceso", label: "Reabrir" }, { value: "cancelado", label: "Cancelar" }];
+    case "rechazado":
+      return [...base, { value: "en_proceso", label: "Reabrir" }, { value: "cancelado", label: "Cancelar" }];
+    default:
+      return base;
+  }
+}
 
 interface ClienteJson {
   nombre?: string;
@@ -115,10 +142,16 @@ export default function ProjectsPage() {
   // --- Admin Project Management State ---
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
   const [managedProject, setManagedProject] = useState<ProyectoVista | null>(null);
-  const [managedStatus, setManagedStatus] = useState("");
+  const [managedAccion, setManagedAccion] = useState("sin_cambio");
   const [managedTeamId, setManagedTeamId] = useState("no-team");
   const [managedUbicacion, setManagedUbicacion] = useState("");
   const [savingManage, setSavingManage] = useState(false);
+
+  // Hooks de ciclo de vida ligados al proyecto gestionado (RPC, no update directo).
+  const iniciarManaged = useIniciarProyecto(managedProject?.id_proyecto ?? 0);
+  const enviarManaged = useEnviarReporte(managedProject?.id_proyecto ?? 0);
+  const finalizarManaged = useFinalizarProyecto(managedProject?.id_proyecto ?? 0);
+  const avanzarManaged = useAvanzarEstado(managedProject?.id_proyecto ?? 0);
 
   const [newProject, setNewProject] = useState({
     nombreProyecto: "",
@@ -189,7 +222,7 @@ export default function ProjectsPage() {
 
   const openManageDialog = (project: ProyectoVista) => {
     setManagedProject(project);
-    setManagedStatus(project.estado || "preparacion");
+    setManagedAccion("sin_cambio");
     setManagedTeamId(project.equipo_id?.toString() || "no-team");
     setManagedUbicacion(project.ubicacion || "");
     setIsManageDialogOpen(true);
@@ -199,17 +232,24 @@ export default function ProjectsPage() {
     if (!user || !managedProject) return;
     setSavingManage(true);
     try {
+      // Campos editables no críticos (permitidos por RLS para admin).
       await actualizarProyecto.mutateAsync({
         id: managedProject.id_proyecto!,
         patch: {
-          estado: managedStatus,
           equipo_id: managedTeamId === "no-team" ? null : parseInt(managedTeamId, 10),
           ubicacion: managedUbicacion || null,
-          ...(managedStatus === "finalizado" && managedProject.estado !== "finalizado"
-            ? { fecha_fin: new Date().toISOString() }
-            : {}),
         },
       });
+      // Cambio de estado exclusivamente por RPC.
+      if (managedAccion === "iniciar") {
+        await iniciarManaged.mutateAsync();
+      } else if (managedAccion === "enviar_reporte") {
+        await enviarManaged.mutateAsync("Envío manual desde gestión (admin)");
+      } else if (managedAccion === "finalizar") {
+        await finalizarManaged.mutateAsync();
+      } else if (managedAccion !== "sin_cambio") {
+        await avanzarManaged.mutateAsync(managedAccion);
+      }
       toast({ title: t.common.success });
       setIsManageDialogOpen(false);
     } catch (e) {
@@ -380,7 +420,7 @@ export default function ProjectsPage() {
           <DialogContent className="sm:max-w-md bg-card border-border">
             <DialogHeader><DialogTitle>{managedProject?.nombre_proyecto}</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Estado</Label><Select value={managedStatus} onValueChange={setManagedStatus}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="preparacion">Pendiente</SelectItem><SelectItem value="en_proceso">En Proceso</SelectItem><SelectItem value="pendiente_de_cierre">Revisión</SelectItem><SelectItem value="finalizado">Finalizado</SelectItem><SelectItem value="cancelado">Cancelado</SelectItem></SelectContent></Select></div>
+              <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Acción sobre el estado</Label><Select value={managedAccion} onValueChange={setManagedAccion}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{accionesDesdeEstado(managedProject?.estado || "preparacion").map((a) => (<SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>))}</SelectContent></Select></div>
               <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Equipo</Label><Select value={managedTeamId} onValueChange={setManagedTeamId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no-team">Sin Equipo</SelectItem>{equipos.map(t => <SelectItem key={t.id_equipo} value={t.id_equipo.toString()}>{t.nombre_equipo}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">📍 Dirección de Obra</Label><Input placeholder="Ej. Av. Principal 123, Colonia..." value={managedUbicacion} onChange={(e) => setManagedUbicacion(e.target.value)} /></div>
             </div>

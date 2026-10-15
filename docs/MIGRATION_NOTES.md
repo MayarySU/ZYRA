@@ -397,3 +397,70 @@ actualizaron sus consumidores:
 - Flujo de recuperación probado contra Supabase: `redirectTo =
   http://localhost:9002/auth/callback?next=/reset-password` aceptado por la API.
 
+## 13. Fase 5 — Máquina de estados y reglas en PostgreSQL — COMPLETADO
+
+La autoridad del ciclo de vida vive en la base de datos, no en React. La Fase 5
+auditó el estado previo, encontró tres huecos reales y los cerró.
+
+### 13.1 Huecos encontrados en la auditoría
+
+1. **La UI escribía `proyectos.estado` directamente.** El diálogo "Gestionar"
+   (`src/app/projects/page.tsx`) hacía `update({ estado: managedStatus, ... })`
+   desde el cliente (vía `useActualizarProyecto`). Cualquier administrador podía
+   saltarse las RPC y cerrar/finalizar sin requisitos.
+2. **`avanzar_estado` permitía saltarse las RPC dedicadas:** permitía
+   `listo_para_iniciar → en_proceso` (sin descontar stock ni validar checklist
+   de nuevo), `en_proceso → pendiente_de_cierre` (sin crear reporte) y
+   `pendiente_de_cierre → finalizado` (sin checklist completo, sin evidencias,
+   sin reporte aprobado y **sin otorgar puntos**).
+3. **`anon` podía ejecutar todas las RPC.** `create or replace function` resetea
+   el ACL a los *default privileges* de Supabase, que incluyen `anon`; el
+   `revoke ... from public` de la 0004 no quitaba el grant explícito a `anon`.
+
+### 13.2 Cambios (`supabase/migrations/0005_hardening.sql`)
+
+- **Guardia de estado (trigger).** `_proteger_estado_proyecto()` (BEFORE UPDATE
+  en `proyectos`) lanza excepción si `estado` cambia y la transacción **no** trae
+  la señal `set_config('zyra.rpc_estado','on',true)`. Solo las RPC de negocio la
+  activan; un `UPDATE ... SET estado` directo desde PostgREST/React falla a nivel
+  de base de datos, incluso para el admin.
+- **`avanzar_estado` limitado a override seguro.** Transiciones permitidas ahora:
+  `borrador→preparacion|cancelado`, `preparacion→borrador|checklist_pendiente|cancelado`,
+  `checklist_pendiente→preparacion|listo_para_iniciar|cancelado`,
+  `listo_para_iniciar→checklist_pendiente|cancelado`, `en_proceso→cancelado`,
+  `pendiente_de_cierre→en_proceso|cancelado`, `rechazado→en_proceso|cancelado`.
+  Ya **no** puede alcanzar `en_proceso`, `pendiente_de_cierre` ni `finalizado`:
+  esas transiciones exigen `iniciar_proyecto` / `enviar_reporte` /
+  `finalizar_proyecto`, que aplican stock, reportes, evidencias, puntos y auditoría.
+- **ACL reafirmado.** Las RPC se recrean en 0005 y se hace
+  `revoke all ... from public, anon` + `grant execute ... to authenticated` para
+  todas (`generar_checklist`, `validar_checklist`, `iniciar_proyecto`,
+  `reportar_avance`, `registrar_evidencia`, `enviar_reporte`, `aprobar_reporte`,
+  `rechazar_reporte`, `avanzar_estado`, `finalizar_proyecto`) y para el trigger.
+  `_otorgar_puntos` sigue sin EXECUTE para `anon/authenticated`.
+
+### 13.3 UI (`src/app/projects/page.tsx`)
+
+El diálogo "Gestionar" ya **no** envía `estado` en el `update`. Los campos no
+críticos (`equipo_id`, `ubicacion`) se siguen actualizando directo (RLS admin),
+y el estado se cambia con un selector de **acciones válidas** para el estado
+actual (`accionesDesdeEstado`) que despacha a la RPC correcta:
+- `iniciar` → `rpcIniciarProyecto`
+- `enviar_reporte` → `rpcEnviarReporte`
+- `finalizar` → `rpcFinalizarProyecto`
+- resto → `rpcAvanzarEstado`
+
+`fecha_fin` dejó de fijarse en el cliente: la pone `finalizar_proyecto`.
+
+### 13.4 Verificación
+
+- `npm run db:apply` (5 migraciones) OK; `npm run db:smoke` **25/25 PASS**.
+  Casos inválidos nuevos que pasan (deben **fallar**): `update` directo de estado
+  bloqueado, `avanzar_estado → finalizado` bloqueado, `avanzar_estado → en_proceso`
+  desde `listo_para_iniciar` bloqueado, `iniciar_proyecto` sin checklist completo
+  bloqueado, `insert` directo en `puntos_historial` bloqueado (RLS), RPC como
+  `anon` bloqueada (`permission denied for function`).
+- ACL verificado contra `pg_proc`: `has_function_privilege('anon', ...)` = `false`
+  en todas las RPC.
+- `npm run typecheck` limpio · `npm run lint` 0 errores (113 warnings preexistentes).
+

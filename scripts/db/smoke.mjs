@@ -96,6 +96,20 @@ async function main() {
   const { data: proyTrasGen } = await supabase.from('proyectos').select('estado').eq('id_proyecto', pid).single();
   check('estado tras generar => checklist_pendiente', proyTrasGen.estado === 'checklist_pendiente', proyTrasGen.estado);
 
+  // ── 1b. Guardias de estado (Fase 5) ─────────────────────────────────
+  {
+    const r = await supabase.from('proyectos').update({ estado: 'finalizado' }).eq('id_proyecto', pid).select();
+    check('update directo de estado bloqueado', !!r.error, r.error?.message || 'permitido!');
+  }
+  {
+    const r = await supabase.rpc('avanzar_estado', { p_proyecto_id: pid, p_nuevo_estado: 'finalizado', p_operation_id: OP() });
+    check('avanzar_estado => finalizado bloqueado', !!r.error, r.error?.message || 'permitido!');
+  }
+  {
+    const r = await supabase.rpc('iniciar_proyecto', { p_proyecto_id: pid, p_operation_id: OP() });
+    check('iniciar sin checklist completo bloqueado', !!r.error, r.error?.message || 'permitido!');
+  }
+
   // ── 2. validar_checklist (incompleto) ───────────────────────────────
   {
     const r = await supabase.rpc('validar_checklist', { p_checklist_id: checklist.id_checklist, p_operation_id: OP() });
@@ -122,6 +136,12 @@ async function main() {
     check('validar_checklist completo', !r.error && r.data.estado === 'completo', JSON.stringify(r.data || r.error));
     const { data: p } = await supabase.from('proyectos').select('estado').eq('id_proyecto', pid).single();
     check('estado => listo_para_iniciar', p.estado === 'listo_para_iniciar', p.estado);
+  }
+
+  // ── 4b. No se puede iniciar saltando la RPC dedicada ────────────────
+  {
+    const r = await supabase.rpc('avanzar_estado', { p_proyecto_id: pid, p_nuevo_estado: 'en_proceso', p_operation_id: OP() });
+    check('avanzar_estado => en_proceso bloqueado', !!r.error, r.error?.message || 'permitido!');
   }
 
   // ── 5. iniciar_proyecto (descuenta stock) ───────────────────────────
@@ -194,6 +214,22 @@ async function main() {
   {
     const r = await supabase.rpc('_otorgar_puntos', { p_empleado_id: adminUsr.empleado_id, p_proyecto_id: pid, p_cantidad: 1, p_motivo: 'hack', p_tipo_evento: 'X' });
     check('_otorgar_puntos bloqueado', !!r.error, r.error?.message || 'accesible!');
+  }
+
+  // ── 13. Puntos no insertables directamente (RLS) ────────────────────
+  {
+    const r = await supabase
+      .from('puntos_historial')
+      .insert({ empleado_id: adminUsr.empleado_id, proyecto_id: pid, cantidad_puntos: 999, motivo: 'hack', tipo_evento: 'HACK' })
+      .select();
+    check('insert directo en puntos_historial bloqueado', !!r.error, r.error?.message || 'permitido!');
+  }
+
+  // ── 14. Sin sesión no se pueden ejecutar RPC protegidas ─────────────
+  {
+    const anon = createClient(url, pub, { auth: { autoRefreshToken: false, persistSession: false } });
+    const r = await anon.rpc('finalizar_proyecto', { p_proyecto_id: pid, p_operation_id: OP() });
+    check('RPC como anon bloqueada', !!r.error, r.error?.message || 'permitido!');
   }
 
   // ── Limpieza ────────────────────────────────────────────────────────
