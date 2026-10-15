@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, FileText, CheckCircle2, XCircle, Clock, Users, Trophy, Zap, CheckCheck, Trash2 } from "lucide-react";
+import { Bell, FileText, CheckCircle2, XCircle, Users, Trophy, Zap, CheckCheck, Trash2 } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -8,9 +8,8 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMemo, useState, useEffect } from "react";
-import { reportsAPI } from "@/lib/api-client";
-import { useAuth } from "@/providers/auth-provider";
+import { useMemo, useState } from "react";
+import { useReportes } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 import { format, isValid } from "date-fns";
 import { es } from "date-fns/locale";
@@ -42,32 +41,7 @@ function formatDate(dateStr: string | undefined) {
 }
 
 export function NotificationCenter() {
-  const { user, profile } = useAuth();
-  const isAdmin = profile?.rol === "admin";
-  const [sqlReports, setSqlReports] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const loadNotifData = async () => {
-      try {
-        setIsLoading(true);
-        const data = await reportsAPI.getAll();
-        setSqlReports(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Error loading notifications from SQL", e);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (profile) {
-      loadNotifData();
-    }
-  }, [profile]);
-
-  // Map SQL reports to existing logic
-  const empReports = !isAdmin ? sqlReports : [];
-  const adminReports = isAdmin ? sqlReports : [];
+  const { data: reportes = [], isLoading } = useReportes();
 
   // ── Local read-tracking (session only) ───────────
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
@@ -77,97 +51,29 @@ export function NotificationCenter() {
 
   // ── Build notification list ───────────────────────
   const notifications: NotifItem[] = useMemo(() => {
-    if (isAdmin) {
-      return (adminReports || [])
-        .map(r => {
-          const status = r.status || "Pendiente";
-          const projectName = r.projectName || r.Pry_Nombre_Proyecto || "proyecto";
-          const author = r.authorName || r.employeeName || "Un técnico";
+    return (reportes || [])
+      .filter(r => r.estado === "pendiente")
+      .map(r => {
+        const id = String(r.id_reporte);
+        const projectName = r.proyectos?.nombre_proyecto || "proyecto";
+        const author = r.empleados?.nombre || "Un técnico";
 
-          let title = "";
-          let message = "";
+        const message = r.comentarios
+          ? `${author} envió un reporte del proyecto "${projectName}": "${r.comentarios}". Requiere tu aprobación.`
+          : `${author} envió un reporte del proyecto "${projectName}". Requiere tu aprobación.`;
 
-          if (status === "Pendiente") {
-            title = "📄 Nuevo reporte pendiente";
-            message = `${author} envió un reporte del proyecto "${projectName}". Requiere tu aprobación.`;
-          } else if (status === "EnRevision") {
-            title = "🔄 Corrección de reporte recibida";
-            message = `${author} corrigió su reporte del proyecto "${projectName}". Lista para revisión.`;
-          } else if (status === "Aprobado") {
-            title = "✅ Reporte aprobado";
-            message = `El reporte de "${projectName}" por ${author} fue aprobado.`;
-          } else if (status === "Rechazado") {
-            title = "❌ Reporte rechazado";
-            message = `El reporte de "${projectName}" por ${author} fue rechazado.`;
-          } else {
-            title = "📋 Reporte actualizado";
-            message = `${author} actualizó su reporte del proyecto "${projectName}".`;
-          }
-
-          return {
-            id: r.id,
-            type: "report" as const,
-            title,
-            message,
-            date: r.timestamp || r.createdAt,
-            read: readIds.has(r.id),
-          };
-        })
-        .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
-        .slice(0, 40);
-    }
-
-    // Employee view: build events from their reports
-    const items: NotifItem[] = [];
-    for (const r of (empReports || [])) {
-      // Report submission confirmation
-      items.push({
-        id: `sent-${r.id}`,
-        type: "report",
-        title: "📤 Reporte enviado",
-        message: `Enviaste tu reporte del proyecto "${r.projectName || r.Pry_Nombre_Proyecto || "—"}". Espera la revisión del administrador.`,
-        date: r.timestamp,
-        read: readIds.has(`sent-${r.id}`),
-      });
-      // Approval / rejection
-      if (r.status === "Aprobado") {
-        items.push({
-          id: `approved-${r.id}`,
-          type: "report",
-          title: "✅ Reporte aprobado",
-          message: `Tu reporte del proyecto "${r.projectName || r.Pry_Nombre_Proyecto || "—"}" fue aprobado. ¡+50 puntos ganados!`,
-          date: r.timestamp,
-          read: readIds.has(`approved-${r.id}`),
-        });
-      }
-      if (r.status === "Rechazado") {
-        items.push({
-          id: `rejected-${r.id}`,
-          type: "report",
-          title: "❌ Reporte rechazado",
-          message: `Tu reporte del proyecto "${r.projectName || r.Pry_Nombre_Proyecto || "—"}" fue rechazado. Corrígelo y vuelve a enviarlo.`,
-          date: r.timestamp,
-          read: readIds.has(`rejected-${r.id}`),
-        });
-      }
-    }
-    // Medal events from profile.logros
-    for (const logro of (profile?.logros || [])) {
-      if (logro.completado && logro.obtainedAt) {
-        items.push({
-          id: `medal-${logro.id}`,
-          type: "achievement",
-          title: `${logro.emoji || "🏅"} Medalla Desbloqueada: ${logro.nombre}`,
-          message: "¡Felicidades! Conseguiste una nueva medalla en ZYRA.",
-          date: logro.obtainedAt,
-          read: readIds.has(`medal-${logro.id}`),
-        });
-      }
-    }
-    return items
+        return {
+          id,
+          type: "report" as const,
+          title: "📄 Nuevo reporte pendiente",
+          message,
+          date: r.fecha_reporte,
+          read: readIds.has(id),
+        };
+      })
       .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
-      .slice(0, 30);
-  }, [isAdmin, adminReports, empReports, profile, readIds]);
+      .slice(0, 40);
+  }, [reportes, readIds]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -212,7 +118,13 @@ export function NotificationCenter() {
 
         {/* List */}
         <ScrollArea className="h-[400px]">
-          {notifications.length > 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center p-16 text-center">
+              <div className="h-12 w-12 rounded-full bg-muted/10 flex items-center justify-center mb-4">
+                <Bell className="h-6 w-6 text-muted-foreground opacity-20 animate-pulse" />
+              </div>
+            </div>
+          ) : notifications.length > 0 ? (
             <div className="divide-y divide-white/5">
               {notifications.map((notif) => (
                 <div

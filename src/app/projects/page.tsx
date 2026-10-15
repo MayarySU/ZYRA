@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import DashboardLayout from "../dashboard/layout";
@@ -16,13 +15,12 @@ import {
   Trash2,
   Settings2,
   CheckCircle2,
-  X,
   Search
 } from "lucide-react";
 import Image from "next/image";
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -43,214 +41,157 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { aiReportDraftingAssistant } from "@/ai/flows/ai-report-drafting-assistant-flow";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { useRouter } from "next/navigation";
 import {
-  projectsAPI,
-  equiposAPI,
-  clientsAPI,
-  checklistsServicioAPI,
-  materialesAPI,
-  reportesAPI,
-  employeesAPI
-} from "@/lib/api-client";
+  useProyectos,
+  useCrearProyecto,
+  useEliminarProyecto,
+  useActualizarProyecto,
+  useEquipos,
+  useClientes,
+  useServicios,
+  useReportes,
+  useChecklist,
+  useDetalleChecklist,
+  useActualizarDetalleChecklist,
+  useIniciarProyecto,
+  useEnviarReporte,
+} from "@/hooks/queries";
+import type { ProyectoVista } from "@/lib/data/proyectos";
+
+// Estados canónicos (español snake_case) → etiqueta de UI usada por la tarjeta.
+type DisplayStatus = "Pendiente" | "EnProceso" | "EnRevision" | "Finalizado" | "Rechazado" | "Cancelado";
+
+function displayFromEstado(estado: string | null): DisplayStatus {
+  switch (estado) {
+    case "en_proceso":
+      return "EnProceso";
+    case "pendiente_de_cierre":
+      return "EnRevision";
+    case "finalizado":
+      return "Finalizado";
+    case "rechazado":
+      return "Rechazado";
+    case "cancelado":
+      return "Cancelado";
+    default:
+      return "Pendiente";
+  }
+}
+
+const PRE_START_STATES = ["borrador", "preparacion", "checklist_pendiente", "listo_para_iniciar"];
+
+interface ClienteJson {
+  nombre?: string;
+  direccion?: string;
+}
 
 export default function ProjectsPage() {
   const { profile, user, loading: isUserLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useI18n();
-  const isAdmin = profile?.rol === 'admin';
+  const isAdmin = profile?.rol === "admin";
 
-  const [loading, setLoading] = useState(false);
+  const { data: proyectos = [], isLoading: loadingProjects } = useProyectos();
+  const { data: equipos = [] } = useEquipos();
+  const { data: clientes = [] } = useClientes();
+  const { data: servicios = [] } = useServicios();
+  const { data: reportes = [] } = useReportes();
+
+  const crearProyecto = useCrearProyecto();
+  const actualizarProyecto = useActualizarProyecto();
+  const eliminarProyecto = useEliminarProyecto();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [isAiDrafting, setIsAiDrafting] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<ProyectoVista | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   // --- Admin Project Management State ---
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
-  const [managedProject, setManagedProject] = useState<any>(null);
+  const [managedProject, setManagedProject] = useState<ProyectoVista | null>(null);
   const [managedStatus, setManagedStatus] = useState("");
-  const [managedProgress, setManagedProgress] = useState(0);
   const [managedTeamId, setManagedTeamId] = useState("no-team");
   const [managedUbicacion, setManagedUbicacion] = useState("");
   const [savingManage, setSavingManage] = useState(false);
 
-  // --- Operator / Report State ---
   const [newProject, setNewProject] = useState({
-    Pry_Nombre_Proyecto: "",
+    nombreProyecto: "",
     clientId: "",
-    serviceType: "Instalación",
+    serviceType: servicios[0]?.tipo || "Instalación",
     assignedTeamId: "no-team",
     addressType: "client" as "client" | "custom",
     customAddress: "",
     imageUrl: "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?q=80&w=2070&auto=format&fit=crop"
   });
 
-  const [reportContent, setReportContent] = useState("");
-  const [reportPhotos, setReportPhotos] = useState<{ name: string; dataUrl: string }[]>([]);
-  const [opProjectMaterials, setOpProjectMaterials] = useState<any[]>([]);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
-  // --- SQL Data State ---
-  const [checklistTemplates, setChecklistTemplates] = useState<any[]>([]);
-  const [sqlProjects, setSqlProjects] = useState<any[]>([]);
-  const [sqlTeams, setSqlTeams] = useState<any[]>([]);
-  const [sqlClients, setSqlClients] = useState<any[]>([]);
-  const [sqlReports, setSqlReports] = useState<any[]>([]);
-  const [rejectedReportId, setRejectedReportId] = useState<number | null>(null);
-  const [isApiLoading, setIsApiLoading] = useState(true);
-
-  const loadSqlData = async () => {
-    try {
-      setIsApiLoading(true);
-      const [pDataRaw, tDataRaw, clDataRaw, ctDataRaw, rDataRaw] = await Promise.all([
-        projectsAPI.getAll(),
-        equiposAPI.getAll(),
-        clientsAPI.getAll(),
-        checklistsServicioAPI.getAll(),
-        reportesAPI.getAll()
-      ]);
-
-      setSqlProjects(Array.isArray(pDataRaw) ? pDataRaw : (pDataRaw as any)?.data || []);
-      setSqlTeams(Array.isArray(tDataRaw) ? tDataRaw : (tDataRaw as any)?.data || []);
-      setSqlClients(Array.isArray(clDataRaw) ? clDataRaw : (clDataRaw as any)?.data || []);
-      setChecklistTemplates(Array.isArray(ctDataRaw) ? ctDataRaw : (ctDataRaw as any)?.data || []);
-      setSqlReports(Array.isArray(rDataRaw) ? rDataRaw : (rDataRaw as any)?.data || []);
-    } catch (e) {
-      console.error("Error loading SQL data", e);
-    } finally {
-      setIsApiLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isUserLoading && profile) {
-      loadSqlData();
-    }
-  }, [isUserLoading, profile]);
+  const isApiLoading = loadingProjects;
 
   const filteredProjects = useMemo(() => {
-    return sqlProjects.filter((p: any) => {
-      // Filtro de búsqueda y estado
-      const matchesSearch = searchTerm === "" ||
-        p.Nombre_Proyecto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.cliente?.Nombre?.toLowerCase().includes(searchTerm.toLowerCase());
-      const isStatusMatch = statusFilter === "all" || p.Estado === statusFilter;
+    return proyectos.filter((p) => {
+      const clienteJson = (p.cliente as ClienteJson | null) || null;
+      const matchesSearch =
+        searchTerm === "" ||
+        (p.nombre_proyecto || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        clienteJson?.nombre?.toLowerCase().includes(searchTerm.toLowerCase());
+      const isStatusMatch = statusFilter === "all" || displayFromEstado(p.estado) === statusFilter;
 
       // Filtro de seguridad: Operativos solo ven sus proyectos
       let isTeamMatch = true;
       if (!isAdmin && profile?.empleadoId) {
-        // Buscamos si el empleado logueado está en el equipo asignado a este proyecto
-        const teamOfProject = sqlTeams.find((t: any) => t.ID_Equipo === p.ID_Equipo);
-        isTeamMatch = teamOfProject?.empleados?.some((rel: any) => rel.ID_Empleado === profile.empleadoId);
+        const equipo = equipos.find((e) => e.id_equipo === p.equipo_id);
+        isTeamMatch = equipo?.empleado_equipo?.some((m) => m.empleado_id === profile.empleadoId) ?? false;
       }
 
       return matchesSearch && isStatusMatch && isTeamMatch;
     });
-  }, [sqlProjects, searchTerm, statusFilter, isAdmin, profile, sqlTeams]);
+  }, [proyectos, searchTerm, statusFilter, isAdmin, profile, equipos]);
 
   // --- Handlers ---
   const handleCreateProject = async () => {
     if (!isAdmin || !user) return;
-    setLoading(true);
     try {
-      const payload = {
-        Nombre_Proyecto: newProject.Pry_Nombre_Proyecto,
-        ID_Cliente: parseInt(newProject.clientId),
-        ID_Equipo: newProject.assignedTeamId === 'no-team' ? null : parseInt(newProject.assignedTeamId),
-        Tipo_Servicio: newProject.serviceType,
-        Ubicacion: newProject.addressType === 'client'
-          ? sqlClients?.find(c => c.ID_Cliente.toString() === newProject.clientId)?.Direccion || ""
-          : newProject.customAddress,
-        Estado: "Pendiente",
-        Progreso: 0,
-        Imagen_Url: newProject.imageUrl,
-        Fecha_Inicio: new Date().toISOString()
-      };
+      const cliente = clientes.find((c) => c.id_cliente.toString() === newProject.clientId);
+      const servicio = servicios.find((s) => s.tipo === newProject.serviceType);
+      const ubicacion =
+        newProject.addressType === "client" ? cliente?.direccion || "" : newProject.customAddress;
 
-      const createdProject = await projectsAPI.create(payload);
+      await crearProyecto.mutateAsync({
+        nombre_proyecto: newProject.nombreProyecto,
+        cliente_id: newProject.clientId ? parseInt(newProject.clientId, 10) : null,
+        servicio_id: servicio?.id_servicio ?? null,
+        equipo_id: newProject.assignedTeamId === "no-team" ? null : parseInt(newProject.assignedTeamId, 10),
+        ubicacion,
+        imagen_url: newProject.imageUrl,
+      });
 
-      // Auto-assign materials from template
-      if (checklistTemplates.length > 0 && createdProject?.ID_Proyecto) {
-        const serviceType = (newProject.serviceType || "").toLowerCase();
-        const template = checklistTemplates.find(c =>
-          (c.Nombre || "").toLowerCase().includes(serviceType) ||
-          (c.servicio?.Tipo || "").toLowerCase() === serviceType
-        ) || checklistTemplates[0];
-
-        // En SQL, los materiales están en 'detalles'
-        const templateMaterials = template.detalles || template.materiales || [];
-
-        if (templateMaterials.length > 0) {
-          const initialMaterials = templateMaterials.map((d: any) => ({
-            ID_Material: d.ID_Material || d.id || d.material?.ID_Material,
-            name: d.material?.Nombre_Material || d.Nombre_Material || d.name || "Material",
-            quantity: d.Cantidad_Requerida || d.quantity || 1,
-            done: false,
-            takenQuantity: d.Cantidad_Requerida || d.quantity || 1,
-            Stock_Disponible: d.material?.Stock_Disponible || d.Stock_Disponible || 0
-          }));
-          
-          await projectsAPI.update(createdProject.ID_Proyecto.toString(), {
-            ID_Servicio: template.ID_Servicio,
-            projectMaterials: initialMaterials
-          });
-        }
-      }
-
-      toast({ title: t.common.success, description: "Proyecto creado y materiales asignados." });
+      toast({ title: t.common.success, description: "Proyecto creado y checklist generado." });
       setIsCreateDialogOpen(false);
-      loadSqlData();
-    } catch (e: any) {
-      if (e.message === 'OFFLINE_SAVED') {
-        toast({ title: "Proyecto guardado localmente", description: "Se sincronizará cuando recuperes conexión." });
-        setIsCreateDialogOpen(false);
-        return;
-      }
-      toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
     }
   };
 
   const handleDeleteProject = async (projectId: number) => {
     if (!isAdmin || !user) return;
-    setLoading(true);
     try {
-      await projectsAPI.delete(projectId.toString());
+      await eliminarProyecto.mutateAsync(projectId);
       toast({ title: t.common.success, description: t.common.delete });
-      loadSqlData();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
     }
   };
 
-  const openManageDialog = (project: any) => {
+  const openManageDialog = (project: ProyectoVista) => {
     setManagedProject(project);
-    setManagedStatus(project.Estado || "Pendiente");
-    setManagedProgress(project.Progreso || 0);
-    setManagedTeamId(project.ID_Equipo?.toString() || "no-team");
-    setManagedUbicacion(project.Ubicacion || "");
+    setManagedStatus(project.estado || "preparacion");
+    setManagedTeamId(project.equipo_id?.toString() || "no-team");
+    setManagedUbicacion(project.ubicacion || "");
     setIsManageDialogOpen(true);
   };
 
@@ -258,210 +199,34 @@ export default function ProjectsPage() {
     if (!user || !managedProject) return;
     setSavingManage(true);
     try {
-      const payload: any = {
-        Estado: managedStatus,
-        Progreso: managedStatus === 'Finalizado' ? 100 : managedProgress,
-        ID_Equipo: managedTeamId === 'no-team' ? null : parseInt(managedTeamId),
-        Ubicacion: managedUbicacion || null,
-        ...(managedStatus === 'Finalizado' && { Fecha_Fin: new Date().toISOString() })
-      };
-      await projectsAPI.update(managedProject.ID_Proyecto.toString(), payload);
+      await actualizarProyecto.mutateAsync({
+        id: managedProject.id_proyecto!,
+        patch: {
+          estado: managedStatus,
+          equipo_id: managedTeamId === "no-team" ? null : parseInt(managedTeamId, 10),
+          ubicacion: managedUbicacion || null,
+          ...(managedStatus === "finalizado" && managedProject.estado !== "finalizado"
+            ? { fecha_fin: new Date().toISOString() }
+            : {}),
+        },
+      });
       toast({ title: t.common.success });
       setIsManageDialogOpen(false);
-      loadSqlData();
-    } catch (e: any) {
-      if (e.message === 'OFFLINE_SAVED') {
-        toast({ title: "Cambios guardados localmente", description: "Se sincronizarán al recuperar señal." });
-        setIsManageDialogOpen(false);
-        return;
-      }
-      toast({ variant: "destructive", title: "Error", description: e.message });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
     } finally {
       setSavingManage(false);
     }
   };
 
-  async function handleToggleOpMaterial(project: any, idx: number) {
-    const currentMaterials = [...opProjectMaterials];
-    if (currentMaterials[idx]) {
-      const mat = currentMaterials[idx];
-      mat.done = !mat.done;
-      if (mat.done && (!mat.takenQuantity || mat.takenQuantity === 0)) {
-        mat.takenQuantity = mat.quantity || 1;
-      }
-    }
-    setOpProjectMaterials(currentMaterials);
-    try {
-      await projectsAPI.update(project.ID_Proyecto.toString(), { projectMaterials: currentMaterials });
-    } catch (e) {
-      console.error("Error sync", e);
-    }
-  }
-
-  async function handleUpdateOpMaterialQuantity(project: any, idx: number, qty: number) {
-    const currentMaterials = [...opProjectMaterials];
-    if (currentMaterials[idx]) {
-      currentMaterials[idx].takenQuantity = qty;
-    }
-    setOpProjectMaterials(currentMaterials);
-    try {
-      await projectsAPI.update(project.ID_Proyecto.toString(), { projectMaterials: currentMaterials });
-    } catch (e) {
-      console.error("Error sync", e);
-    }
-  }
-
-  const handleStartDay = async (project: any) => {
-    setLoading(true);
-    try {
-      const materialsToDeduct = opProjectMaterials || [];
-      for (const m of materialsToDeduct) {
-        if (m.ID_Material && m.done && (m.takenQuantity || m.quantity) > 0) {
-          const qty = m.takenQuantity || m.quantity || 0;
-          await materialesAPI.update(m.ID_Material.toString(), {
-            Stock_Disponible: (m.Stock_Disponible || 0) - qty
-          }).catch(console.warn);
-        }
-      }
-
-      await projectsAPI.update(project.ID_Proyecto.toString(), {
-        Estado: "EnProceso",
-        stockDescontado: true,
-        stockDescontadoAt: new Date().toISOString(),
-        projectMaterials: materialsToDeduct
-      });
-
-      toast({ title: t.projects.day_started });
-      setIsSheetOpen(false);
-      loadSqlData();
-    } catch (e: any) {
-      if (e.message === 'OFFLINE_SAVED') {
-        toast({ title: "Jornada iniciada (Offline)", description: "Los datos se sincronizarán al recuperar señal." });
-        setIsSheetOpen(false);
-        return;
-      }
-      toast({ variant: "destructive", title: "Error al iniciar jornada" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFinishDayAndReport = async (project: any) => {
-    /* 
-    if (reportPhotos.length === 0) {
-      toast({ title: "Faltan Fotos", variant: "destructive" });
-      return;
-    }
-    */
-    setLoading(true);
-    try {
-      if (rejectedReportId) {
-        // UPDATE existing rejected report
-        const updatePayload: any = {
-          Comentarios: reportContent || "Corrección de reporte",
-          estado: "Pendiente"
-        };
-        if (reportPhotos.length > 0) {
-          updatePayload.Evidencias_URL = reportPhotos[0].dataUrl;
-        }
-        await reportesAPI.update(rejectedReportId.toString(), updatePayload);
-
-        await projectsAPI.update(project.ID_Proyecto.toString(), {
-          Estado: "EnRevision"
-        });
-      } else {
-        // CREATE new report
-        // Buscar ID_Empleado real (SQL) antes de crear
-        // Buscar ID_Empleado real (SQL) antes de crear
-        // profile.empleadoId viene directo del login — es el ID numérico de SQL
-        let sqlEmployeeId: number | null = profile?.empleadoId || null;
-        if (!sqlEmployeeId) {
-          try {
-            const allEmps = await employeesAPI.getAll();
-            const myEmp = allEmps.find((e: any) =>
-              e.usuario?.Username?.toLowerCase() === (profile?.email || "").toLowerCase()
-            );
-            if (myEmp) sqlEmployeeId = myEmp.ID_Empleado;
-          } catch (e) { console.warn("Error buscando ID SQL", e); }
-        }
-
-        const baseReportData = {
-          ID_Proyecto: parseInt(project.ID_Proyecto.toString()),
-          ID_Equipo: project.ID_Equipo ? parseInt(project.ID_Equipo.toString()) : null,
-          Comentarios: reportContent || "Avance diario",
-          estado: "Pendiente",
-          Fecha_Reporte: new Date().toISOString(),
-          Evidencias_URL: reportPhotos.length > 0 ? reportPhotos[0].dataUrl : "",
-          ID_Empleado: sqlEmployeeId ? parseInt(sqlEmployeeId.toString()) : null
-        };
-        const createdReport = await reportesAPI.create(baseReportData);
-
-        await projectsAPI.update(project.ID_Proyecto.toString(), {
-          Estado: "EnRevision",
-          Progreso: 50
-        });
-
-        // NOTA: Los puntos se otorgan automáticamente en el backend
-        // cuando el Admin finaliza el proyecto (Estado = "Finalizado")
-        // Ver: backend/src/routes/proyectos.ts
-
-      }
-      toast({ title: t.common.success });
-      setIsSheetOpen(false);
-      loadSqlData();
-    } catch (e: any) {
-      if (e.message === 'OFFLINE_SAVED') {
-        toast({ title: "Reporte guardado localmente", description: "Se enviará automáticamente al recuperar señal." });
-        setIsSheetOpen(false);
-        return;
-      }
-      console.error("Error finalizing day:", e);
-      toast({ variant: "destructive", title: "Error al enviar reporte", description: e.message || "Error desconocido" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const img = new (window as any).Image();
-        img.src = ev.target?.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 400;
-          const MAX_HEIGHT = 300;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.3); // Aggressive compression (30% quality)
-          setReportPhotos(prev => [...prev, { name: file.name, dataUrl }]);
-        };
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
   if (isUserLoading || isApiLoading) {
-    return <DashboardLayout><div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div></DashboardLayout>;
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (
@@ -476,12 +241,12 @@ export default function ProjectsPage() {
                 <DialogHeader><DialogTitle>{t.projects.new_project}</DialogTitle></DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">NOMBRE</Label><Input value={newProject.Pry_Nombre_Proyecto} onChange={(e) => setNewProject({ ...newProject, Pry_Nombre_Proyecto: e.target.value })} /></div>
-                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">CLIENTE</Label><Select value={newProject.clientId} onValueChange={(val) => setNewProject({ ...newProject, clientId: val })}><SelectTrigger><SelectValue placeholder="Selecciona Cliente" /></SelectTrigger><SelectContent>{sqlClients?.map(c => <SelectItem key={c.ID_Cliente} value={c.ID_Cliente.toString()}>{c.Nombre}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">NOMBRE</Label><Input value={newProject.nombreProyecto} onChange={(e) => setNewProject({ ...newProject, nombreProyecto: e.target.value })} /></div>
+                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">CLIENTE</Label><Select value={newProject.clientId} onValueChange={(val) => setNewProject({ ...newProject, clientId: val })}><SelectTrigger><SelectValue placeholder="Selecciona Cliente" /></SelectTrigger><SelectContent>{clientes.map(c => <SelectItem key={c.id_cliente} value={c.id_cliente.toString()}>{c.nombre}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">SERVICIO</Label><Select value={newProject.serviceType} onValueChange={(val) => setNewProject({ ...newProject, serviceType: val })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Instalación">Instalación</SelectItem><SelectItem value="Mantenimiento">Mantenimiento</SelectItem></SelectContent></Select></div>
-                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">EQUIPO (EQ)</Label><Select value={newProject.assignedTeamId} onValueChange={(val) => setNewProject({ ...newProject, assignedTeamId: val })}><SelectTrigger><SelectValue placeholder="SIN EQUIPO ASIGNADO" /></SelectTrigger><SelectContent><SelectItem value="no-team">SIN EQUIPO ASIGNADO</SelectItem>{sqlTeams?.map(t => <SelectItem key={t.ID_Equipo} value={t.ID_Equipo.toString()}>{t.Nombre_Equipo}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">SERVICIO</Label><Select value={newProject.serviceType} onValueChange={(val) => setNewProject({ ...newProject, serviceType: val })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{servicios.length > 0 ? servicios.map(s => <SelectItem key={s.id_servicio} value={s.tipo}>{s.tipo}</SelectItem>) : (<><SelectItem value="Instalación">Instalación</SelectItem><SelectItem value="Mantenimiento">Mantenimiento</SelectItem></>)}</SelectContent></Select></div>
+                    <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground uppercase">EQUIPO (EQ)</Label><Select value={newProject.assignedTeamId} onValueChange={(val) => setNewProject({ ...newProject, assignedTeamId: val })}><SelectTrigger><SelectValue placeholder="SIN EQUIPO ASIGNADO" /></SelectTrigger><SelectContent><SelectItem value="no-team">SIN EQUIPO ASIGNADO</SelectItem>{equipos.map(t => <SelectItem key={t.id_equipo} value={t.id_equipo.toString()}>{t.nombre_equipo}</SelectItem>)}</SelectContent></Select></div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase">DIRECCIÓN DE OBRA</Label>
@@ -505,7 +270,7 @@ export default function ProjectsPage() {
                       <Input
                         disabled
                         placeholder="Selecciona un cliente para autocompletar"
-                        value={newProject.clientId ? sqlClients?.find((c: any) => c.ID_Cliente.toString() === newProject.clientId)?.Direccion || "Sin dirección registrada" : ""}
+                        value={newProject.clientId ? clientes.find((c) => c.id_cliente.toString() === newProject.clientId)?.direccion || "Sin dirección registrada" : ""}
                         className="bg-card/50"
                       />
                     ) : (
@@ -517,7 +282,7 @@ export default function ProjectsPage() {
                     )}
                   </div>
                 </div>
-                <DialogFooter><Button className="w-full bg-accent text-white" onClick={handleCreateProject} disabled={loading}>{t.common.create}</Button></DialogFooter>
+                <DialogFooter><Button className="w-full bg-accent text-white" onClick={handleCreateProject} disabled={crearProyecto.isPending}>{t.common.create}</Button></DialogFooter>
               </DialogContent>
             </Dialog>
           )}
@@ -531,51 +296,32 @@ export default function ProjectsPage() {
         )}
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredProjects.map((project: any) => {
-            const projectReports = sqlReports.filter(r => r.ID_Proyecto === project.ID_Proyecto);
-            const hasReports = projectReports.length > 0;
-            const hasPendingReport = projectReports.some(r => r.estado === 'Pendiente');
-            const hasRejectedReport = projectReports.some(r => r.estado === 'Rechazado');
-
-            let displayStatus = project.Estado || 'Pendiente';
-
-            // Flujo corregido con seguro de progreso
-            if (displayStatus === 'Finalizado') {
-              // Ya está terminado
-            } else if (hasPendingReport) {
-              displayStatus = 'EnRevision';
-            } else if (hasRejectedReport) {
-              displayStatus = 'Rechazado';
-            } else if (displayStatus === 'EnProceso') {
-              displayStatus = 'EnProceso';
-            } else if (!hasReports) {
-              displayStatus = 'Activo';
-            }
-
-            const isEnCurso = displayStatus === 'EnProceso' || displayStatus === 'Rechazado';
-            const progressValue = displayStatus === 'Finalizado' ? 100 : (project.Progreso || 0);
-            const assignedTeam = sqlTeams.find(t => t.ID_Equipo === project.ID_Equipo);
+          {filteredProjects.map((project) => {
+            const displayStatus = displayFromEstado(project.estado);
+            const progressValue = displayStatus === "Finalizado" ? 100 : project.progreso || 0;
+            const assignedTeam = equipos.find((e) => e.id_equipo === project.equipo_id);
+            const clienteJson = (project.cliente as ClienteJson | null) || null;
 
             return (
-              <Card key={project.ID_Proyecto} className="bg-card border-border overflow-hidden flex flex-col">
+              <Card key={project.id_proyecto} className="bg-card border-border overflow-hidden flex flex-col">
                 <div className="h-32 relative">
-                  <Image src={project.Imagen_Url || "https://picsum.photos/seed/solar/800/450"} alt="" fill className="object-cover opacity-80" />
+                  <Image src={project.imagen_url || "https://picsum.photos/seed/solar/800/450"} alt="" fill className="object-cover opacity-80" />
                   <div className="absolute top-2 right-2 flex gap-2">
-                    {displayStatus === 'Finalizado' && (
+                    {displayStatus === "Finalizado" && (
                       <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 font-bold tracking-wider">FINALIZADO</Badge>
                     )}
                     {isAdmin && (
-                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleDeleteProject(project.ID_Proyecto)}><Trash2 className="h-4 w-4" /></Button>
+                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleDeleteProject(project.id_proyecto!)}><Trash2 className="h-4 w-4" /></Button>
                     )}
                   </div>
                 </div>
                 <CardHeader className="p-4">
-                  <CardTitle className="text-lg font-bold truncate">{project.Nombre_Proyecto}</CardTitle>
+                  <CardTitle className="text-lg font-bold truncate">{project.nombre_proyecto}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0 flex-1 space-y-2">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> {project.Ubicacion}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="h-3 w-3" /> {project.cliente?.Nombre}</div>
-                  <div className="text-xs text-accent font-bold flex items-center gap-1"><Users className="h-3 w-3" /> {assignedTeam?.Nombre_Equipo || "Sin Equipo"}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> {project.ubicacion}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="h-3 w-3" /> {clienteJson?.nombre}</div>
+                  <div className="text-xs text-accent font-bold flex items-center gap-1"><Users className="h-3 w-3" /> {assignedTeam?.nombre_equipo || "Sin Equipo"}</div>
                   <div className="space-y-2 pt-2">
                     <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
                       <span className="text-muted-foreground">Progreso</span>
@@ -588,148 +334,39 @@ export default function ProjectsPage() {
                   {isAdmin ? (
                     <div className="grid grid-cols-2 w-full">
                       <Button variant="ghost" className="h-10 rounded-none border-r" onClick={() => openManageDialog(project)}><Settings2 className="h-4 w-4 mr-2" /> Gestionar</Button>
-                      <Button variant="ghost" className="h-10 rounded-none" onClick={() => router.push(`/reports?projectId=${project.ID_Proyecto}`)}><ClipboardList className="h-4 w-4 mr-2" /> Reportes</Button>
+                      <Button variant="ghost" className="h-10 rounded-none" onClick={() => router.push(`/reports?projectId=${project.id_proyecto}`)}><ClipboardList className="h-4 w-4 mr-2" /> Reportes</Button>
                     </div>
-                  ) : displayStatus === 'Finalizado' ? (
+                  ) : displayStatus === "Finalizado" ? (
                     <div className="w-full h-12 flex items-center justify-center gap-2 bg-muted/40 text-muted-foreground text-sm font-bold border-t border-border">
                       <CheckCircle2 className="h-4 w-4" /> Proyecto Cerrado
                     </div>
-                  ) : displayStatus === 'EnRevision' ? (
+                  ) : displayStatus === "EnRevision" ? (
                     <Button disabled className="w-full h-10 rounded-none bg-yellow-600/50 text-white cursor-not-allowed">En Revisión</Button>
                   ) : (
-                    <Sheet open={isSheetOpen && selectedProject?.ID_Proyecto === project.ID_Proyecto} onOpenChange={(o) => {
-                      setIsSheetOpen(o);
-                      if (o) {
-                        setSelectedProject(project);
-                        setRejectedReportId(null);
-                        setReportContent("");
-                        setReportPhotos([]);
-
-                        if (project.Estado === 'Rechazado') {
-                          // Find the rejected report
-                          const rejectedReport = sqlReports.find((r: any) => r.ID_Proyecto === project.ID_Proyecto && r.estado === 'Rechazado');
-                          if (rejectedReport) {
-                            setRejectedReportId(rejectedReport.ID_Reporte);
-                            setReportContent(rejectedReport.Comentarios || "");
-                            if (rejectedReport.Evidencias_URL) {
-                              setReportPhotos([{ name: "Evidencia Anterior", dataUrl: rejectedReport.Evidencias_URL }]);
-                            }
-                          }
-                        }
-
-                        // Intentar cargar desde el checklist relacional de SQL
-                        let mats: any[] = [];
-                        if (project.checklists && project.checklists.length > 0) {
-                          const mainChecklist = project.checklists[0];
-                          if (mainChecklist.detalles && mainChecklist.detalles.length > 0) {
-                            mats = mainChecklist.detalles.map((d: any) => ({
-                              ID_Material: d.ID_Material,
-                              name: d.material?.Nombre_Material || "Material",
-                              quantity: d.Cantidad_Requerida || 1,
-                              done: d.Marcado || false,
-                              takenQuantity: d.Cantidad_Cargada || d.Cantidad_Requerida || 1,
-                              Stock_Disponible: d.material?.Stock_Disponible || 100
-                            }));
-                          }
-                        }
-
-                        // Si no hay reportes, reseteamos el checklist para empezar de cero
-                        if (projectReports.length === 0) {
-                          mats = mats.map((m: any) => ({ ...m, done: false }));
-                        }
-
-                        if (mats.length === 0) {
-                          const type = (project.Tipo_Servicio || project.servicio?.Tipo || "").toLowerCase();
-                          let template = checklistTemplates.find(c =>
-                            (c.Nombre || "").toLowerCase().includes(type) || (c.servicio?.Tipo || "").toLowerCase() === type
-                          ) || checklistTemplates[0];
-
-                          const templateMaterials = template?.detalles || template?.materiales || [];
-
-                          if (templateMaterials.length > 0) {
-                            mats = templateMaterials.map((d: any) => ({
-                              ID_Material: d.ID_Material || d.material?.ID_Material,
-                              name: d.material?.Nombre_Material || d.Nombre_Material || "Material",
-                              quantity: d.Cantidad_Requerida || 1,
-                              done: false, 
-                              takenQuantity: d.Cantidad_Requerida || 1,
-                              Stock_Disponible: d.material?.Stock_Disponible || d.Stock_Disponible || 100
-                            }));
-                          }
-                          
-                          if (mats.length > 0) {
-                            projectsAPI.update(project.ID_Proyecto.toString(), { projectMaterials: mats }).catch(console.error);
-                          }
-                        }
-                        setOpProjectMaterials(mats);
-                      }
-                    }}>
+                    <Sheet
+                      open={isSheetOpen && selectedProject?.id_proyecto === project.id_proyecto}
+                      onOpenChange={(o) => {
+                        setIsSheetOpen(o);
+                        if (o) setSelectedProject(project);
+                      }}
+                    >
                       <SheetTrigger asChild>
                         <Button className={cn("w-full h-10 rounded-none text-white",
-                          displayStatus === 'Rechazado' ? "bg-red-500" :
-                            (displayStatus === 'EnProceso' ? "bg-emerald-600" : "bg-accent")
+                          displayStatus === "Rechazado" ? "bg-red-500" :
+                            (displayStatus === "EnProceso" ? "bg-emerald-600" : "bg-accent")
                         )}>
-                          {displayStatus === 'Rechazado' ? "Corregir Reporte" :
-                            (displayStatus === 'EnProceso' ? "Reportar Avance" : "Iniciar Día")}
+                          {displayStatus === "Rechazado" ? "Corregir Reporte" :
+                            (displayStatus === "EnProceso" ? "Reportar Avance" : "Iniciar Día")}
                         </Button>
                       </SheetTrigger>
                       <SheetContent side="bottom" className="h-[90vh] overflow-y-auto w-full bg-card p-0">
-                        <div className="max-w-xl mx-auto pb-10">
-                          <SheetHeader className="p-6 border-b bg-muted/20"><SheetTitle>Reportar - {project.Nombre_Proyecto}</SheetTitle></SheetHeader>
-                          <div className="p-6 space-y-6">
-                            {!isEnCurso ? (
-                              <div className="space-y-6">
-                                <Label className="text-xs font-bold uppercase text-emerald-500">1. Lista de Materiales</Label>
-                                <div className="grid gap-2">
-                                  {opProjectMaterials.length > 0 ? opProjectMaterials.map((mat, idx) => {
-                                    const isShort = (mat.takenQuantity || 0) < mat.quantity;
-                                    return (
-                                      <div key={idx} className={cn("flex flex-col p-3 rounded-lg border", isShort ? "bg-red-500/10 border-red-500/30" : "bg-muted/30")}>
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-3">
-                                            <Checkbox checked={mat.done && !isShort} onCheckedChange={() => !isShort && handleToggleOpMaterial(project, idx)} disabled={isShort} />
-                                            <div className="text-sm font-bold">{mat.name} <span className="text-[10px] text-muted-foreground block">Req: {mat.quantity}</span></div>
-                                          </div>
-                                          <Input type="number" className={cn("w-16 h-8 text-center", isShort && "border-red-500 text-red-500")} value={mat.takenQuantity === undefined ? 0 : mat.takenQuantity} onChange={(e) => handleUpdateOpMaterialQuantity(project, idx, parseInt(e.target.value) || 0)} />
-                                        </div>
-                                        {isShort && <span className="text-[10px] font-bold text-red-500 mt-2">La cantidad no puede ser menor a {mat.quantity}</span>}
-                                      </div>
-                                    );
-                                  }) : <p className="text-center text-muted-foreground py-4">No hay materiales.</p>}
-                                </div>
-                                <Button
-                                  onClick={() => handleStartDay(project)}
-                                  className="w-full h-12 bg-accent text-white font-bold"
-                                  disabled={loading || (opProjectMaterials.length > 0 && (!opProjectMaterials.every(m => m.done) || opProjectMaterials.some(m => (m.takenQuantity || 0) < m.quantity)))}
-                                >
-                                  {loading ? "Iniciando..." : "CONFIRMAR E INICIAR JORNADA"}
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="space-y-6">
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase text-accent">Evidencia Fotográfica</Label>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {reportPhotos.map((p, i) => <div key={i} className="w-20 h-20 relative rounded-lg overflow-hidden border"><Image src={p.dataUrl} fill alt="" className="object-cover" /></div>)}
-                                    <button onClick={() => photoInputRef.current?.click()} className="w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/10"><Camera className="h-6 w-6 text-muted-foreground" /></button>
-                                  </div>
-                                  <input type="file" ref={photoInputRef} className="hidden" multiple onChange={handlePhotoUpload} />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase text-accent">Observaciones</Label>
-                                  <Textarea value={reportContent} onChange={(e) => setReportContent(e.target.value)} placeholder="Notas de hoy..." />
-                                </div>
-                                <Button
-                                  onClick={() => handleFinishDayAndReport(project)}
-                                  disabled={loading}
-                                  className={cn("w-full h-12 text-white font-bold", project.Estado === 'Rechazado' ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600")}
-                                >
-                                  {loading ? "Enviando..." : (project.Estado === 'Rechazado' ? "REENVIAR REPORTE Y TERMINAR" : "ENVIAR REPORTE Y TERMINAR")}
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        {selectedProject?.id_proyecto === project.id_proyecto && (
+                          <OperatorSheetBody
+                            project={project}
+                            estado={project.estado || "preparacion"}
+                            onClose={() => setIsSheetOpen(false)}
+                          />
+                        )}
                       </SheetContent>
                     </Sheet>
                   )}
@@ -741,16 +378,237 @@ export default function ProjectsPage() {
 
         <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
           <DialogContent className="sm:max-w-md bg-card border-border">
-            <DialogHeader><DialogTitle>{managedProject?.Nombre_Proyecto}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{managedProject?.nombre_proyecto}</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Estado</Label><Select value={managedStatus} onValueChange={setManagedStatus}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Pendiente">Pendiente</SelectItem><SelectItem value="EnProceso">En Proceso</SelectItem><SelectItem value="EnRevision">Revisión</SelectItem><SelectItem value="Finalizado">Finalizado</SelectItem></SelectContent></Select></div>
-              <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Equipo</Label><Select value={managedTeamId} onValueChange={setManagedTeamId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no-team">Sin Equipo</SelectItem>{sqlTeams?.map(t => <SelectItem key={t.ID_Equipo} value={t.ID_Equipo.toString()}>{t.Nombre_Equipo}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Estado</Label><Select value={managedStatus} onValueChange={setManagedStatus}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="preparacion">Pendiente</SelectItem><SelectItem value="en_proceso">En Proceso</SelectItem><SelectItem value="pendiente_de_cierre">Revisión</SelectItem><SelectItem value="finalizado">Finalizado</SelectItem><SelectItem value="cancelado">Cancelado</SelectItem></SelectContent></Select></div>
+              <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Equipo</Label><Select value={managedTeamId} onValueChange={setManagedTeamId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no-team">Sin Equipo</SelectItem>{equipos.map(t => <SelectItem key={t.id_equipo} value={t.id_equipo.toString()}>{t.nombre_equipo}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">📍 Dirección de Obra</Label><Input placeholder="Ej. Av. Principal 123, Colonia..." value={managedUbicacion} onChange={(e) => setManagedUbicacion(e.target.value)} /></div>
             </div>
-            <DialogFooter><Button onClick={handleSaveManagement} className="w-full bg-accent text-white font-bold">Guardar</Button></DialogFooter>
+            <DialogFooter><Button onClick={handleSaveManagement} disabled={savingManage} className="w-full bg-accent text-white font-bold">{savingManage ? "Guardando..." : "Guardar"}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Hoja de reporte/jornada del operador (usa hooks de checklist y RPC)
+// ─────────────────────────────────────────────────────────────────────
+function OperatorSheetBody({
+  project,
+  estado,
+  onClose,
+}: {
+  project: ProyectoVista;
+  estado: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const { t } = useI18n();
+
+  const pid = project.id_proyecto as number;
+  const { data: checklist } = useChecklist(pid);
+  const checklistId = checklist?.id_checklist ?? null;
+  const { data: detalle = [] } = useDetalleChecklist(checklistId);
+
+  const actualizarDetalle = useActualizarDetalleChecklist();
+  const iniciar = useIniciarProyecto(pid);
+  const enviar = useEnviarReporte(pid);
+
+  const esPreInicio = PRE_START_STATES.includes(estado);
+  const esRechazado = estado === "rechazado";
+
+  const [reportContent, setReportContent] = useState("");
+  const [reportPhotos, setReportPhotos] = useState<{ name: string; dataUrl: string; file: File }[]>([]);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const materiales = detalle.map((d) => ({
+    id: d.id_checklist_detalle as number,
+    name: d.nombre_material || "Material",
+    quantity: d.cantidad_requerida || 1,
+    done: d.marcado ?? false,
+    takenQuantity: d.cantidad_cargada ?? d.cantidad_requerida ?? 0,
+  }));
+
+  const accesoValido =
+    materiales.length === 0 ||
+    (materiales.every((m) => m.done) && materiales.every((m) => (m.takenQuantity || 0) >= m.quantity));
+
+  const toggleMaterial = async (idx: number) => {
+    const mat = materiales[idx];
+    if (!mat) return;
+    const nuevoDone = !mat.done;
+    try {
+      await actualizarDetalle.mutateAsync({
+        id: mat.id,
+        patch: {
+          marcado: nuevoDone,
+          cantidad_cargada: nuevoDone ? mat.takenQuantity || mat.quantity : 0,
+        },
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
+    }
+  };
+
+  const updateQuantity = async (idx: number, qty: number) => {
+    const mat = materiales[idx];
+    if (!mat) return;
+    try {
+      await actualizarDetalle.mutateAsync({
+        id: mat.id,
+        patch: { cantidad_cargada: qty, marcado: qty >= mat.quantity },
+      });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: (e as Error).message });
+    }
+  };
+
+  const handleStartDay = async () => {
+    try {
+      await iniciar.mutateAsync();
+      toast({ title: t.projects.day_started });
+      onClose();
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al iniciar jornada", description: (e as Error).message });
+    }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new window.Image();
+        img.src = ev.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 400;
+          const MAX_HEIGHT = 300;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.3);
+          setReportPhotos((prev) => [...prev, { name: file.name, dataUrl, file }]);
+        };
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const subirEvidencia = async (file: File): Promise<string | null> => {
+    try {
+      const res = await fetch("/api/upload/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proyectoId: pid, fileName: file.name, contentType: file.type }),
+      });
+      if (!res.ok) throw new Error("No se pudo firmar la subida");
+      const { url, key } = (await res.json()) as { url: string; key: string };
+      const put = await fetch(url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      if (!put.ok) throw new Error("No se pudo subir la evidencia");
+      return key;
+    } catch (e) {
+      console.error("Error subiendo evidencia", e);
+      return null;
+    }
+  };
+
+  const handleFinishDayAndReport = async () => {
+    try {
+      const { rpcRegistrarEvidencia } = await import("@/lib/data/rpc");
+      for (const photo of reportPhotos) {
+        const key = await subirEvidencia(photo.file);
+        if (key) {
+          await rpcRegistrarEvidencia({
+            proyectoId: pid,
+            objectKey: key,
+            descripcion: reportContent || photo.name,
+            contentType: photo.file.type,
+            sizeBytes: photo.file.size,
+          }).catch(console.warn);
+        }
+      }
+      await enviar.mutateAsync(reportContent || "Avance diario");
+      toast({ title: t.common.success });
+      onClose();
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al enviar reporte", description: (e as Error).message });
+    }
+  };
+
+  const isLoading = iniciar.isPending || enviar.isPending;
+
+  return (
+    <div className="max-w-xl mx-auto pb-10">
+      <SheetHeader className="p-6 border-b bg-muted/20"><SheetTitle>Reportar - {project.nombre_proyecto}</SheetTitle></SheetHeader>
+      <div className="p-6 space-y-6">
+        {esPreInicio ? (
+          <div className="space-y-6">
+            <Label className="text-xs font-bold uppercase text-emerald-500">1. Lista de Materiales</Label>
+            <div className="grid gap-2">
+              {materiales.length > 0 ? materiales.map((mat, idx) => {
+                const isShort = (mat.takenQuantity || 0) < mat.quantity;
+                return (
+                  <div key={mat.id} className={cn("flex flex-col p-3 rounded-lg border", isShort ? "bg-red-500/10 border-red-500/30" : "bg-muted/30")}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Checkbox checked={mat.done && !isShort} onCheckedChange={() => !isShort && toggleMaterial(idx)} disabled={isShort} />
+                        <div className="text-sm font-bold">{mat.name} <span className="text-[10px] text-muted-foreground block">Req: {mat.quantity}</span></div>
+                      </div>
+                      <Input type="number" className={cn("w-16 h-8 text-center", isShort && "border-red-500 text-red-500")} value={mat.takenQuantity === undefined ? 0 : mat.takenQuantity} onChange={(e) => updateQuantity(idx, parseInt(e.target.value) || 0)} />
+                    </div>
+                    {isShort && <span className="text-[10px] font-bold text-red-500 mt-2">La cantidad no puede ser menor a {mat.quantity}</span>}
+                  </div>
+                );
+              }) : <p className="text-center text-muted-foreground py-4">No hay materiales.</p>}
+            </div>
+            <Button
+              onClick={handleStartDay}
+              className="w-full h-12 bg-accent text-white font-bold"
+              disabled={isLoading || !accesoValido}
+            >
+              {isLoading ? "Iniciando..." : "CONFIRMAR E INICIAR JORNADA"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-accent">Evidencia Fotográfica</Label>
+              <div className="flex gap-2 flex-wrap">
+                {reportPhotos.map((p, i) => <div key={i} className="w-20 h-20 relative rounded-lg overflow-hidden border"><Image src={p.dataUrl} fill alt="" className="object-cover" /></div>)}
+                <button onClick={() => photoInputRef.current?.click()} className="w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/10"><Camera className="h-6 w-6 text-muted-foreground" /></button>
+              </div>
+              <input type="file" ref={photoInputRef} className="hidden" multiple onChange={handlePhotoUpload} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-accent">Observaciones</Label>
+              <Textarea value={reportContent} onChange={(e) => setReportContent(e.target.value)} placeholder="Notas de hoy..." />
+            </div>
+            <Button
+              onClick={handleFinishDayAndReport}
+              disabled={isLoading}
+              className={cn("w-full h-12 text-white font-bold", esRechazado ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600")}
+            >
+              {isLoading ? "Enviando..." : (esRechazado ? "REENVIAR REPORTE Y TERMINAR" : "ENVIAR REPORTE Y TERMINAR")}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

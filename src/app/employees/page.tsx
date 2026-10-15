@@ -2,7 +2,13 @@
 
 import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "../dashboard/layout";
-import { empleadosAPI } from "@/lib/api-client";
+import {
+  useEmpleados,
+  useCrearEmpleado,
+  useActualizarEmpleado,
+  useEliminarEmpleado,
+} from "@/hooks/queries";
+import type { Empleado } from "@/lib/data";
 import {
   Card, CardHeader, CardTitle, CardDescription
 } from "@/components/ui/card";
@@ -32,96 +38,75 @@ import Link from "next/link";
 export default function EmployeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [empleados, setEmpleados] = useState<any[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const { data: empleados = [], isLoading, isError } = useEmpleados();
+  const crear = useCrearEmpleado();
+  const actualizar = useActualizarEmpleado();
+  const eliminar = useEliminarEmpleado();
   const [searchTerm, setSearchTerm] = useState("");
   const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Empleado | null>(null);
   const [generatedCredentials, setGeneratedCredentials] = useState({ email: "", password: "" });
 
   const [newEmployee, setNewEmployee] = useState({
-    Nombre: "", Correo: "", Telefono: ""
+    nombre: "", correo: "", telefono: ""
   });
 
-  // Cargar empleados desde SQL
   useEffect(() => {
-    empleadosAPI.getAll()
-      .then((data: any) => setEmpleados(
-        (Array.isArray(data) ? data : []).filter(
-          (e: any) => !e.Nombre?.toLowerCase().includes('administrador')
-        )
-      ))
-      .catch(() => toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los empleados" }))
-      .finally(() => setLoadingData(false));
-  }, []);
+    if (isError) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los empleados" });
+    }
+  }, [isError, toast]);
 
   const filteredEmpleados = useMemo(() => {
-    return (empleados || []).filter(e =>
-      e?.Nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e?.Correo?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return (empleados || [])
+      .filter(e => !e?.nombre?.toLowerCase().includes('administrador'))
+      .filter(e =>
+        e?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e?.correo?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
   }, [empleados, searchTerm]);
 
   const handleCreateEmployee = async () => {
-    if (!newEmployee.Nombre || !newEmployee.Correo || !newEmployee.Telefono) {
+    if (!newEmployee.nombre || !newEmployee.correo || !newEmployee.telefono) {
       toast({ variant: "destructive", title: "Error", description: "Todos los campos son obligatorios" });
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmployee.Correo)) {
+    if (!emailRegex.test(newEmployee.correo)) {
       toast({ variant: "destructive", title: "Error", description: "Formato de correo inválido" });
       return;
     }
     if (!user) return;
 
-    setLoading(true);
     try {
-      const response = await empleadosAPI.create({
-        Nombre: newEmployee.Nombre,
-        Correo: newEmployee.Correo,
-        Telefono: newEmployee.Telefono,
-        ID_Empresa: 1
-      }) as any;
-      
-      // La respuesta ahora contiene { empleado, accessEmail, tempPassword }
-      console.log("Respuesta servidor:", response);
-      
-      if (response && response.empleado) {
-        setEmpleados(prev => [response.empleado, ...prev]);
-        setGeneratedCredentials({
-          email: response.accessEmail,
-          password: response.tempPassword
-        });
-        
-        setIsCreateDialogOpen(false);
-        setIsSuccessDialogOpen(true);
-        setNewEmployee({ Nombre: "", Correo: "", Telefono: "" });
-      } else {
-        console.error("Respuesta inválida:", response);
-        throw new Error("Respuesta del servidor incompleta o malformada");
-      }
+      const empleado = await crear.mutateAsync({
+        nombre: newEmployee.nombre,
+        correo: newEmployee.correo,
+        telefono: newEmployee.telefono,
+      });
+
+      setGeneratedCredentials({
+        email: empleado.correo || newEmployee.correo,
+        password: "",
+      });
+
+      setIsCreateDialogOpen(false);
+      setIsSuccessDialogOpen(true);
+      setNewEmployee({ nombre: "", correo: "", telefono: "" });
     } catch (e: any) {
-      console.error("Error en registro:", e);
       toast({ variant: "destructive", title: "Error al registrar", description: e.message || "Error desconocido" });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleDeleteEmployee = async (id: number) => {
     if (!user) return;
-    setLoading(true);
     try {
-      await empleadosAPI.delete(id);
-      setEmpleados(prev => prev.filter(e => e.ID_Empleado !== id));
+      await eliminar.mutateAsync(id);
       toast({ title: "Éxito", description: "Empleado eliminado correctamente" });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -150,29 +135,29 @@ export default function EmployeesPage() {
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-bold text-muted-foreground">Nombre Completo</Label>
                   <Input placeholder="Ej. Juan Pérez" className="h-11 bg-muted/50 border-border"
-                    value={newEmployee.Nombre}
-                    onChange={(e) => setNewEmployee({ ...newEmployee, Nombre: e.target.value })} />
+                    value={newEmployee.nombre}
+                    onChange={(e) => setNewEmployee({ ...newEmployee, nombre: e.target.value })} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground">Correo Personal</Label>
                     <Input type="email" placeholder="ejemplo@gmail.com" className="h-11 bg-muted/50 border-border"
-                      value={newEmployee.Correo}
-                      onChange={(e) => setNewEmployee({ ...newEmployee, Correo: e.target.value })} />
+                      value={newEmployee.correo}
+                      onChange={(e) => setNewEmployee({ ...newEmployee, correo: e.target.value })} />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground">Teléfono</Label>
                     <Input placeholder="10 dígitos" className="h-11 bg-muted/50 border-border"
-                      value={newEmployee.Telefono}
-                      onChange={(e) => setNewEmployee({ ...newEmployee, Telefono: e.target.value })} />
+                      value={newEmployee.telefono}
+                      onChange={(e) => setNewEmployee({ ...newEmployee, telefono: e.target.value })} />
                   </div>
                 </div>
               </div>
               <DialogFooter>
                 <Button className="bg-accent hover:bg-accent/90 text-white w-full h-12 text-lg font-bold rounded-xl"
-                  disabled={!newEmployee.Nombre || !newEmployee.Correo || !newEmployee.Telefono || loading}
+                  disabled={!newEmployee.nombre || !newEmployee.correo || !newEmployee.telefono || crear.isPending}
                   onClick={handleCreateEmployee}>
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : "Crear Registro"}
+                  {crear.isPending ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : "Crear Registro"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -192,7 +177,7 @@ export default function EmployeesPage() {
           </CardHeader>
 
           <div className="p-0">
-            {loadingData ? (
+            {isLoading ? (
               <div className="flex items-center justify-center p-12">
                 <Loader2 className="h-8 w-8 animate-spin text-accent" />
               </div>
@@ -208,24 +193,23 @@ export default function EmployeesPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredEmpleados.map((emp) => {
-                    // Calcular puntos reales
-                    const totalPuntos = emp.puntos?.reduce((sum: number, p: any) => sum + (p.Cantidad_Puntos || 0), 0) || 0;
+                    // Los puntos viven en `puntos_historial` (otorgados por RPC), no en `empleados`.
+                    const totalPuntos = 0;
                     const nivel = Math.max(1, Math.floor(totalPuntos / 200) + 1);
-                    
-                    // Obtener el correo de acceso real desde el usuario vinculado
-                    const displayEmail = emp.usuario?.Username || `${emp.Correo?.split('@')[0] || "usuario"}@zyra.com`;
+
+                    const displayEmail = `${emp.correo?.split('@')[0] || "usuario"}@zyra.com`;
 
                     return (
-                      <TableRow key={emp.ID_Empleado} className="border-border hover:bg-muted/5 transition-colors group">
+                      <TableRow key={emp.id_empleado} className="border-border hover:bg-muted/5 transition-colors group">
                         <TableCell className="py-5 pl-6">
                           <div className="flex items-center gap-4">
                             <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center border-2 border-accent/20 transition-transform group-hover:scale-105">
                               <span className="text-[10px] font-black text-accent">
-                                {emp.Nombre?.substring(0, 2).toUpperCase()}
+                                {emp.nombre?.substring(0, 2).toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-foreground leading-tight">{emp.Nombre}</p>
+                              <p className="text-sm font-bold text-foreground leading-tight">{emp.nombre}</p>
                               <p className="text-[9px] text-muted-foreground uppercase font-black tracking-tighter">Técnico Operativo</p>
                             </div>
                           </div>
@@ -270,13 +254,13 @@ export default function EmployeesPage() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    ¿Eliminar permanentemente el registro de <strong>{emp.Nombre}</strong>?
+                                    ¿Eliminar permanentemente el registro de <strong>{emp.nombre}</strong>?
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel className="bg-muted">Cancelar</AlertDialogCancel>
                                   <AlertDialogAction 
-                                    onClick={() => handleDeleteEmployee(emp.ID_Empleado)}
+                                    onClick={() => handleDeleteEmployee(emp.id_empleado)}
                                     className="bg-destructive hover:bg-destructive/90 text-white font-bold"
                                   >
                                     Eliminar
@@ -317,10 +301,10 @@ export default function EmployeesPage() {
                 <div className="w-full aspect-square max-w-[240px] rounded-[50px] bg-[#f8f7ff] border-[12px] border-white shadow-2xl shadow-accent/5 flex items-center justify-center mb-6 overflow-hidden relative group">
                   <div className="absolute inset-0 bg-accent/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <span className="text-7xl font-black text-accent italic tracking-tighter">
-                    {selectedEmployee?.Nombre?.substring(0, 2).toUpperCase()}
+                    {selectedEmployee?.nombre?.substring(0, 2).toUpperCase()}
                   </span>
                 </div>
-                <h3 className="text-2xl font-black text-slate-800 tracking-tight">{selectedEmployee?.Nombre}</h3>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight">{selectedEmployee?.nombre}</h3>
                 <Badge className="bg-accent text-white font-black text-[9px] uppercase tracking-widest px-6 py-2 mt-2 rounded-full shadow-lg shadow-accent/20 border-none">
                   Operaciones Zyra
                 </Badge>
@@ -335,7 +319,7 @@ export default function EmployeesPage() {
                     <div className="flex items-center gap-2">
                       <Zap className="h-5 w-5 text-accent fill-accent/10" />
                       <span className="text-3xl font-black text-accent italic italic">
-                        {Math.max(1, Math.floor((selectedEmployee?.puntos?.reduce((s:any,p:any)=>s+(p.Cantidad_Puntos||0),0)||0) / 200) + 1)}
+                        {1}
                       </span>
                     </div>
                   </div>
@@ -345,7 +329,7 @@ export default function EmployeesPage() {
                     <div className="flex items-center gap-2">
                       <Star className="h-6 w-6 text-yellow-500 fill-yellow-400" />
                       <span className="text-3xl font-black text-slate-800 italic">
-                        {selectedEmployee?.puntos?.reduce((sum: number, p: any) => sum + (p.Cantidad_Puntos || 0), 0) || 0}
+                        {0}
                       </span>
                     </div>
                   </div>
@@ -357,7 +341,7 @@ export default function EmployeesPage() {
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Email de Acceso (ID)</p>
                     <div className="h-14 bg-[#f8f8fa] border border-slate-50 rounded-2xl flex items-center px-6 gap-3 group focus-within:border-accent/30 transition-all">
                       <Mail className="h-4 w-4 text-accent/50" />
-                      <span className="text-xs font-bold text-accent truncate">{selectedEmployee?.usuario?.Username || `${selectedEmployee?.Correo?.split('@')[0]}@zyra.com`}</span>
+                      <span className="text-xs font-bold text-accent truncate">{`${selectedEmployee?.correo?.split('@')[0]}@zyra.com`}</span>
                     </div>
                   </div>
                   
@@ -366,7 +350,7 @@ export default function EmployeesPage() {
                     <div className="h-14 bg-[#f8f8fa] border border-slate-50 rounded-2xl flex items-center px-6 gap-3">
                       <Lock className="h-4 w-4 text-accent/50" />
                       <span className="text-xs font-bold text-accent tracking-widest">
-                        {selectedEmployee?.usuario?.Username ? "********" : "zyra2024!"}
+                        {"********"}
                       </span>
                     </div>
                   </div>
@@ -375,7 +359,7 @@ export default function EmployeesPage() {
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Email Personal</p>
                     <div className="h-14 bg-white border border-slate-100 rounded-2xl flex items-center px-6 gap-3">
                       <Mail className="h-4 w-4 text-slate-300" />
-                      <span className="text-xs font-medium text-slate-600 truncate">{selectedEmployee?.Correo || "N/A"}</span>
+                      <span className="text-xs font-medium text-slate-600 truncate">{selectedEmployee?.correo || "N/A"}</span>
                     </div>
                   </div>
 
@@ -383,7 +367,7 @@ export default function EmployeesPage() {
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Contacto Directo</p>
                     <div className="h-14 bg-white border border-slate-100 rounded-2xl flex items-center px-6 gap-3">
                       <Phone className="h-4 w-4 text-slate-300" />
-                      <span className="text-xs font-black text-slate-800">{selectedEmployee?.Telefono || "N/A"}</span>
+                      <span className="text-xs font-black text-slate-800">{selectedEmployee?.telefono || "N/A"}</span>
                     </div>
                   </div>
                 </div>

@@ -1,37 +1,37 @@
 
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { authAPI } from "@/lib/api-client";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const auth = useAuth();
-  const [email, setEmail] = useState("admin@zyra.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await authAPI.login({ email, password });
-      auth.login(response.token, response.user);
+      await auth.login(email, password);
       toast({ title: "Sesión iniciada", description: "Cargando panel de control..." });
-      router.push("/dashboard");
-    } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error de autenticación", 
-        description: "Credenciales inválidas. Verifique su usuario y contraseña." 
+      const redirect = searchParams.get("redirect");
+      router.push(redirect && redirect.startsWith("/") ? redirect : "/dashboard");
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Error de autenticación",
+        description: "Credenciales inválidas. Verifique su usuario y contraseña.",
       });
     } finally {
       setLoading(false);
@@ -73,7 +73,7 @@ export default function LoginPage() {
               <div className="space-y-3">
                 <Input
                   type="email"
-                  placeholder="admin@zyra.com"
+                  placeholder="admin@essesolar.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-zinc-900/50 border-zinc-800 text-white h-12 px-4 rounded-xl focus-visible:ring-accent/50 placeholder:text-zinc-700 transition-all"
@@ -120,5 +120,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

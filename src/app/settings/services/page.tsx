@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import DashboardLayout from "../../dashboard/layout";
-import { serviciosAPI } from "@/lib/api-client";
 import { 
   Card, 
   CardHeader, 
@@ -25,47 +24,27 @@ import {
   Settings2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useServicios, useCrearServicio, useEliminarServicio } from "@/hooks/queries";
 
 export default function ServicesManagementPage() {
   const { toast } = useToast();
-  const [services, setServices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: services = [], isLoading } = useServicios();
+  const crearServicio = useCrearServicio();
+  const eliminarServicio = useEliminarServicio();
   const [isAdding, setIsAdding] = useState(false);
-  const [newService, setNewService] = useState({ Tipo: "", Descripcion: "" });
-
-  useEffect(() => {
-    fetchServices();
-  }, []);
-
-  const fetchServices = async () => {
-    setLoading(true);
-    try {
-      const data = await serviciosAPI.getAll();
-      setServices(data as any[]);
-    } catch (error) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudieron cargar los servicios"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [newService, setNewService] = useState({ tipo: "", descripcion: "" });
 
   const handleAddService = async () => {
-    if (!newService.Tipo) {
+    if (!newService.tipo) {
       toast({ variant: "destructive", title: "Error", description: "El nombre del servicio es obligatorio" });
       return;
     }
 
     try {
-      await serviciosAPI.create(newService);
+      await crearServicio.mutateAsync({ tipo: newService.tipo, descripcion: newService.descripcion || null });
       toast({ title: "Éxito", description: "Servicio creado correctamente" });
-      setNewService({ Tipo: "", Descripcion: "" });
+      setNewService({ tipo: "", descripcion: "" });
       setIsAdding(false);
-      fetchServices();
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo crear el servicio" });
     }
@@ -74,9 +53,8 @@ export default function ServicesManagementPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("¿Estás seguro de eliminar este tipo de servicio?")) return;
     try {
-      await serviciosAPI.delete(id);
+      await eliminarServicio.mutateAsync(id);
       toast({ title: "Eliminado", description: "El servicio ha sido eliminado" });
-      fetchServices();
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el servicio" });
     }
@@ -118,8 +96,8 @@ export default function ServicesManagementPage() {
                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Nombre del Servicio</Label>
                   <Input 
                     placeholder="Ej: Mantenimiento Preventivo" 
-                    value={newService.Tipo}
-                    onChange={(e) => setNewService({ ...newService, Tipo: e.target.value })}
+                    value={newService.tipo}
+                    onChange={(e) => setNewService({ ...newService, tipo: e.target.value })}
                     className="h-12 border-border focus:border-accent bg-muted/10 transition-all"
                   />
                 </div>
@@ -127,8 +105,8 @@ export default function ServicesManagementPage() {
                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Descripción</Label>
                   <Textarea 
                     placeholder="Describe en qué consiste este servicio..." 
-                    value={newService.Descripcion}
-                    onChange={(e) => setNewService({ ...newService, Descripcion: e.target.value })}
+                    value={newService.descripcion}
+                    onChange={(e) => setNewService({ ...newService, descripcion: e.target.value })}
                     className="min-h-[120px] border-border focus:border-accent bg-muted/10 transition-all"
                   />
                 </div>
@@ -136,20 +114,23 @@ export default function ServicesManagementPage() {
             </CardContent>
             <CardFooter className="border-t border-border/50 bg-muted/30 flex justify-end gap-3 pt-4">
               <Button variant="ghost" onClick={() => setIsAdding(false)}>Cancelar</Button>
-              <Button onClick={handleAddService} className="bg-accent text-white font-bold px-8">Guardar Servicio</Button>
+              <Button onClick={handleAddService} disabled={crearServicio.isPending} className="bg-accent text-white font-bold px-8">
+                {crearServicio.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Guardar Servicio
+              </Button>
             </CardFooter>
           </Card>
         ) : (
           /* Lista de servicios */
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 animate-in fade-in duration-500">
-            {loading ? (
+            {isLoading ? (
               <div className="col-span-full flex flex-col items-center justify-center py-24 space-y-4">
                 <Loader2 className="h-10 w-10 animate-spin text-accent" />
                 <p className="text-muted-foreground font-medium animate-pulse">Cargando tus servicios...</p>
               </div>
             ) : services.length > 0 ? (
-              services.map((service) => (
-                <Card key={service.ID_Servicio} className="group border-border hover:border-accent/40 hover:shadow-2xl hover:shadow-accent/5 transition-all duration-300 overflow-hidden">
+              services.map((service: any) => (
+                <Card key={service.id_servicio} className="group border-border hover:border-accent/40 hover:shadow-2xl hover:shadow-accent/5 transition-all duration-300 overflow-hidden">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
                       <div className="p-2 bg-accent/5 rounded-lg group-hover:bg-accent/10 transition-colors">
@@ -158,27 +139,28 @@ export default function ServicesManagementPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleDelete(service.ID_Servicio)}
+                        onClick={() => handleDelete(service.id_servicio)}
+                        disabled={eliminarServicio.isPending}
                         className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                     <CardTitle className="text-lg mt-3 text-foreground group-hover:text-accent transition-colors">
-                      {service.Tipo}
+                      {service.tipo}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground line-clamp-3 min-h-[4.5rem]">
-                      {service.Descripcion || "Sin descripción disponible."}
+                      {service.descripcion || "Sin descripción disponible."}
                     </p>
                   </CardContent>
                   <CardFooter className="pt-0 pb-4 flex items-center gap-2">
                     <div className="px-2 py-1 bg-muted rounded text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
-                      ID: {service.ID_Servicio}
+                      ID: {service.id_servicio}
                     </div>
                     <div className="px-2 py-1 bg-accent/5 rounded text-[10px] font-bold text-accent uppercase tracking-tight">
-                      {service.empresa?.Nombre || "Empresa 1"}
+                      {service.empresa?.Nombre || service.empresa?.nombre || "Empresa 1"}
                     </div>
                   </CardFooter>
                 </Card>

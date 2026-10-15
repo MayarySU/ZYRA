@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useAuth } from "@/providers/auth-provider";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -53,7 +53,15 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/providers/i18n-provider";
-import { equiposAPI, empleadosAPI } from "@/lib/api-client";
+import {
+  useEquipos,
+  useEmpleados,
+  useCrearEquipo,
+  useActualizarEquipo,
+  useEliminarEquipo,
+  useAgregarMiembroEquipo,
+  useQuitarMiembroEquipo,
+} from "@/hooks/queries";
 
 export default function TeamPage() {
   const { user, profile, loading: userLoading } = useAuth();
@@ -61,115 +69,122 @@ export default function TeamPage() {
   const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
-  const [teams, setTeams] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const { data: equiposData, isLoading: equiposLoading } = useEquipos();
+  const { data: empleadosData, isLoading: empleadosLoading } = useEmpleados();
+
+  const crearEquipo = useCrearEquipo();
+  const actualizarEquipo = useActualizarEquipo();
+  const eliminarEquipo = useEliminarEquipo();
+  const agregarMiembro = useAgregarMiembroEquipo();
+  const quitarMiembro = useQuitarMiembroEquipo();
+
+  const isLoading = equiposLoading || empleadosLoading;
+  const isSubmitting =
+    crearEquipo.isPending ||
+    actualizarEquipo.isPending ||
+    eliminarEquipo.isPending ||
+    agregarMiembro.isPending ||
+    quitarMiembro.isPending;
+
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newTeam, setNewTeam] = useState({
-    Nombre_Equipo: "",
+    nombre_equipo: "",
     integrantes: [] as number[],
-    ID_Lider: null as number | null,
+    id_lider: null as number | null,
   });
 
   const [editTeamData, setEditTeamData] = useState<any>({
-    Nombre_Equipo: "",
+    nombre_equipo: "",
     integrantes: [],
-    ID_Lider: null
+    id_lider: null
   });
 
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      const [teamsData, employeesData] = await Promise.all([
-        equiposAPI.getAll(),
-        empleadosAPI.getAll()
-      ]);
-      let filteredTeams = Array.isArray(teamsData) ? teamsData : [];
-      if (!isAdmin && profile?.empleadoId) {
-        filteredTeams = filteredTeams.filter((team: any) => 
-          team.empleados?.some((rel: any) => rel.ID_Empleado === profile.empleadoId)
-        );
-      }
-      setTeams(filteredTeams);
-
-      setEmployees(Array.isArray(employeesData) ? employeesData.filter(e => 
-        !e.Nombre.toLowerCase().includes('admin') && 
-        e.usuario?.rol?.Nombre_Rol !== 'admin'
-      ) : []);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la información de equipos" });
-    } finally {
-      setIsLoading(false);
+  const teams = useMemo(() => {
+    const all = equiposData ?? [];
+    if (!isAdmin && profile?.empleadoId) {
+      return all.filter((team) =>
+        team.empleado_equipo?.some((m) => m.empleado_id === profile.empleadoId)
+      );
     }
-  };
+    return all;
+  }, [equiposData, isAdmin, profile?.empleadoId]);
 
-  useEffect(() => {
-    if (!userLoading && profile) {
-      loadData();
-    }
-  }, [userLoading, profile]);
+  const employees = useMemo(
+    () => (empleadosData ?? []).filter((e) => !e.nombre.toLowerCase().includes('admin')),
+    [empleadosData]
+  );
 
   const filteredTeams = useMemo(() => {
     return teams.filter(t =>
-      (t.Nombre_Equipo || "").toLowerCase().includes(searchTerm.toLowerCase())
+      (t.nombre_equipo || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [teams, searchTerm]);
 
   const handleCreateTeam = async () => {
-    if (!newTeam.Nombre_Equipo || !user) return;
-    setIsSubmitting(true);
+    if (!newTeam.nombre_equipo || !user) return;
     try {
-      await equiposAPI.create({
-        Nombre_Equipo: newTeam.Nombre_Equipo,
-        integrantes: newTeam.integrantes,
-        ID_Lider: newTeam.ID_Lider
-      });
+      const equipo = await crearEquipo.mutateAsync({ nombre_equipo: newTeam.nombre_equipo });
+      await Promise.all(
+        newTeam.integrantes.map((empId) =>
+          agregarMiembro.mutateAsync({
+            empleado_id: empId,
+            equipo_id: equipo.id_equipo,
+            cargo: newTeam.id_lider === empId ? "Líder" : null,
+            es_lider: newTeam.id_lider === empId,
+          })
+        )
+      );
       toast({ title: t.common.success, description: "Equipo creado correctamente" });
       setIsCreateDialogOpen(false);
-      setNewTeam({ Nombre_Equipo: "", integrantes: [], Tipo: "Instalación", ID_Lider: null });
-      loadData();
+      setNewTeam({ nombre_equipo: "", integrantes: [], id_lider: null });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleUpdateTeam = async () => {
     if (!selectedTeam || !editTeamData || !user) return;
-    setIsSubmitting(true);
     try {
-      await equiposAPI.update(selectedTeam.ID_Equipo, {
-        Nombre_Equipo: editTeamData.Nombre_Equipo,
-        integrantes: editTeamData.integrantes,
-        ID_Lider: editTeamData.ID_Lider
+      await actualizarEquipo.mutateAsync({
+        id: selectedTeam.id_equipo,
+        patch: { nombre_equipo: editTeamData.nombre_equipo },
       });
+      const currentIds: number[] = selectedTeam.empleado_equipo?.map((m: any) => m.empleado_id) ?? [];
+      const nextIds: number[] = editTeamData.integrantes ?? [];
+      const toRemove = currentIds.filter((id) => !nextIds.includes(id));
+      await Promise.all(
+        nextIds.map((empId) =>
+          agregarMiembro.mutateAsync({
+            empleado_id: empId,
+            equipo_id: selectedTeam.id_equipo,
+            cargo: editTeamData.id_lider === empId ? "Líder" : null,
+            es_lider: editTeamData.id_lider === empId,
+          })
+        )
+      );
+      await Promise.all(
+        toRemove.map((empId) =>
+          quitarMiembro.mutateAsync({ empleado_id: empId, equipo_id: selectedTeam.id_equipo })
+        )
+      );
       toast({ title: t.common.success });
       setIsEditDialogOpen(false);
-      loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleDeleteTeam = async (id: number) => {
     if (!user) return;
-    setIsSubmitting(true);
     try {
-      await equiposAPI.delete(id);
+      await eliminarEquipo.mutateAsync(id);
       toast({ title: t.common.success, description: "Equipo eliminado correctamente" });
-      loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -243,8 +258,8 @@ export default function TeamPage() {
                         <Input
                           placeholder="Ej. Cuadrilla Alfa"
                           className="bg-white/5 border-white/5 h-12 rounded-xl focus:ring-accent/50 focus:border-accent"
-                          value={newTeam.Nombre_Equipo}
-                          onChange={(e) => setNewTeam({ ...newTeam, Nombre_Equipo: e.target.value })}
+                          value={newTeam.nombre_equipo}
+                          onChange={(e) => setNewTeam({ ...newTeam, nombre_equipo: e.target.value })}
                         />
                       </div>
 
@@ -252,16 +267,16 @@ export default function TeamPage() {
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-widest pl-1">Líder del Equipo</Label>
                         <Select 
-                          value={newTeam.ID_Lider?.toString()} 
-                          onValueChange={(val) => setNewTeam({ ...newTeam, ID_Lider: parseInt(val) })}
+                          value={newTeam.id_lider?.toString()} 
+                          onValueChange={(val) => setNewTeam({ ...newTeam, id_lider: parseInt(val) })}
                         >
                           <SelectTrigger className="bg-white/5 border-white/5 h-12 rounded-xl">
                             <SelectValue placeholder="Seleccionar líder" />
                           </SelectTrigger>
                           <SelectContent className="bg-popover border-border text-popover-foreground">
-                            {employees.filter(e => newTeam.integrantes.includes(e.ID_Empleado)).map(emp => (
-                              <SelectItem key={emp.ID_Empleado} value={emp.ID_Empleado.toString()}>
-                                {emp.Nombre}
+                            {employees.filter(e => newTeam.integrantes.includes(e.id_empleado)).map(emp => (
+                              <SelectItem key={emp.id_empleado} value={emp.id_empleado.toString()}>
+                                {emp.nombre}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -271,7 +286,7 @@ export default function TeamPage() {
 
                     <Button
                       className="bg-accent hover:bg-accent/90 text-white w-full h-14 font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-accent/20 transition-all active:scale-95"
-                      disabled={!newTeam.Nombre_Equipo || isSubmitting}
+                      disabled={!newTeam.nombre_equipo || isSubmitting}
                       onClick={handleCreateTeam}
                     >
                       {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : "Guardar Equipo"}
@@ -288,15 +303,15 @@ export default function TeamPage() {
                     <ScrollArea className="h-[350px] border border-white/5 rounded-2xl p-4 bg-black/20">
                       <div className="space-y-1">
                         {employees.map(emp => {
-                          const isChecked = newTeam.integrantes.includes(emp.ID_Empleado);
+                          const isChecked = newTeam.integrantes.includes(emp.id_empleado);
                           return (
                             <div 
-                              key={emp.ID_Empleado} 
+                              key={emp.id_empleado} 
                               className={cn(
                                 "flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer group mb-1",
                                 isChecked ? "bg-accent/10 border border-accent/20" : "hover:bg-white/5 border border-transparent"
                               )}
-                              onClick={() => toggleMember(emp.ID_Empleado)}
+                              onClick={() => toggleMember(emp.id_empleado)}
                             >
                               <div className="flex items-center gap-3">
                                 <div className={cn(
@@ -309,7 +324,7 @@ export default function TeamPage() {
                                   "text-sm font-bold transition-colors",
                                   isChecked ? "text-foreground" : "text-muted-foreground"
                                 )}>
-                                  {emp.Nombre}
+                                  {emp.nombre}
                                 </span>
                               </div>
                             </div>
@@ -327,12 +342,12 @@ export default function TeamPage() {
         <div className="grid gap-4 md:gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {filteredTeams.length > 0 ? (
             filteredTeams.map((team) => (
-              <Card key={team.ID_Equipo} className="bg-card border-white/10 hover:border-accent/40 transition-all group overflow-hidden shadow-2xl relative">
+              <Card key={team.id_equipo} className="bg-card border-white/10 hover:border-accent/40 transition-all group overflow-hidden shadow-2xl relative">
                 <CardHeader className="pb-4 relative">
                   <div className="flex items-start justify-between">
                     <div className="p-3 rounded-xl bg-accent/10 text-accent border border-accent/20">
-                      {team.Nombre_Equipo?.toLowerCase().includes('instal') ? <Plus className="h-6 w-6" /> : 
-                       team.Nombre_Equipo?.toLowerCase().includes('manten') ? <Wrench className="h-6 w-6" /> :
+                      {team.nombre_equipo?.toLowerCase().includes('instal') ? <Plus className="h-6 w-6" /> : 
+                       team.nombre_equipo?.toLowerCase().includes('manten') ? <Wrench className="h-6 w-6" /> :
                        <UsersIcon className="h-6 w-6" />}
                     </div>
                     <Badge className="bg-accent/10 text-accent border border-accent/20 font-black text-[9px] h-6 px-3 rounded-full hover:bg-accent/20 transition-colors uppercase">
@@ -342,13 +357,13 @@ export default function TeamPage() {
                   
                   <div className="mt-4">
                     <h3 className="text-xl font-bold text-foreground mb-2">
-                      {team.Nombre_Equipo}
+                      {team.nombre_equipo}
                     </h3>
                     <div className="flex items-center gap-2 mb-4">
                       <Crown className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500/20" />
                       <p className="text-[10px] font-bold text-muted-foreground italic">
                         Líder del Equipo: <span className="text-foreground not-italic">
-                          {team.empleados?.find((r: any) => r.Cargo === 'Líder')?.empleado?.Nombre || "Sin asignar"}
+                          {team.empleado_equipo?.find((m: any) => m.es_lider)?.empleados?.nombre || "Sin asignar"}
                         </span>
                       </p>
                     </div>
@@ -357,7 +372,7 @@ export default function TeamPage() {
                   <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col items-center justify-center my-4">
                     <p className="text-[9px] uppercase font-black text-muted-foreground mb-2 tracking-[0.2em]">Integrantes</p>
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl font-black text-foreground">{team.empleados?.length || 0}</span>
+                      <span className="text-2xl font-black text-foreground">{team.empleado_equipo?.length || 0}</span>
                       <div className="p-1.5 rounded-lg bg-accent/20">
                         <UsersIcon className="h-4 w-4 text-accent" />
                       </div>
@@ -367,14 +382,14 @@ export default function TeamPage() {
                 <CardContent className="space-y-4 pt-0">
                   <div className="space-y-2">
                     <p className="text-[10px] uppercase font-black text-accent tracking-[0.2em] ml-1 mb-2">Integrantes</p>
-                    {team.empleados?.map((rel: any) => (
-                      <div key={rel.ID_Empleado} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/member hover:bg-white/10 transition-all cursor-default">
+                    {team.empleado_equipo?.map((rel: any) => (
+                      <div key={rel.empleado_id} className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 group/member hover:bg-white/10 transition-all cursor-default">
                         <div className="flex items-center gap-3 truncate">
                           <div className="h-9 w-9 rounded-full bg-accent/10 flex items-center justify-center text-[10px] font-black text-accent border border-accent/20">
-                            {rel.empleado?.Nombre?.substring(0, 2).toUpperCase()}
+                            {rel.empleados?.nombre?.substring(0, 2).toUpperCase()}
                           </div>
                           <span className="text-xs font-bold text-foreground/90 truncate capitalize">
-                            {rel.empleado?.Nombre?.toLowerCase()}
+                            {rel.empleados?.nombre?.toLowerCase()}
                           </span>
                         </div>
                         <ChevronRight className="h-3 w-3 text-muted-foreground group-hover/member:text-accent transition-colors" />
@@ -390,9 +405,9 @@ export default function TeamPage() {
                       onClick={() => {
                         setSelectedTeam(team);
                         setEditTeamData({
-                          Nombre_Equipo: team.Nombre_Equipo,
-                          ID_Lider: team.empleados?.find((r: any) => r.Cargo === 'Líder')?.ID_Empleado || null,
-                          integrantes: team.empleados?.map((r: any) => r.ID_Empleado) || []
+                          nombre_equipo: team.nombre_equipo,
+                          id_lider: team.empleado_equipo?.find((m: any) => m.es_lider)?.empleado_id || null,
+                          integrantes: team.empleado_equipo?.map((m: any) => m.empleado_id) || []
                         });
                         setIsEditDialogOpen(true);
                       }}
@@ -409,13 +424,13 @@ export default function TeamPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle>
                           <AlertDialogDescription>
-                            ¿Estás seguro de que deseas eliminar permanentemente al equipo {team.Nombre_Equipo}?
+                            ¿Estás seguro de que deseas eliminar permanentemente al equipo {team.nombre_equipo}?
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel className="bg-white/10">Cancelar</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => handleDeleteTeam(team.ID_Equipo)}
+                            onClick={() => handleDeleteTeam(team.id_equipo)}
                             className="bg-destructive hover:bg-destructive/90 text-white font-bold"
                           >
                             Eliminar
@@ -444,7 +459,7 @@ export default function TeamPage() {
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold text-foreground">
-                  Gestionar Equipo - {selectedTeam?.Nombre_Equipo}
+                  Gestionar Equipo - {selectedTeam?.nombre_equipo}
                 </DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground mt-1">
                   Edita los detalles del equipo, añade/elimina integrantes o cambia el líder.
@@ -459,8 +474,8 @@ export default function TeamPage() {
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-widest pl-1">Nombre del Equipo</Label>
                     <Input
-                      value={editTeamData?.Nombre_Equipo || ""}
-                      onChange={(e) => setEditTeamData({ ...editTeamData, Nombre_Equipo: e.target.value })}
+                      value={editTeamData?.nombre_equipo || ""}
+                      onChange={(e) => setEditTeamData({ ...editTeamData, nombre_equipo: e.target.value })}
                       className="bg-white/5 border-white/5 h-12 rounded-xl focus:ring-accent/50 focus:border-accent"
                     />
                   </div>
@@ -469,16 +484,16 @@ export default function TeamPage() {
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-widest pl-1">Líder del Equipo</Label>
                     <Select 
-                      value={editTeamData?.ID_Lider?.toString()} 
-                      onValueChange={(val) => setEditTeamData({ ...editTeamData, ID_Lider: parseInt(val) })}
+                      value={editTeamData?.id_lider?.toString()} 
+                      onValueChange={(val) => setEditTeamData({ ...editTeamData, id_lider: parseInt(val) })}
                     >
                       <SelectTrigger className="bg-white/5 border-white/5 h-12 rounded-xl">
                         <SelectValue placeholder="Seleccionar líder" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border text-popover-foreground">
-                        {employees.filter(e => editTeamData?.integrantes.includes(e.ID_Empleado)).map(emp => (
-                          <SelectItem key={emp.ID_Empleado} value={emp.ID_Empleado.toString()}>
-                            {emp.Nombre}
+                        {employees.filter(e => editTeamData?.integrantes.includes(e.id_empleado)).map(emp => (
+                          <SelectItem key={emp.id_empleado} value={emp.id_empleado.toString()}>
+                            {emp.nombre}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -489,7 +504,7 @@ export default function TeamPage() {
                 <Button
                   className="bg-accent hover:bg-accent/90 text-white w-full h-14 font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-accent/20 transition-all active:scale-95"
                   onClick={handleUpdateTeam}
-                  disabled={isSubmitting || !editTeamData?.Nombre_Equipo}
+                  disabled={isSubmitting || !editTeamData?.nombre_equipo}
                 >
                   {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : "Guardar"}
                 </Button>
@@ -505,15 +520,15 @@ export default function TeamPage() {
                 <ScrollArea className="h-[350px] border border-white/5 rounded-2xl p-4 bg-black/20">
                   <div className="space-y-1">
                     {employees.map(emp => {
-                      const isChecked = editTeamData?.integrantes.includes(emp.ID_Empleado);
+                      const isChecked = editTeamData?.integrantes.includes(emp.id_empleado);
                       return (
                         <div 
-                          key={emp.ID_Empleado} 
+                          key={emp.id_empleado} 
                           className={cn(
                             "flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer group mb-1",
                             isChecked ? "bg-accent/10 border border-accent/20" : "hover:bg-white/5 border border-transparent"
                           )}
-                          onClick={() => toggleMember(emp.ID_Empleado, true)}
+                          onClick={() => toggleMember(emp.id_empleado, true)}
                         >
                           <div className="flex items-center gap-3">
                             <div className={cn(
@@ -526,7 +541,7 @@ export default function TeamPage() {
                               "text-sm font-bold transition-colors",
                               isChecked ? "text-foreground" : "text-muted-foreground"
                             )}>
-                              {emp.Nombre}
+                              {emp.nombre}
                             </span>
                           </div>
                         </div>
