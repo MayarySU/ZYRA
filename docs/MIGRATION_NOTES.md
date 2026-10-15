@@ -169,3 +169,77 @@ producción). Se crea con `npm run seed:admin`.
   `db:smoke`.
 - Corregido `npm run build` (usaba `NODE_ENV=production`, sintaxis Unix que
   fallaba en Windows; `next build` lo fija solo).
+
+## 4. Capa de datos (repositorios + TanStack Query) — COMPLETADO
+
+### Repositorios (`src/lib/data/`)
+
+| Archivo | Contenido |
+|---|---|
+| `util.ts` | `db()` (cliente Supabase navegador), `unwrap`/`unwrapMaybe` (respuesta tipada o error legible), `nuevoOperationId()`. |
+| `rpc.ts` | Envolturas tipadas de las 10 RPC + tipos de resultado. |
+| `catalogos.ts` | Clientes, servicios, materiales, equipos (con miembros), empleados, roles, empresa. |
+| `proyectos.ts` | CRUD de proyectos (vista `v_proyectos`), checklist y `v_checklist_detalle`, avances, evidencias, `crearProyecto` (genera checklist vía RPC). |
+| `reportes.ts` | Reportes con proyecto/empleado embebidos. |
+| `checklists-servicio.ts` | Plantillas de checklist y sus materiales. |
+| `recordatorios.ts` | Recordatorios + destinatarios + usuarios. |
+
+### Hooks (`src/hooks/queries/`)
+
+`keys.ts` (`qk`), `use-catalogos.ts`, `use-proyectos.ts` (incluye hooks de ciclo de
+vida que llaman a las RPC e invalidan caché), `use-otros.ts`, `index.ts`.
+Todas las mutaciones invalidan las claves afectadas.
+
+### R2 (evidencias)
+
+`src/lib/r2.ts` (cliente S3 + URLs prefirmadas, solo servidor) y los Route
+Handlers `POST /api/upload/url` (valida sesión, key `proyectos/{id}/{ts}-{name}`)
+y `GET /api/upload/download`. En PostgreSQL solo se guarda `object_key`.
+
+## 5. Migración de páginas — COMPLETADO
+
+Reescritas para usar los hooks/repositorios Supabase (snake_case) eliminando el
+`api-client` Express: `dashboard`, `projects`, `reports`, `team`, `employees`,
+`materials`, `clients`, `settings/services`, `settings/checklists` y los
+componentes `global-search` y `notification-center`.
+
+- `projects`: el ciclo de vida usa RPC (`iniciar_proyecto` descuenta stock en el
+  servidor; `enviar_reporte`; `generar_checklist`). Las evidencias se suben a R2
+  con URL prefirmada y se registran con `registrar_evidencia`.
+- Estados canónicos de proyecto → etiquetas de UI: `en_proceso`→EnProceso,
+  `pendiente_de_cierre`→Revisión, `finalizado`, `rechazado`, `cancelado`,
+  resto→Pendiente.
+- Eliminados: `src/lib/api-client.ts`, `src/hooks/use-api.ts`,
+  `src/hooks/use-offline-sync.ts` (ya no se importaban en ningún sitio).
+- `gamification.ts` conserva solo utilidades de presentación (`calcLevel`,
+  `getRankByPoints`); los puntos los otorga el servidor vía RPC.
+
+### Verificación
+
+`npm run typecheck` limpio y `npm run build` correcto (18 rutas + 2 handlers R2).
+
+## 6/7. Offline-First real — COMPLETADO
+
+| Archivo | Rol |
+|---|---|
+| `src/lib/offline/db.ts` | Base Dexie `zyra-offline` (tabla `kv`) en IndexedDB. |
+| `src/lib/offline/persister.ts` | `Persister` de TanStack Query respaldado por Dexie. |
+| `src/components/providers/query-provider.tsx` | `PersistQueryClientProvider`: `maxAge` 24h, `buster`, queries en `offlineFirst`, cache en IndexedDB y persistencia de las mutaciones pausadas (outbox). Al reconectar se reanudan las mutaciones (`resumePausedMutations`). |
+
+La idempotencia de reintentos la garantiza `p_operation_id` en cada RPC.
+`SyncProvider` queda como indicador de conectividad hasta integrarse con la cola.
+
+## 8. PWA — COMPLETADO
+
+Se reemplazó `@ducanh2912/next-pwa` por **Serwist** (`@serwist/next`):
+`src/app/sw.ts` con `defaultCache` y precache del manifest; `next.config.ts` con
+`withSerwistInit({ swSrc, swDest, disable: dev })` y `outputFileTracingRoot`.
+Se eliminaron las dependencias y artefactos de workbox; la salida del SW
+(`public/sw.js`, `public/swe-worker-*.js`) queda en `.gitignore`.
+
+## 9. Limpieza final — EN CURSO
+
+- Eliminados: `backend/` (Express + Prisma + Railway), `firebase.json`,
+  `firestore.rules`, `scratch/`, `.idx/`, `ACTION_PLAN.md` (obsoleto).
+- `README.md` reescrito para el stack Supabase.
+

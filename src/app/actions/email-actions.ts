@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer';
 
 /**
  * Envia un correo electrónico de notificación de restablecimiento utilizando el diseño HTML profesional.
- * Nota: El enlace real de Firebase se envía por separado a través de los servidores de Google.
+ * Nota: El enlace real de restablecimiento lo envía Supabase Auth por separado.
  * Esta acción sirve para dar un aviso profesional adicional si se desea.
  */
 export async function sendResetNotificationAction(to: string, userName: string) {
@@ -45,7 +45,7 @@ Por seguridad y cumplimiento de protocolos, se ha disparado un <strong>enlace of
 </p>
 
 <div style="background:#f2f4ff; border-left:4px solid #2f80ed; padding:15px; margin:20px 0; font-size:14px; text-align:center;">
-Busque en su bandeja de entrada (o SPAM) un correo enviado por <strong>Firebase/Google</strong> con el asunto "Reset your password".
+Busque en su bandeja de entrada (o SPAM) el correo de restablecimiento enviado por el sistema.
 </div>
 
 <p>
