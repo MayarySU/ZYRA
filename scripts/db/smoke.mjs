@@ -232,6 +232,13 @@ async function main() {
     check('RPC como anon bloqueada', !!r.error, r.error?.message || 'permitido!');
   }
 
+  // ── 15. Evidencias: RLS impide lectura sin sesión ───────────────────
+  {
+    const anon = createClient(url, pub, { auth: { autoRefreshToken: false, persistSession: false } });
+    const { data, error } = await anon.from('evidencias').select('id_evidencia').eq('proyecto_id', pid);
+    check('anon no lee evidencias (RLS)', !error && (data?.length ?? 0) === 0, error?.message || `${data?.length ?? 0} filas`);
+  }
+
   // ── Limpieza ────────────────────────────────────────────────────────
   await supabase.from('proyectos').delete().eq('id_proyecto', pid);
   await supabase.from('clientes').delete().eq('id_cliente', cliente.id_cliente);

@@ -63,6 +63,7 @@ import {
   useAvanzarEstado,
 } from "@/hooks/queries";
 import type { ProyectoVista } from "@/lib/data/proyectos";
+import { subirEvidencia as subirEvidenciaR2 } from "@/lib/evidencias-client";
 
 // Estados canónicos (español snake_case) → etiqueta de UI usada por la tarjeta.
 type DisplayStatus = "Pendiente" | "EnProceso" | "EnRevision" | "Finalizado" | "Rechazado" | "Cancelado";
@@ -550,38 +551,14 @@ function OperatorSheetBody({
     });
   };
 
-  const subirEvidencia = async (file: File): Promise<string | null> => {
-    try {
-      const res = await fetch("/api/upload/url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proyectoId: pid, fileName: file.name, contentType: file.type }),
-      });
-      if (!res.ok) throw new Error("No se pudo firmar la subida");
-      const { url, key } = (await res.json()) as { url: string; key: string };
-      const put = await fetch(url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      if (!put.ok) throw new Error("No se pudo subir la evidencia");
-      return key;
-    } catch (e) {
-      console.error("Error subiendo evidencia", e);
-      return null;
-    }
-  };
-
   const handleFinishDayAndReport = async () => {
     try {
-      const { rpcRegistrarEvidencia } = await import("@/lib/data/rpc");
       for (const photo of reportPhotos) {
-        const key = await subirEvidencia(photo.file);
-        if (key) {
-          await rpcRegistrarEvidencia({
-            proyectoId: pid,
-            objectKey: key,
-            descripcion: reportContent || photo.name,
-            contentType: photo.file.type,
-            sizeBytes: photo.file.size,
-          }).catch(console.warn);
-        }
+        await subirEvidenciaR2({
+          proyectoId: pid,
+          file: photo.file,
+          descripcion: reportContent || photo.name,
+        }).catch((e) => console.warn("Evidencia no subida:", e));
       }
       await enviar.mutateAsync(reportContent || "Avance diario");
       toast({ title: t.common.success });

@@ -464,3 +464,48 @@ actual (`accionesDesdeEstado`) que despacha a la RPC correcta:
   en todas las RPC.
 - `npm run typecheck` limpio · `npm run lint` 0 errores (113 warnings preexistentes).
 
+## 14. Fase 6 — Evidencias en Cloudflare R2 — COMPLETADO
+
+### 14.1 Modelo
+
+- Bucket **privado**; en PostgreSQL solo se guarda `evidencias.object_key` (nunca
+  una URL firmada persistente). La URL de lectura se firma bajo demanda y caduca.
+- Metadata por evidencia: `proyecto_id`, `empleado_id` (`mi_empleado_id()`),
+  `avance_id` (actividad), `descripcion`, `tipo` (`foto|documento|video`),
+  `content_type`, `size_bytes`, `fecha`. La escribe `registrar_evidencia`.
+
+### 14.2 Huecos encontrados
+
+Los Route Handlers `api/upload/url` y `api/upload/download` **solo comprobaban
+que hubiera sesión**, no la pertenencia al proyecto: un técnico podía pedir una
+URL prefirmada de subida para cualquier `proyectoId` (manipulando el ID) y firmar
+la descarga de **cualquier** `object_key`, incluidas evidencias de otros equipos.
+
+### 14.3 Cambios
+
+- `api/upload/url` (POST): además de sesión, **verifica acceso al proyecto**
+  consultando `proyectos` con el cliente del usuario (RLS `proyectos_select` =
+  admin o miembro). Valida `contentType` contra una **lista blanca** de MIME
+  (imagen, PDF, MP4) → `415` si no. La clave usa `crypto.randomUUID()` y saneo
+  del nombre (sin path traversal): `proyectos/{id}/{uuid}-{nombre}`.
+- `api/upload/download` (POST): firma solo si existe una fila de `evidencias`
+  visible para el usuario con ese `object_key` (RLS `evidencias_select` = admin o
+  miembro del proyecto) y no está eliminada → `403` en caso contrario.
+- `api/upload/delete` (POST, **nuevo, solo admin**): comprueba `es_admin()`,
+  marca `eliminado = true` (borrado lógico, conserva auditoría) y borra el objeto
+  de R2 (best-effort). Tras esto la descarga se rechaza.
+- `src/lib/r2.ts`: se añade `deleteObject(key)`.
+- `src/lib/evidencias-client.ts` (nuevo): API de cliente
+  `subirEvidencia` (presign → `PUT` directo navegador→R2 → `registrar_evidencia`),
+  `urlEvidencia` (firma temporal de lectura) y `eliminarEvidencia`.
+- La optimización de imágenes ya se hacía en el cliente (redimensión a 400×300
+  JPEG q0.3 antes de subir); `projects/page.tsx` ahora usa el helper centralizado.
+
+### 14.4 Verificación
+
+- `npm run db:smoke` **26/26 PASS** (nuevo caso: `anon` no puede leer
+  `evidencias` por RLS; la pertenencia se evalúa con `es_miembro_proyecto`, la
+  misma función que usan los Route Handlers vía RLS).
+- `npm run typecheck` limpio · `npm run build` OK (rutas
+  `/api/upload/url`, `/api/upload/download`, `/api/upload/delete` generadas).
+

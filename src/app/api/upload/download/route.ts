@@ -14,10 +14,22 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { key } = body;
+    const { key } = body as { key?: string };
 
     if (!key) {
       return NextResponse.json({ error: "key es requerido" }, { status: 400 });
+    }
+
+    // Solo se firma si existe una evidencia que el usuario puede ver.
+    // RLS (evidencias_select = admin o miembro del proyecto) decide el acceso.
+    const { data: evidencia } = await supabase
+      .from("evidencias")
+      .select("id_evidencia, eliminado")
+      .eq("object_key", key)
+      .maybeSingle();
+
+    if (!evidencia || evidencia.eliminado) {
+      return NextResponse.json({ error: "Sin acceso a la evidencia" }, { status: 403 });
     }
 
     const url = await getPresignedDownloadUrl(key);

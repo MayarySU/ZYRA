@@ -2,7 +2,7 @@
 // R2 utilities (server-only)
 // S3-compatible client for Cloudflare R2 usando credenciales del servidor.
 // =====================================================================
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { serverEnv } from "@/lib/env.server";
 
@@ -40,4 +40,8 @@ export async function getPresignedDownloadUrl(
     Key: key,
   });
   return getSignedUrl(r2Client, cmd, { expiresIn: expiresInSeconds });
+}
+
+export async function deleteObject(key: string): Promise<void> {
+  await r2Client.send(new DeleteObjectCommand({ Bucket: r2.bucketName, Key: key }));
 }
