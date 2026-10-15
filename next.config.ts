@@ -1,16 +1,14 @@
-// @ts-nocheck
 import type { NextConfig } from "next";
-import withPWAInit from "@ducanh2912/next-pwa";
+import withSerwistInit from "@serwist/next";
 
-// @ts-ignore
-const withPWA = withPWAInit({
-  dest: "public",
+const withSerwist = withSerwistInit({
+  swSrc: "src/app/sw.ts",
+  swDest: "public/sw.js",
   disable: process.env.NODE_ENV === "development",
-  register: true,
-  skipWaiting: true,
 });
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: process.cwd(),
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -31,4 +29,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+export default withSerwist(nextConfig);
