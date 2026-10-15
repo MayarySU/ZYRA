@@ -5,6 +5,7 @@ import { AuthProvider } from "@/providers/auth-provider";
 import { I18nProvider } from "@/components/providers/i18n-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SyncProvider } from "@/components/providers/sync-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 export const metadata: Metadata = {
   title: 'ZYRA Command',
@@ -32,14 +33,16 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background text-foreground min-h-screen">
         <AuthProvider>
-          <ThemeProvider>
-            <I18nProvider>
-              <SyncProvider>
-                {children}
-                <Toaster />
-              </SyncProvider>
-            </I18nProvider>
-          </ThemeProvider>
+          <QueryProvider>
+            <ThemeProvider>
+              <I18nProvider>
+                <SyncProvider>
+                  {children}
+                  <Toaster />
+                </SyncProvider>
+              </I18nProvider>
+            </ThemeProvider>
+          </QueryProvider>
         </AuthProvider>
       </body>
     </html>
