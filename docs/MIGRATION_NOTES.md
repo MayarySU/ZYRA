@@ -253,3 +253,29 @@ Se eliminaron las dependencias y artefactos de workbox; la salida del SW
     flujo antiguo. La generación "normal" (manual) de reportes vía RPC
     `enviar_reporte` no se ve afectada.
 
+## 10. ESLint (flat config) — COMPLETADO
+
+Antes no existía configuración de ESLint; `next lint` estaba deprecado y era
+interactivo. Se añadió **ESLint 9** con *flat config* (`eslint.config.mjs`) que
+extiende `next/core-web-vitals` y `next/typescript` mediante `FlatCompat`, y el
+script pasó a `"lint": "eslint ."`.
+
+- **Errores reales corregidos** (sin refactors funcionales):
+  - `prefer-const` en `src/app/materials/page.tsx` (`let` → `const`).
+  - `@typescript-eslint/no-require-imports` en `tailwind.config.ts`
+    (`require('tailwindcss-animate')` → `import`).
+- **Reglas configuradas y advertencias aceptadas** (documentadas aquí):
+  - `@typescript-eslint/no-explicit-any` degradada a *warning*: el código
+    heredado usa `any` en filas de Supabase y componentes shadcn/ui; corregirlo
+    sería un refactor masivo ajeno a la migración.
+  - `@typescript-eslint/no-unused-vars` (*warning*, regla recomendada): señala
+    código muerto heredado (imports/estados sin usar) pendiente de limpieza
+    incremental.
+  - `@next/next/no-page-custom-font` desactivada **solo** para
+    `src/app/layout.tsx`: la regla apunta al Pages Router; en el App Router el
+    `<link>` de fuentes del layout raíz se aplica globalmente (falso positivo).
+
+Resultado de `npm run lint`: **0 errores**, 116 advertencias de las reglas
+anteriores (aceptadas y justificadas). `tsc`, `build` y `db:smoke` permanecen
+limpios. Orden de comprobación: `lint` → `typecheck` → `build` → `db:smoke`.
+

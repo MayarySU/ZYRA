@@ -192,7 +192,7 @@ export default function MaterialsPage() {
     setIsSubmitting(true);
     try {
       // Auto-añadir el material seleccionado si el usuario olvidó darle al botón "+"
-      let finalMaterials = tempMaterials.map(m => ({
+      const finalMaterials = tempMaterials.map(m => ({
         material_id: m.ID_Material,
         cantidad_requerida: m.Cantidad_Requerida
       }));
