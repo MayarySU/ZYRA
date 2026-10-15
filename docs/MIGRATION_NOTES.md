@@ -242,4 +242,14 @@ Se eliminaron las dependencias y artefactos de workbox; la salida del SW
 - Eliminados: `backend/` (Express + Prisma + Railway), `firebase.json`,
   `firestore.rules`, `scratch/`, `.idx/`, `ACTION_PLAN.md` (obsoleto).
 - `README.md` reescrito para el stack Supabase.
+- Eliminada la función experimental de **redacción de reportes con IA**
+  (`src/ai/*`, flujo Genkit). Dependía del antiguo backend Express y no se
+  volvió a conectar tras la migración, por lo que quedaba sin uso. Se retiraron
+  junto con ella las dependencias (`genkit`, `@genkit-ai/google-genai`,
+  `genkit-cli`), los scripts `genkit:dev`/`genkit:watch` y la entrada `.genkit/*`
+  del `.gitignore`.
+  - **Mejora futura:** si se recupera esta función, debe reimplementarse sobre la
+    arquitectura actual (Supabase + Route Handlers + R2), no restaurando el
+    flujo antiguo. La generación "normal" (manual) de reportes vía RPC
+    `enviar_reporte` no se ve afectada.
 
