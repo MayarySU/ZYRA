@@ -1,5 +1,3 @@
-
-// @ts-nocheck
 "use client";
 
 import { useState, useMemo, useRef, Suspense, useEffect } from "react";
@@ -40,7 +38,6 @@ import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
-import { recordAction } from "@/lib/gamification";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -62,8 +59,16 @@ import {
 import { useI18n } from "@/components/providers/i18n-provider";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// @ts-nocheck
-import { projectsAPI, reportesAPI, equiposAPI } from "@/lib/api-client";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useReportes,
+  useProyectos,
+  useEquipos,
+  useAprobarReporte,
+  useRechazarReporte,
+  qk,
+} from "@/hooks/queries";
+import { db } from "@/lib/data";
 
 function ReportsContent() {
   const { profile, user } = useAuth();
@@ -71,6 +76,7 @@ function ReportsContent() {
   const { t, language } = useI18n();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const isAdmin = profile?.rol === 'admin';
 
   const projectIdParam = searchParams.get("projectId");
@@ -86,156 +92,63 @@ function ReportsContent() {
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Queries
-  const [sqlReports, setSqlReports] = useState<any[]>([]);
-  const [sqlProjects, setSqlProjects] = useState<any[]>([]);
-  const [sqlTeams, setSqlTeams] = useState<any[]>([]);
-  const [isApiLoading, setIsApiLoading] = useState(true);
+  const { data: reportes = [], isLoading } = useReportes();
+  const { data: proyectos = [] } = useProyectos();
+  const { data: equipos = [] } = useEquipos();
+  const aprobar = useAprobarReporte();
+  const rechazar = useRechazarReporte();
 
-  const loadSqlData = async () => {
-    try {
-      setIsApiLoading(true);
-      const [rData, pData, tData] = await Promise.all([
-        reportesAPI.getAll(),
-        projectsAPI.getAll(),
-        equiposAPI.getAll()
-      ]);
-      setSqlReports(Array.isArray(rData) ? rData : []);
-      setSqlProjects(Array.isArray(pData) ? pData : []);
-      setSqlTeams(Array.isArray(tData) ? tData : []);
-    } catch (e) {
-      console.error("Error loading SQL reports data", e);
-    } finally {
-      setIsApiLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (profile) {
-      loadSqlData();
-    }
-  }, [profile]);
+  const estadoNorm = (estado?: string | null) => (estado || "pendiente").toLowerCase();
 
   // Filtrado de reportes
   const filteredReports = useMemo(() => {
-    let reports = sqlReports || [];
+    let reports = reportes || [];
 
     // Filtrar por proyecto si viene de la URL
     if (projectIdParam) {
-      reports = reports.filter(r => r.ID_Proyecto === parseInt(projectIdParam));
+      reports = reports.filter(r => r.proyecto_id === parseInt(projectIdParam));
     }
 
     return reports.filter(report => {
-      const content = report.Comentarios || "";
-      const author = report.proyecto?.cliente?.Nombre || "S/A"; // Or employee name if available
-      const project = report.proyecto?.Nombre_Proyecto || "";
+      const content = report.comentarios || "";
+      const project = report.proyectos?.nombre_proyecto || "";
       const matchesSearch = content.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.toLowerCase().includes(searchTerm.toLowerCase());
-      const currentStatus = report.estado || "Pendiente";
-      const matchesFilter = activeFilter === "Todos" || currentStatus === activeFilter;
+      const matchesFilter = activeFilter === "Todos" || estadoNorm(report.estado) === activeFilter.toLowerCase();
       return matchesSearch && matchesFilter;
     });
-  }, [sqlReports, searchTerm, activeFilter, projectIdParam]);
+  }, [reportes, searchTerm, activeFilter, projectIdParam]);
 
-  const selectedReport = useMemo(() => sqlReports?.find(r => r.ID_Reporte === parseInt(selectedReportId || "0")), [sqlReports, selectedReportId]);
-  const linkedProject = useMemo(() => selectedReport?.proyecto, [selectedReport]);
-  const linkedTeam = useMemo(() => selectedReport?.equipo, [selectedReport]);
-
-  // Resumen del proyecto si se filtra por uno solo
-  const currentProject = useMemo(() => sqlProjects?.find(p => p.ID_Proyecto === parseInt(projectIdParam || "0")), [sqlProjects, projectIdParam]);
+  const selectedReport = useMemo(() => reportes?.find(r => r.id_reporte === parseInt(selectedReportId || "0")), [reportes, selectedReportId]);
+  const selectedProject = useMemo(() => selectedReport ? proyectos.find(p => p.id_proyecto === selectedReport.proyecto_id) : undefined, [proyectos, selectedReport]);
+  const selectedTeam = useMemo(() => {
+    if (!selectedReport) return null;
+    const equipoId = selectedReport.equipo_id ?? selectedReport.proyectos?.equipo_id ?? null;
+    return equipos.find(e => e.id_equipo === equipoId) ?? null;
+  }, [equipos, selectedReport]);
 
   const handleUpdateStatus = async (reportId: string, newStatus: "Aprobado" | "Rechazado") => {
     if (!isAdmin) return;
-    setProcessingId(reportId);
+    const reporteId = parseInt(reportId);
+    if (Number.isNaN(reporteId)) return;
     try {
-      await reportesAPI.update(reportId, { estado: newStatus });
-
-      // Buscar el reporte en la lista para tener los datos frescos (ID_Proyecto, ID_Empleado)
-      const report = sqlReports.find(r => r.ID_Reporte.toString() === reportId.toString());
-
-      if (newStatus === "Aprobado" && report && report.ID_Proyecto) {
-        try {
-          await projectsAPI.update(report.ID_Proyecto.toString(), {
-            Estado: "Finalizado",
-            Progreso: 100,
-            Fecha_Fin: new Date().toISOString()
-          });
-
-          // BUSQUEDA AGRESIVA: Encontrar a quién darle los puntos
-          try {
-            const allEmps = await employeesAPI.getAll();
-               // 1. Intentar por el ID_Empleado guardado en el reporte (o Firebase UID)
-               let recipients: any[] = [];
-               if (report.ID_Empleado) {
-                 const directEmp = allEmps.find((e: any) => 
-                   String(e.ID_Empleado) === String(report.ID_Empleado) ||
-                   e.usuario?.FirebaseUID === String(report.ID_Empleado)
-                 );
-                 if (directEmp) recipients = [directEmp];
-               }
-               
-               // 2. Si falla, intentar por el Equipo
-               if (recipients.length === 0 && report.ID_Equipo) {
-                 recipients = allEmps.filter((e: any) => String(e.ID_Equipo) === String(report.ID_Equipo));
-               }
-               
-               // 3. Si falla, intentar por Nombre o Email (Búsqueda Agresiva)
-               if (recipients.length === 0) {
-                 const fbName = profile?.displayName?.toLowerCase() || "lilian";
-                 const fbEmail = profile?.email?.toLowerCase() || "";
-                 
-                 recipients = allEmps.filter((e: any) => {
-                   const sqlName = e.Nombre?.toLowerCase() || "";
-                   const sqlUser = e.usuario?.Username?.toLowerCase() || "";
-                   return sqlName.includes(fbName) || (fbEmail && sqlUser.includes(fbEmail.split('@')[0]));
-                 });
-               }
-
-               if (recipients.length > 0) {
-                 for (const emp of recipients) {
-                   console.log("🎯 Otorgando puntos a:", emp.Nombre, "ID:", emp.ID_Empleado);
-                   await recordAction(emp.ID_Empleado, "PROJECT_COMPLETED");
-                 }
-                 toast({ title: "Gamificación", description: `¡50 puntos otorgados a ${recipients.length} técnico(s)!` });
-               } else {
-                 console.warn("⚠️ No se encontró técnico para asignar puntos");
-                 // Intento desesperado: asignar a Lilian si es ella quien está operando
-                 const lilian = allEmps.find((e: any) => e.Nombre?.toLowerCase().includes("lilian"));
-                 if (lilian) {
-                   await recordAction(lilian.ID_Empleado, "PROJECT_COMPLETED");
-                   toast({ title: "Gamificación", description: "Puntos asignados a Lilian (Modo Rescate)" });
-                 }
-               }
-          } catch (e) {
-            console.error("Error en gamificación:", e);
-            toast({ variant: "destructive", title: "Error", description: "Fallo al asignar puntos." });
-          }
-        } catch (e) {
-          console.error("Error updating project / gamification:", e);
-        }
-      } else if (newStatus === "Rechazado" && report && report.ID_Proyecto) {
-        try {
-          await projectsAPI.update(selectedReport.ID_Proyecto.toString(), {
-            Estado: "Rechazado"
-          });
-        } catch (e) {
-          console.error("Error updating project status:", e);
-        }
+      if (newStatus === "Aprobado") {
+        await aprobar.mutateAsync(reporteId);
+      } else {
+        await rechazar.mutateAsync({ reporteId });
       }
 
       toast({ title: t.common.success });
       setSelectedReportId(null);
-      loadSqlData();
     } catch (e: any) {
-      toast({ variant: "destructive", title: t.common.error });
-    } finally {
-      setProcessingId(null);
+      toast({ variant: "destructive", title: t.common.error, description: e?.message });
     }
   };
 
   useEffect(() => {
     if (selectedReportId && selectedReport) {
       setEditMode(false);
-      setEditComentarios(selectedReport.Comentarios || "");
+      setEditComentarios(selectedReport.comentarios || "");
       setEditPhoto(null);
     }
   }, [selectedReportId, selectedReport]);
@@ -254,20 +167,20 @@ function ReportsContent() {
 
   const handleResubmitReport = async () => {
     if (!selectedReportId) return;
+    const reporteId = parseInt(selectedReportId);
+    if (Number.isNaN(reporteId)) return;
     setProcessingId(selectedReportId);
     try {
-      const payload: any = {
-        Comentarios: editComentarios,
-        estado: "Pendiente"
-      };
-      if (editPhoto) {
-        payload.Evidencias_URL = editPhoto.dataUrl;
-      }
-      await reportesAPI.update(selectedReportId, payload);
+      const { error } = await db()
+        .from("reportes")
+        .update({ comentarios: editComentarios, estado: "pendiente" })
+        .eq("id_reporte", reporteId);
+      if (error) throw new Error(error.message);
+
+      queryClient.invalidateQueries({ queryKey: qk.reportes });
       toast({ title: t.common.success, description: "Reporte reenviado exitosamente." });
       setEditMode(false);
       setSelectedReportId(null);
-      loadSqlData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
     } finally {
@@ -280,22 +193,15 @@ function ReportsContent() {
     if (!isAdmin) return;
     if (!confirm("¿Estás seguro de que deseas eliminar este reporte?")) return;
 
+    const reporteId = parseInt(reportId);
+    if (Number.isNaN(reporteId)) return;
     setProcessingId(reportId);
     try {
-      // Obtener datos del reporte antes de borrarlo para saber de qué proyecto es
-      const reportToDelete = sqlReports.find(r => r.ID_Reporte.toString() === reportId.toString());
+      const { error } = await db().from("reportes").delete().eq("id_reporte", reporteId);
+      if (error) throw new Error(error.message);
 
-      await reportesAPI.delete(reportId);
-
-      // Si el reporte pertenecía a un proyecto, regresamos el proyecto a "Activo" para que puedan volver a Iniciar Día
-      if (reportToDelete && reportToDelete.ID_Proyecto) {
-        await projectsAPI.update(reportToDelete.ID_Proyecto.toString(), {
-          Estado: "Activo"
-        });
-      }
-
-      toast({ title: t.common.success, description: "Reporte eliminado y proyecto reiniciado." });
-      loadSqlData();
+      queryClient.invalidateQueries({ queryKey: qk.reportes });
+      toast({ title: t.common.success, description: "Reporte eliminado." });
     } catch (e: any) {
       toast({ variant: "destructive", title: t.common.error });
     } finally {
@@ -356,57 +262,60 @@ function ReportsContent() {
         </div>
       </div>
 
-      {isApiLoading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-accent"></div>
         </div>
       ) : filteredReports.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-2">
-          {filteredReports.map((report) => (
-            <div
-              key={report.ID_Reporte}
-              onClick={() => setSelectedReportId(report.ID_Reporte.toString())}
-              className="bg-card border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-accent/40 transition-all flex flex-col shadow-xl group"
-            >
-              <div className="relative aspect-[4/3] w-full overflow-hidden">
-                <Image src={report.Evidencias_URL || "https://picsum.photos/seed/solar-report/800/600"} alt="" fill className="object-cover" />
-                <div className="absolute top-3 right-3">
-                  <Badge className={cn("font-bold text-[10px]", report.estado === "Aprobado" ? "bg-emerald-500" : report.estado === "Rechazado" ? "bg-red-500" : "bg-yellow-500")}>
-                    {(report.estado || "Pendiente").toUpperCase()}
-                  </Badge>
-                </div>
-                {isAdmin && (
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute bottom-3 right-3 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                    onClick={(e) => handleDeleteReport(report.ID_Reporte.toString(), e)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <div className="p-5 flex flex-col flex-1 space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-accent">
-                    <Briefcase className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider truncate">{report.proyecto?.Nombre_Proyecto}</span>
+          {filteredReports.map((report) => {
+            const equipo = equipos.find(e => e.id_equipo === (report.equipo_id ?? report.proyectos?.equipo_id));
+            return (
+              <div
+                key={report.id_reporte}
+                onClick={() => setSelectedReportId(report.id_reporte.toString())}
+                className="bg-card border border-border rounded-2xl overflow-hidden cursor-pointer hover:border-accent/40 transition-all flex flex-col shadow-xl group"
+              >
+                <div className="relative aspect-[4/3] w-full overflow-hidden">
+                  <Image src={"https://picsum.photos/seed/solar-report/800/600"} alt="" fill className="object-cover" />
+                  <div className="absolute top-3 right-3">
+                    <Badge className={cn("font-bold text-[10px]", estadoNorm(report.estado) === "aprobado" ? "bg-emerald-500" : estadoNorm(report.estado) === "rechazado" ? "bg-red-500" : "bg-yellow-500")}>
+                      {estadoNorm(report.estado).toUpperCase()}
+                    </Badge>
                   </div>
-                  <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{report.Comentarios || "-"}</p>
+                  {isAdmin && (
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute bottom-3 right-3 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      onClick={(e) => handleDeleteReport(report.id_reporte.toString(), e)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-                {report.equipo?.Nombre_Equipo && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Users className="h-3 w-3" />
-                    <span className="text-[10px] font-medium truncate">{report.equipo.Nombre_Equipo}</span>
+                <div className="p-5 flex flex-col flex-1 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-accent">
+                      <Briefcase className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider truncate">{report.proyectos?.nombre_proyecto}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{report.comentarios || "-"}</p>
                   </div>
-                )}
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-4 border-t border-border">
-                  <span className="font-bold text-foreground/70 truncate">SQL Report</span>
-                  <span>{formatDate(report.Fecha_Reporte, "d/M/yyyy")}</span>
+                  {equipo?.nombre_equipo && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Users className="h-3 w-3" />
+                      <span className="text-[10px] font-medium truncate">{equipo.nombre_equipo}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-4 border-t border-border">
+                    <span className="font-bold text-foreground/70 truncate">SQL Report</span>
+                    <span>{formatDate(report.fecha_reporte, "d/M/yyyy")}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center px-6">
@@ -423,7 +332,7 @@ function ReportsContent() {
             <>
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold text-accent flex items-center gap-2">
-                  <Briefcase className="h-6 w-6" /> {selectedReport.proyecto?.Nombre_Proyecto || "Auditoría de Reporte"}
+                  <Briefcase className="h-6 w-6" /> {selectedReport.proyectos?.nombre_proyecto || "Auditoría de Reporte"}
                 </DialogTitle>
                 <DialogDescription className="text-muted-foreground">{t.reports.audit_detail}</DialogDescription>
               </DialogHeader>
@@ -436,15 +345,15 @@ function ReportsContent() {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Building2 className="h-3.5 w-3.5 text-accent" />
-                        <span className="font-semibold text-foreground">{selectedReport.proyecto?.Nombre_Proyecto || "-"}</span>
+                        <span className="font-semibold text-foreground">{selectedReport.proyectos?.nombre_proyecto || "-"}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <MapPin className="h-3.5 w-3.5 text-accent" />
-                        <span>{selectedReport.proyecto?.Ubicacion || "-"}</span>
+                        <span>{selectedProject?.ubicacion || "-"}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <CalendarDays className="h-3.5 w-3.5 text-accent" />
-                        <span>{formatDate(selectedReport.Fecha_Reporte, "PPP")}</span>
+                        <span>{formatDate(selectedReport.fecha_reporte, "PPP")}</span>
                       </div>
                     </div>
                   </div>
@@ -453,15 +362,15 @@ function ReportsContent() {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="h-3.5 w-3.5 text-accent" />
-                        <span className="font-semibold text-foreground">{selectedReport.equipo?.Nombre_Equipo || "Sin equipo"}</span>
+                        <span className="font-semibold text-foreground">{selectedTeam?.nombre_equipo || "Sin equipo"}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Wrench className="h-3.5 w-3.5 text-accent" />
-                        <span>Tipo: {selectedReport.equipo?.Tipo || "N/A"}</span>
+                        <span>Tipo: N/A</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Hash className="h-3.5 w-3.5 text-accent" />
-                        <span>ID Reporte: {selectedReport.ID_Reporte}</span>
+                        <span>ID Reporte: {selectedReport.id_reporte}</span>
                       </div>
                     </div>
                   </div>
@@ -477,14 +386,14 @@ function ReportsContent() {
                       className="min-h-[100px]"
                     />
                   ) : (
-                    <p className="text-sm leading-relaxed">{selectedReport.Comentarios || "-"}</p>
+                    <p className="text-sm leading-relaxed">{selectedReport.comentarios || "-"}</p>
                   )}
                 </div>
 
                 {/* Potentially multiple photos or single URL */}
                 <div className="space-y-2">
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-border shadow-inner">
-                    <Image src={editPhoto?.dataUrl || selectedReport.Evidencias_URL || "https://picsum.photos/seed/solar-report/800/600"} alt="" fill className="object-cover" />
+                    <Image src={editPhoto?.dataUrl || "https://picsum.photos/seed/solar-report/800/600"} alt="" fill className="object-cover" />
                   </div>
                   {editMode && (
                     <div className="flex justify-end">
@@ -498,23 +407,23 @@ function ReportsContent() {
 
                 {/* Metadata footer */}
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-2 border-t border-border">
-                  <Badge variant="outline" className="text-[9px] font-bold">Proyecto: {selectedReport.proyecto?.Nombre_Proyecto}</Badge>
-                  <Badge variant="outline" className="text-[9px] font-bold">Fecha: {formatDate(selectedReport.Fecha_Reporte, "PPP")}</Badge>
-                  <Badge variant="outline" className={cn("text-[9px] font-bold", selectedReport.estado === "Aprobado" ? "border-emerald-500/50 text-emerald-500" : selectedReport.estado === "Rechazado" ? "border-red-500/50 text-red-500" : "border-yellow-500/50 text-yellow-500")}>
-                    {(selectedReport.estado || "Pendiente").toUpperCase()}
+                  <Badge variant="outline" className="text-[9px] font-bold">Proyecto: {selectedReport.proyectos?.nombre_proyecto}</Badge>
+                  <Badge variant="outline" className="text-[9px] font-bold">Fecha: {formatDate(selectedReport.fecha_reporte, "PPP")}</Badge>
+                  <Badge variant="outline" className={cn("text-[9px] font-bold", estadoNorm(selectedReport.estado) === "aprobado" ? "border-emerald-500/50 text-emerald-500" : estadoNorm(selectedReport.estado) === "rechazado" ? "border-red-500/50 text-red-500" : "border-yellow-500/50 text-yellow-500")}>
+                    {estadoNorm(selectedReport.estado).toUpperCase()}
                   </Badge>
                 </div>
 
                 {/* Admin Approve/Reject */}
-                {isAdmin && (selectedReport.estado === "Pendiente" || !selectedReport.status) && (
+                {isAdmin && estadoNorm(selectedReport.estado) === "pendiente" && (
                   <div className="flex gap-3 pt-4 border-t border-border">
-                    <Button className="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold" onClick={() => handleUpdateStatus(selectedReport.ID_Reporte.toString(), "Aprobado")}>{t.reports.approve_btn}</Button>
-                    <Button variant="destructive" className="flex-1 font-bold" onClick={() => handleUpdateStatus(selectedReport.ID_Reporte.toString(), "Rechazado")}>{t.reports.reject_btn}</Button>
+                    <Button className="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold" disabled={aprobar.isPending || rechazar.isPending} onClick={() => handleUpdateStatus(selectedReport.id_reporte.toString(), "Aprobado")}>{t.reports.approve_btn}</Button>
+                    <Button variant="destructive" className="flex-1 font-bold" disabled={aprobar.isPending || rechazar.isPending} onClick={() => handleUpdateStatus(selectedReport.id_reporte.toString(), "Rechazado")}>{t.reports.reject_btn}</Button>
                   </div>
                 )}
 
                 {/* Operator Edit/Resubmit for Rejected Reports */}
-                {!isAdmin && selectedReport.estado === "Rechazado" && (
+                {!isAdmin && estadoNorm(selectedReport.estado) === "rechazado" && (
                   <div className="pt-4 border-t border-border flex flex-col gap-3">
                     {editMode ? (
                       <div className="flex gap-3">

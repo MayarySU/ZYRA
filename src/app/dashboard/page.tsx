@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useAuth } from "@/providers/auth-provider";
@@ -30,7 +29,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -46,10 +45,11 @@ import {
   Tooltip,
 } from "recharts";
 import { useI18n } from "@/components/providers/i18n-provider";
-import { calcLevel, recordAction } from "@/lib/gamification";
-import { startOfDay, subWeeks, isAfter, format, startOfWeek, subDays } from "date-fns";
+import { calcLevel } from "@/lib/gamification";
+import { startOfDay, isAfter, format, subDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { reportsAPI, projectsAPI, usersAPI, materialsAPI, employeesAPI } from "@/lib/api-client";
+import { useProyectos, useReportes, useMateriales, useEmpleados } from "@/hooks/queries";
+import type { ProyectoVista, ReporteConProyecto, Material, Empleado } from "@/lib/data";
 
 // ─────────────────────────────────────────────────
 // MEDAL CONFIG
@@ -66,32 +66,54 @@ const MEDAL_CONFIG: Record<string, { color: string; icon: string; label: string 
 // ─────────────────────────────────────────────────
 function statusStyle(status: string) {
   switch (status) {
-    case "Finalizado": return { color: "text-emerald-400", bg: "bg-emerald-500/10", icon: <CheckCircle2 className="h-3 w-3" /> };
-    case "EnProceso": return { color: "text-blue-400", bg: "bg-blue-500/10", icon: <Activity className="h-3 w-3" /> };
-    case "EnRevision": return { color: "text-yellow-400", bg: "bg-yellow-500/10", icon: <Clock className="h-3 w-3" /> };
-    case "Rechazado": return { color: "text-red-400", bg: "bg-red-500/10", icon: <XCircle className="h-3 w-3" /> };
+    case "finalizado": return { color: "text-emerald-400", bg: "bg-emerald-500/10", icon: <CheckCircle2 className="h-3 w-3" /> };
+    case "en_proceso": return { color: "text-blue-400", bg: "bg-blue-500/10", icon: <Activity className="h-3 w-3" /> };
+    case "pendiente_de_cierre": return { color: "text-yellow-400", bg: "bg-yellow-500/10", icon: <Clock className="h-3 w-3" /> };
+    case "rechazado": return { color: "text-red-400", bg: "bg-red-500/10", icon: <XCircle className="h-3 w-3" /> };
+    case "cancelado": return { color: "text-red-400", bg: "bg-red-500/10", icon: <XCircle className="h-3 w-3" /> };
     default: return { color: "text-muted-foreground", bg: "bg-muted/20", icon: <Clock className="h-3 w-3" /> };
   }
+}
+
+const ESTADO_LABEL: Record<string, string> = {
+  borrador: "Borrador",
+  preparacion: "Preparación",
+  checklist_pendiente: "Checklist Pendiente",
+  listo_para_iniciar: "Listo para Iniciar",
+  en_proceso: "En Proceso",
+  pendiente_de_cierre: "Pendiente de Cierre",
+  finalizado: "Finalizado",
+  cancelado: "Cancelado",
+  rechazado: "Rechazado",
+};
+
+function estadoLabel(estado: string) {
+  return ESTADO_LABEL[estado] ?? estado;
 }
 
 // ─────────────────────────────────────────────────
 // ADMIN DASHBOARD
 // ─────────────────────────────────────────────────
-function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
+function AdminDashboard({ proyectos, reportes, empleados, materiales }: {
+  proyectos: ProyectoVista[];
+  reportes: ReporteConProyecto[];
+  empleados: Empleado[];
+  materiales: Material[];
+}) {
   const { t } = useI18n();
 
   const stats = useMemo(() => {
-    const activeProjects = (proyectos || []).filter((p: any) => p.Estado !== "Finalizado").length;
-    const finishedProjects = (proyectos || []).filter((p: any) => p.Estado === "Finalizado").length;
-    const pendingReports = (reportes || []).filter((r: any) => r.estado === "Pendiente" || !r.estado).length;
-    const approvedReports = (reportes || []).filter((r: any) => r.estado === "Aprobado").length;
-    const rejectedReports = (reportes || []).filter((r: any) => r.estado === "Rechazado").length;
+    const activeProjects = (proyectos || []).filter((p) => p.estado !== "finalizado").length;
+    const finishedProjects = (proyectos || []).filter((p) => p.estado === "finalizado").length;
+    const pendingReports = (reportes || []).filter((r) => r.estado === "pendiente" || !r.estado).length;
+    const approvedReports = (reportes || []).filter((r) => r.estado === "aprobado").length;
+    const rejectedReports = (reportes || []).filter((r) => r.estado === "rechazado").length;
     const totalEmpl = (empleados || []).length;
-    const criticalMats = (materiales || []).filter((m: any) => (m.Stock_Disponible || 0) <= 5).length;
+    const criticalMats = (materiales || []).filter((m) => (m.stock_disponible || 0) <= 5).length;
 
     const today = startOfDay(new Date());
-    const todayReports = (reportes || []).filter((r: any) =>
-      r.Fecha_Reporte && isAfter(new Date(r.Fecha_Reporte), today)
+    const todayReports = (reportes || []).filter((r) =>
+      r.fecha_reporte && isAfter(new Date(r.fecha_reporte), today)
     ).length;
 
     return {
@@ -107,9 +129,9 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
       const label = format(date, "EEE", { locale: es });
       return { name: label, reportes: 0, proyectos: 0, date };
     });
-    (reportes || []).forEach((r: any) => {
-      if (!r.Fecha_Reporte) return;
-      const d = new Date(r.Fecha_Reporte);
+    (reportes || []).forEach((r) => {
+      if (!r.fecha_reporte) return;
+      const d = new Date(r.fecha_reporte);
       const idx = weeks.findIndex(w => format(w.date, "yyyyMMdd") === format(d, "yyyyMMdd"));
       if (idx !== -1) weeks[idx].reportes++;
     });
@@ -132,21 +154,23 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
   // Top employees by points
   const topEmployees = useMemo(() =>
     [...(empleados || [])]
-      .filter(e => 
-        !e.Nombre?.toLowerCase().includes('admin') && 
-        e.usuario?.rol?.Nombre_Rol !== 'admin'
+      .filter(e =>
+        !e.nombre?.toLowerCase().includes('admin')
       )
-      .map(e => ({ ...e, totalPuntos: Array.isArray(e.puntos) ? e.puntos.reduce((s: number, p: any) => s + (p.Cantidad_Puntos || 0), 0) : 0 }))
-      .sort((a: any, b: any) => b.totalPuntos - a.totalPuntos)
+      .map(e => {
+        const puntos = (e as Empleado & { puntos?: { cantidad_puntos?: number }[] }).puntos;
+        return { ...e, totalPuntos: Array.isArray(puntos) ? puntos.reduce((s, p) => s + (p.cantidad_puntos || 0), 0) : 0 };
+      })
+      .sort((a, b) => b.totalPuntos - a.totalPuntos)
       .slice(0, 5),
     [empleados]
   );
 
   // Recent projects
   const recentProjects = useMemo(() =>
-    [...(proyectos || [])].sort((a: any, b: any) => {
-      const aId = a.ID_Proyecto || 0;
-      const bId = b.ID_Proyecto || 0;
+    [...(proyectos || [])].sort((a, b) => {
+      const aId = a.id_proyecto || 0;
+      const bId = b.id_proyecto || 0;
       return bId - aId;
     }).slice(0, 5),
     [proyectos]
@@ -286,10 +310,10 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
           <CardContent className="space-y-3">
             {topEmployees.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">Sin datos aún</p>
-            ) : topEmployees.map((emp: any, i: number) => {
+            ) : topEmployees.map((emp, i) => {
               const currentLevel = calcLevel(emp.totalPuntos || 0);
               return (
-                <div key={emp.ID_Empleado || i} className="flex items-center gap-3">
+                <div key={emp.id_empleado || i} className="flex items-center gap-3">
                   <div className={cn(
                     "h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0",
                     i === 0 ? "bg-amber-500/20 text-amber-400" :
@@ -297,7 +321,7 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
                         i === 2 ? "bg-orange-700/20 text-orange-500" : "bg-muted text-muted-foreground"
                   )}>{i + 1}</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground truncate">{emp.Nombre || "—"}</p>
+                    <p className="text-xs font-bold text-foreground truncate">{emp.nombre || "—"}</p>
                     <p className="text-[9px] text-muted-foreground">Nv. {currentLevel}</p>
                   </div>
                   <Badge variant="outline" className="text-[9px] font-black border-accent/30 text-accent shrink-0">
@@ -319,18 +343,18 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
           <CardContent className="space-y-3">
             {recentProjects.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">Sin proyectos</p>
-            ) : recentProjects.map((proj: any) => {
-              const estado = proj.Estado || "Planificación";
+            ) : recentProjects.map((proj) => {
+              const estado = proj.estado || "borrador";
               const s = statusStyle(estado);
               return (
-                <div key={proj.ID_Proyecto} className="flex items-center gap-3">
+                <div key={proj.id_proyecto} className="flex items-center gap-3">
                   <div className={cn("p-1.5 rounded-lg shrink-0", s.bg, s.color)}>{s.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground truncate">{proj.Nombre_Proyecto}</p>
-                    <p className="text-[9px] text-muted-foreground truncate">{proj.cliente?.Nombre || "Sin cliente"}</p>
+                    <p className="text-xs font-bold text-foreground truncate">{proj.nombre_proyecto}</p>
+                    <p className="text-[9px] text-muted-foreground truncate">{(proj.cliente as { nombre?: string } | null)?.nombre || "Sin cliente"}</p>
                   </div>
                   <Badge variant="outline" className={cn("text-[8px] font-black shrink-0 border-0", s.bg, s.color)}>
-                    {estado}
+                    {estadoLabel(estado)}
                   </Badge>
                 </div>
               );
@@ -345,10 +369,10 @@ function AdminDashboard({ proyectos, reportes, empleados, materiales }: any) {
 // ─────────────────────────────────────────────────
 // EMPLOYEE DASHBOARD
 // ─────────────────────────────────────────────────
-function EmployeeDashboard({ profile, reportes, empleadoData }: any) {
+function EmployeeDashboard({ profile, reportes, proyectos, empleadoData }: any) {
   const puntos = useMemo(() => {
     return (empleadoData?.puntos || []).reduce((s: number, p: any) => {
-      const val = parseInt(p.Cantidad_Puntos?.toString() || "0");
+      const val = parseInt(p.cantidad_puntos?.toString() || "0");
       return s + (isNaN(val) ? 0 : val);
     }, 0);
   }, [empleadoData]);
@@ -359,14 +383,17 @@ function EmployeeDashboard({ profile, reportes, empleadoData }: any) {
   // Sistema de Logros Dinámico
   const logros = useMemo(() => {
     const list = [];
-    const approvedCount = (reportes || []).filter((r: any) => r.estado === "Aprobado").length;
+    const approvedCount = (reportes || []).filter((r: any) => r.estado === "aprobado").length;
 
     if (approvedCount >= 1) list.push("first_report");
     if (approvedCount >= 5) list.push("photographer");
-    if ((reportes || []).some((r: any) => r.proyecto?.Estado === "Finalizado")) list.push("project_master");
+    if ((reportes || []).some((r: any) => {
+      const proj = (proyectos || []).find((p: any) => p.id_proyecto === r.proyecto_id);
+      return proj?.estado === "finalizado";
+    })) list.push("project_master");
 
     return list;
-  }, [reportes]);
+  }, [reportes, proyectos]);
 
   // Level-up celebration
   const prevNivelRef = useRef<number>(nivel);
@@ -385,32 +412,32 @@ function EmployeeDashboard({ profile, reportes, empleadoData }: any) {
   const historial = useMemo(() => {
     const ptsHistory = (empleadoData?.puntos || [])
       .map((p: any) => ({
-        id: p.ID_Punto,
+        id: p.id_punto,
         type: "points" as const,
-        label: `✨ ${p.Motivo || "Acción premiada"}`,
-        sub: p.ID_Proyecto ? `Proyecto #${p.ID_Proyecto}` : "Actividad general",
-        pts: `+${p.Cantidad_Puntos} pts`,
+        label: `✨ ${p.motivo || "Acción premiada"}`,
+        sub: p.proyecto_id ? `Proyecto #${p.proyecto_id}` : "Actividad general",
+        pts: `+${p.cantidad_puntos} pts`,
         color: "text-emerald-400",
       }));
 
     // Fallback: also show recent reports even if they don't have points yet
     const myReports = (reportes || [])
-      .filter((r: any) => !ptsHistory.some((p: any) => p.sub.includes(String(r.ID_Proyecto))))
+      .filter((r: any) => !ptsHistory.some((p: any) => p.sub.includes(String(r.proyecto_id))))
       .map((r: any) => ({
-        id: r.ID_Reporte,
+        id: r.id_reporte,
         type: "report" as const,
-        label: r.estado === "Aprobado" ? "✅ Reporte aprobado" : r.estado === "Rechazado" ? "❌ Reporte rechazado" : "📤 Reporte enviado",
-        sub: r.proyecto?.Nombre_Proyecto || "Sin proyecto",
-        date: r.Fecha_Reporte,
+        label: r.estado === "aprobado" ? "✅ Reporte aprobado" : r.estado === "rechazado" ? "❌ Reporte rechazado" : "📤 Reporte enviado",
+        sub: r.proyectos?.nombre_proyecto || "Sin proyecto",
+        date: r.fecha_reporte,
         pts: null,
-        color: r.estado === "Aprobado" ? "text-emerald-400" : r.estado === "Rechazado" ? "text-red-400" : "text-yellow-400",
+        color: r.estado === "aprobado" ? "text-emerald-400" : r.estado === "rechazado" ? "text-red-400" : "text-yellow-400",
       }));
 
     return [...ptsHistory]
       .slice(0, 8);
   }, [empleadoData, reportes]);
 
-  const nombre = empleadoData?.Nombre || profile?.displayName || "Técnico";
+  const nombre = empleadoData?.nombre || profile?.displayName || "Técnico";
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-body">
@@ -535,71 +562,46 @@ function EmployeeDashboard({ profile, reportes, empleadoData }: any) {
 // ─────────────────────────────────────────────────
 export default function DashboardPage() {
   const { profile, loading: userLoading } = useAuth();
-  const [proyectos, setProyectos] = useState<any[]>([]);
-  const [reportes, setReportes] = useState<any[]>([]);
-  const [empleados, setEmpleados] = useState<any[]>([]);
-  const [materiales, setMateriales] = useState<any[]>([]);
-  const [empleadoData, setEmpleadoData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const proyectosQuery = useProyectos();
+  const reportesQuery = useReportes();
+  const materialesQuery = useMateriales();
+  const empleadosQuery = useEmpleados();
+
+  const { data: proyectos = [] } = proyectosQuery;
+  const { data: reportes = [] } = reportesQuery;
+  const { data: materiales = [] } = materialesQuery;
+  const { data: empleados = [] } = empleadosQuery;
+
+  const isLoading =
+    proyectosQuery.isLoading ||
+    reportesQuery.isLoading ||
+    materialesQuery.isLoading ||
+    empleadosQuery.isLoading;
 
   const isAdmin = profile?.rol === 'admin';
 
+  const empleadoData = useMemo(() => {
+    if (!profile?.empleadoId) return null;
+    return (empleados || []).find((e) => e.id_empleado === profile.empleadoId) ?? null;
+  }, [empleados, profile?.empleadoId]);
+
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-
-        const reportesData = await reportsAPI.getAll();
-        setReportes(Array.isArray(reportesData) ? reportesData : []);
-
-        if (isAdmin) {
-          const proyectosData = await projectsAPI.getAll();
-          setProyectos(Array.isArray(proyectosData) ? proyectosData : []);
-
-          const empleadosData = await employeesAPI.getAll();
-          setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
-
-          const materialesData = await materialsAPI.getAll();
-          setMateriales(Array.isArray(materialesData) ? materialesData : []);
-        } else {
-          // For operators: load their own employee record (with puntos)
-          try {
-            if (profile?.empleadoId) {
-              const empData = await employeesAPI.getById(profile.empleadoId);
-              console.log("📊 [DEBUG Dashboard] Datos del empleado:", empData);
-              setEmpleadoData(empData || null);
-            } else {
-              // Fallback: buscar por email (Username en SQL)
-              const allEmpleados = await employeesAPI.getAll();
-              const myRecord = Array.isArray(allEmpleados)
-                ? allEmpleados.find((e: any) =>
-                    e.usuario?.Username?.toLowerCase() === (profile?.email || "").toLowerCase()
-                  )
-                : null;
-              console.log("📊 [DEBUG Dashboard] Datos del empleado (fallback):", myRecord);
-              setEmpleadoData(myRecord || null);
-            }
-          } catch (e) {
-            console.warn("Could not load employee record", e);
-          }
-        }
-      } catch (error: any) {
-        console.error('Error loading dashboard data:', error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "No se pudieron cargar los datos del dashboard"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (!userLoading && profile) {
-      loadData();
+    if (proyectosQuery.isError || reportesQuery.isError || materialesQuery.isError || empleadosQuery.isError) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudieron cargar los datos del dashboard"
+      });
     }
-  }, [userLoading, profile, isAdmin, toast]);
+  }, [
+    proyectosQuery.isError,
+    reportesQuery.isError,
+    materialesQuery.isError,
+    empleadosQuery.isError,
+    toast,
+  ]);
 
   if (userLoading || isLoading) {
     return (
@@ -613,6 +615,5 @@ export default function DashboardPage() {
     return <AdminDashboard proyectos={proyectos} reportes={reportes} empleados={empleados} materiales={materiales} />;
   }
 
-  return <EmployeeDashboard profile={profile} reportes={reportes} empleadoData={empleadoData} />;
+  return <EmployeeDashboard profile={profile} reportes={reportes} proyectos={proyectos} empleadoData={empleadoData} />;
 }
-

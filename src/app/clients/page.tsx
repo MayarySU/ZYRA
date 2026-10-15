@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useAuth } from "@/providers/auth-provider";
 import { 
@@ -64,7 +64,7 @@ import { useI18n } from "@/components/providers/i18n-provider";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { clientsAPI } from "@/lib/api-client";
+import { useClientes, useCrearCliente, useEliminarCliente, useProyectos } from "@/hooks/queries";
 
 export default function ClientsPage() {
   const { user, profile, loading: userLoading } = useAuth();
@@ -72,94 +72,81 @@ export default function ClientsPage() {
   const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
-  const [clients, setClients] = useState<any[]>([]);
+  const { data: clients = [], isLoading } = useClientes();
+  const { data: proyectos = [] } = useProyectos();
+  const crear = useCrearCliente();
+  const eliminar = useEliminarCliente();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newClient, setNewClient] = useState({
-    Nombre: "",
-    RazonSocial: "",
-    Correo: "",
-    Direccion: "",
-    Telefono: ""
+    nombre: "",
+    razon_social: "",
+    correo: "",
+    direccion: "",
+    telefono: ""
   });
-
-  const loadClients = async () => {
-    try {
-      setIsLoading(true);
-      const data = await clientsAPI.getAll();
-      setClients(Array.isArray(data) ? data : []);
-    } catch (e: any) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la lista de clientes" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!userLoading && profile && isAdmin) {
-      loadClients();
-    }
-  }, [userLoading, profile, isAdmin]);
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => 
-      c.Nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.RazonSocial?.toLowerCase().includes(searchTerm.toLowerCase())
+      c.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.razon_social?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [clients, searchTerm]);
+
+  const selectedProjects = useMemo(() => {
+    if (!selectedClient) return [];
+    return proyectos.filter(p => p.cliente_id === selectedClient.id_cliente);
+  }, [proyectos, selectedClient]);
 
   const handleCreateClient = async () => {
     if (!isAdmin || !user) return;
     
     // Validaciones
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!newClient.Correo || !emailRegex.test(newClient.Correo)) {
+    if (!newClient.correo || !emailRegex.test(newClient.correo)) {
       toast({ variant: "destructive", title: "Error", description: "Formato de correo electrónico inválido" });
       return;
     }
 
-    if (!newClient.Telefono || !/^\d+$/.test(newClient.Telefono)) {
+    if (!newClient.telefono || !/^\d+$/.test(newClient.telefono)) {
       toast({ variant: "destructive", title: "Error", description: "El teléfono debe ser numérico" });
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      await clientsAPI.create(newClient);
+      await crear.mutateAsync({
+        nombre: newClient.nombre,
+        razon_social: newClient.razon_social,
+        correo: newClient.correo,
+        direccion: newClient.direccion,
+        telefono: newClient.telefono,
+        empresa_id: 1
+      });
       toast({ title: t.common.success, description: "Cliente registrado exitosamente" });
       setIsCreateDialogOpen(false);
       setNewClient({
-        Nombre: "",
-        RazonSocial: "",
-        Correo: "",
-        Direccion: "",
-        Telefono: ""
+        nombre: "",
+        razon_social: "",
+        correo: "",
+        direccion: "",
+        telefono: ""
       });
-      loadClients();
     } catch (e: any) {
       toast({ variant: "destructive", title: t.common.error, description: "Error al registrar cliente" });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteClient = async (clientId: string) => {
+  const handleDeleteClient = async (clientId: number) => {
     if (!isAdmin || !user) return;
-    setIsSubmitting(true);
     try {
-      await clientsAPI.delete(clientId);
+      await eliminar.mutateAsync(clientId);
       toast({ title: t.common.success, description: "Cliente eliminado correctamente." });
-      loadClients();
     } catch (e: any) {
       toast({ variant: "destructive", title: t.common.error, description: "Error al eliminar el cliente." });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -226,8 +213,8 @@ export default function ClientsPage() {
                       id="name" 
                       placeholder="Nombre..." 
                       className="bg-muted/50 border-border text-foreground"
-                      value={newClient.Nombre}
-                      onChange={(e) => setNewClient({...newClient, Nombre: e.target.value})}
+                      value={newClient.nombre}
+                      onChange={(e) => setNewClient({...newClient, nombre: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
@@ -236,8 +223,8 @@ export default function ClientsPage() {
                       id="legal" 
                       placeholder="S.A. de C.V." 
                       className="bg-muted/50 border-border text-foreground"
-                      value={newClient.RazonSocial}
-                      onChange={(e) => setNewClient({...newClient, RazonSocial: e.target.value})}
+                      value={newClient.razon_social}
+                      onChange={(e) => setNewClient({...newClient, razon_social: e.target.value})}
                     />
                   </div>
                 </div>
@@ -248,8 +235,8 @@ export default function ClientsPage() {
                       type="email"
                       placeholder="email@empresa.com" 
                       className="bg-muted/50 border-border text-foreground"
-                      value={newClient.Correo}
-                      onChange={(e) => setNewClient({...newClient, Correo: e.target.value})}
+                      value={newClient.correo}
+                      onChange={(e) => setNewClient({...newClient, correo: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
@@ -257,8 +244,8 @@ export default function ClientsPage() {
                     <Input 
                       placeholder="10 dígitos" 
                       className="bg-muted/50 border-border text-foreground"
-                      value={newClient.Telefono}
-                      onChange={(e) => setNewClient({...newClient, Telefono: e.target.value})}
+                      value={newClient.telefono}
+                      onChange={(e) => setNewClient({...newClient, telefono: e.target.value})}
                     />
                   </div>
                 </div>
@@ -267,18 +254,18 @@ export default function ClientsPage() {
                   <Input 
                     placeholder="Calle, No, Colonia..." 
                     className="bg-muted/50 border-border text-foreground"
-                    value={newClient.Direccion}
-                    onChange={(e) => setNewClient({...newClient, Direccion: e.target.value})}
+                    value={newClient.direccion}
+                    onChange={(e) => setNewClient({...newClient, direccion: e.target.value})}
                   />
                 </div>
               </div>
               <DialogFooter>
                 <Button 
                   className="bg-accent hover:bg-accent/90 text-white w-full h-12 text-lg font-bold"
-                  disabled={!newClient.Nombre || isSubmitting}
+                  disabled={!newClient.nombre || crear.isPending}
                   onClick={handleCreateClient}
                 >
-                  {isSubmitting ? "Cargando..." : "Guardar Cliente"}
+                  {crear.isPending ? "Cargando..." : "Guardar Cliente"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -318,35 +305,35 @@ export default function ClientsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredClients.map((client) => (
-                    <TableRow key={client.ID_Cliente} className="hover:bg-muted/20 transition-colors border-border">
+                    <TableRow key={client.id_cliente} className="hover:bg-muted/20 transition-colors border-border">
                       <TableCell className="py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-9 w-9 rounded-lg bg-accent/20 flex items-center justify-center">
                             <User className="h-5 w-5 text-accent" />
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-foreground">{client.Nombre}</p>
+                            <p className="text-sm font-bold text-foreground">{client.nombre}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <span className="text-xs text-muted-foreground italic">
-                          {client.RazonSocial || "-"}
+                          {client.razon_social || "-"}
                         </span>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-xs text-foreground">
-                            <Mail className="h-3 w-3 text-accent" /> {client.Correo || "-"}
+                            <Mail className="h-3 w-3 text-accent" /> {client.correo || "-"}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Phone className="h-3 w-3 text-muted-foreground" /> {client.Telefono || "-"}
+                            <Phone className="h-3 w-3 text-muted-foreground" /> {client.telefono || "-"}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground max-w-[200px] truncate">
-                          <MapPin className="h-3 w-3 shrink-0 text-accent" /> {client.Direccion || "-"}
+                          <MapPin className="h-3 w-3 shrink-0 text-accent" /> {client.direccion || "-"}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -369,7 +356,7 @@ export default function ClientsPage() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  ¿Eliminar permanentemente al cliente {client.Nombre}?
+                                  ¿Eliminar permanentemente al cliente {client.nombre}?
                                   <span className="block mt-2 font-bold text-destructive">
                                     ¡Advertencia! No hay vuelta atrás. Todos los proyectos vinculados a este cliente también se eliminarán del sistema de inmediato.
                                   </span>
@@ -378,7 +365,7 @@ export default function ClientsPage() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel className="bg-muted">Cancelar</AlertDialogCancel>
                                 <AlertDialogAction 
-                                  onClick={() => handleDeleteClient(client.ID_Cliente)}
+                                  onClick={() => handleDeleteClient(client.id_cliente)}
                                   className="bg-destructive hover:bg-destructive/90 text-white font-bold"
                                 >
                                   Eliminar
@@ -414,31 +401,31 @@ export default function ClientsPage() {
                 <div>
                   <DialogTitle className="text-xl font-bold text-foreground">Proyectos de Propiedad</DialogTitle>
                   <DialogDescription className="text-accent font-bold text-xs uppercase tracking-widest">
-                    {selectedClient?.Nombre}
+                    {selectedClient?.nombre}
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto py-6">
-              {selectedClient?.proyectos && selectedClient.proyectos.length > 0 ? (
+              {selectedProjects.length > 0 ? (
                 <div className="grid gap-4">
-                  {selectedClient.proyectos.map((project: any) => (
+                  {selectedProjects.map((project) => (
                     <div 
-                      key={project.ID_Proyecto} 
+                      key={project.id_proyecto} 
                       className="group p-4 rounded-2xl bg-muted/20 border border-border hover:border-accent/40 transition-all flex flex-col gap-4"
                     >
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
                           <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                            {project.Nombre_Proyecto}
+                            {project.nombre_proyecto}
                             <Badge variant="outline" className="text-[8px] font-black uppercase border-accent/30 text-accent h-4">
-                              {project.Estado}
+                              {project.estado}
                             </Badge>
                           </h4>
                           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase">
                             <MapPin className="h-3 w-3 text-accent" />
-                            <span className="truncate max-w-[250px]">{project.Ubicacion || "Sin dirección"}</span>
+                            <span className="truncate max-w-[250px]">{project.ubicacion || "Sin dirección"}</span>
                           </div>
                         </div>
                       </div>

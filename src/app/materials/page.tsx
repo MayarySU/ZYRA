@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "../dashboard/layout";
 import { useAuth } from "@/providers/auth-provider";
 import { 
@@ -63,7 +63,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { materialesAPI, checklistsServicioAPI } from "@/lib/api-client";
+import {
+  useMateriales,
+  useCrearMaterial,
+  useActualizarMaterial,
+  useEliminarMaterial,
+  usePlantillas,
+  useActualizarPlantilla,
+} from "@/hooks/queries";
+import type { PlantillaConDetalle } from "@/lib/data/checklists-servicio";
 
 export default function MaterialsPage() {
   const { user, profile, loading: userLoading } = useAuth();
@@ -71,12 +79,16 @@ export default function MaterialsPage() {
   const { t } = useI18n();
   const isAdmin = profile?.rol === 'admin';
 
-  const [materials, setMaterials] = useState<any[]>([]);
-  const [checklists, setChecklists] = useState<any[]>([]);
+  const { data: materiales = [], isLoading } = useMateriales();
+  const { data: checklists = [] } = usePlantillas();
+  const crear = useCrearMaterial();
+  const actualizar = useActualizarMaterial();
+  const eliminar = useEliminarMaterial();
+  const actualizarPlantilla = useActualizarPlantilla();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // States for Update Stock
@@ -84,7 +96,7 @@ export default function MaterialsPage() {
   const [stockToUpdate, setStockToUpdate] = useState<{ id: number, name: string, current: number, added: number } | null>(null);
 
   // States for Template Editing
-  const [editingChecklist, setEditingChecklist] = useState<any>(null);
+  const [editingChecklist, setEditingChecklist] = useState<PlantillaConDetalle | null>(null);
   const [tempMaterials, setTempMaterials] = useState<{ ID_Material: number, Nombre_Material: string, Cantidad_Requerida: number }[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editQuantity, setEditQuantity] = useState<number>(0);
@@ -92,60 +104,38 @@ export default function MaterialsPage() {
   const [newMaterialQuantity, setNewMaterialQuantity] = useState(1);
 
   const [newMaterial, setNewMaterial] = useState({
-    Nombre_Material: "",
-    Stock_Disponible: 0,
+    nombre_material: "",
+    unidad: "",
+    stock_disponible: 0,
   });
 
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      const [mats, checks] = await Promise.all([
-        materialesAPI.getAll(),
-        checklistsServicioAPI.getAll()
-      ]);
-      setMaterials(Array.isArray(mats) ? mats : []);
-      setChecklists(Array.isArray(checks) ? checks : []);
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo cargar la información" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!userLoading && profile && isAdmin) {
-      loadData();
-    }
-  }, [userLoading, profile, isAdmin]);
-
   const filteredMaterials = useMemo(() => {
-    return materials.filter(m => 
-      m.Nombre_Material?.toLowerCase().includes(searchTerm.toLowerCase())
+    return materiales.filter(m => 
+      m.nombre_material?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [materials, searchTerm]);
+  }, [materiales, searchTerm]);
 
   const handleCreateMaterial = async () => {
-    if (!newMaterial.Nombre_Material || !user) return;
-    setIsSubmitting(true);
+    if (!newMaterial.nombre_material || !user) return;
     try {
-      await materialesAPI.create(newMaterial);
+      await crear.mutateAsync({
+        nombre_material: newMaterial.nombre_material,
+        unidad: newMaterial.unidad,
+        stock_disponible: newMaterial.stock_disponible,
+      });
       toast({ title: t.common.success, description: "Material agregado al catálogo" });
       setIsCreateDialogOpen(false);
-      setNewMaterial({ Nombre_Material: "", Stock_Disponible: 0 });
-      loadData();
+      setNewMaterial({ nombre_material: "", unidad: "", stock_disponible: 0 });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el material" });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleDeleteMaterial = async (id: number) => {
     if (!user) return;
     try {
-      await materialesAPI.delete(id);
+      await eliminar.mutateAsync(id);
       toast({ title: "Éxito", description: "Material eliminado" });
-      loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar" });
     }
@@ -153,28 +143,24 @@ export default function MaterialsPage() {
 
   const handleUpdateStock = async () => {
     if (!stockToUpdate || !user) return;
-    setIsSubmitting(true);
     try {
       const newTotal = stockToUpdate.current + stockToUpdate.added;
-      await materialesAPI.update(stockToUpdate.id, { Stock_Disponible: newTotal });
+      await actualizar.mutateAsync({ id: stockToUpdate.id, patch: { stock_disponible: newTotal } });
       toast({ title: t.common.success, description: "Stock actualizado correctamente" });
       setIsUpdateStockOpen(false);
       setStockToUpdate(null);
-      loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el stock" });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   // Template Management Logic
-  const openEditTemplate = (checklist: any) => {
+  const openEditTemplate = (checklist: PlantillaConDetalle) => {
     setEditingChecklist(checklist);
-    const mapped = checklist.detalles?.map((d: any) => ({
-      ID_Material: d.ID_Material,
-      Nombre_Material: d.material?.Nombre_Material || "Material",
-      Cantidad_Requerida: d.Cantidad_Requerida || 1
+    const mapped = checklist.checklist_servicio_detalle?.map((d) => ({
+      ID_Material: d.material_id,
+      Nombre_Material: d.materiales?.nombre_material || "Material",
+      Cantidad_Requerida: d.cantidad_requerida || 1
     })) || [];
     setTempMaterials(mapped);
     setIsEditDialogOpen(true);
@@ -182,18 +168,18 @@ export default function MaterialsPage() {
 
   const handleAddTempMaterial = () => {
     if (!newMaterialSelected || newMaterialQuantity <= 0) return;
-    const materialData = materials.find(m => m.ID_Material === parseInt(newMaterialSelected));
+    const materialData = materiales.find(m => m.id_material === parseInt(newMaterialSelected));
     if (!materialData) return;
 
-    const existingIdx = tempMaterials.findIndex(m => m.ID_Material === materialData.ID_Material);
+    const existingIdx = tempMaterials.findIndex(m => m.ID_Material === materialData.id_material);
     if (existingIdx >= 0) {
       const updated = [...tempMaterials];
       updated[existingIdx].Cantidad_Requerida += newMaterialQuantity;
       setTempMaterials(updated);
     } else {
       setTempMaterials([...tempMaterials, { 
-        ID_Material: materialData.ID_Material, 
-        Nombre_Material: materialData.Nombre_Material, 
+        ID_Material: materialData.id_material, 
+        Nombre_Material: materialData.nombre_material, 
         Cantidad_Requerida: newMaterialQuantity 
       }]);
     }
@@ -207,28 +193,28 @@ export default function MaterialsPage() {
     try {
       // Auto-añadir el material seleccionado si el usuario olvidó darle al botón "+"
       let finalMaterials = tempMaterials.map(m => ({
-        ID_Material: m.ID_Material,
-        Cantidad_Requerida: m.Cantidad_Requerida
+        material_id: m.ID_Material,
+        cantidad_requerida: m.Cantidad_Requerida
       }));
 
       if (newMaterialSelected) {
         const matId = parseInt(newMaterialSelected);
-        if (!finalMaterials.some(m => m.ID_Material === matId)) {
+        if (!finalMaterials.some(m => m.material_id === matId)) {
           finalMaterials.push({
-            ID_Material: matId,
-            Cantidad_Requerida: newMaterialQuantity
+            material_id: matId,
+            cantidad_requerida: newMaterialQuantity
           });
         }
       }
 
-      await checklistsServicioAPI.update(editingChecklist.ID_Checklist_Servicio, {
-        materiales: finalMaterials
+      await actualizarPlantilla.mutateAsync({
+        id: editingChecklist.id_checklist_servicio,
+        items: finalMaterials,
       });
-      
+
       toast({ title: t.common.success, description: "Plantilla actualizada" });
       setIsEditDialogOpen(false);
       setNewMaterialSelected(""); // Limpiar seleccion
-      loadData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la plantilla" });
     } finally {
@@ -287,8 +273,8 @@ export default function MaterialsPage() {
                   <Input 
                     placeholder="Ej: Cable Solar 6mm..." 
                     className="bg-muted/50 border-border"
-                    value={newMaterial.Nombre_Material}
-                    onChange={(e) => setNewMaterial({...newMaterial, Nombre_Material: e.target.value})}
+                    value={newMaterial.nombre_material}
+                    onChange={(e) => setNewMaterial({...newMaterial, nombre_material: e.target.value})}
                   />
                 </div>
                 <div className="space-y-2">
@@ -296,18 +282,18 @@ export default function MaterialsPage() {
                   <Input 
                     type="number" 
                     className="bg-muted/50 border-border"
-                    value={newMaterial.Stock_Disponible}
-                    onChange={(e) => setNewMaterial({...newMaterial, Stock_Disponible: parseInt(e.target.value) || 0})}
+                    value={newMaterial.stock_disponible}
+                    onChange={(e) => setNewMaterial({...newMaterial, stock_disponible: parseInt(e.target.value) || 0})}
                   />
                 </div>
               </div>
               <DialogFooter>
                 <Button 
                   className="bg-accent hover:bg-accent/90 text-white w-full h-12 font-bold" 
-                  disabled={!newMaterial.Nombre_Material || isSubmitting} 
+                  disabled={!newMaterial.nombre_material || crear.isPending} 
                   onClick={handleCreateMaterial}
                 >
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t.common.save}
+                  {crear.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t.common.save}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -356,19 +342,19 @@ export default function MaterialsPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredMaterials.map((mat) => (
-                        <TableRow key={mat.ID_Material} className="border-border hover:bg-muted/10 transition-colors">
+                        <TableRow key={mat.id_material} className="border-border hover:bg-muted/10 transition-colors">
                           <TableCell className="py-4">
                             <div className="flex items-center gap-3">
                               <div className="h-9 w-9 rounded-lg bg-accent/10 flex items-center justify-center"><Package className="h-5 w-5 text-accent" /></div>
                               <div>
-                                <p className="text-sm font-bold text-foreground">{mat.Nombre_Material}</p>
-                                <p className="text-[9px] text-muted-foreground uppercase tracking-widest">ID SQL: {mat.ID_Material}</p>
+                                <p className="text-sm font-bold text-foreground">{mat.nombre_material}</p>
+                                <p className="text-[9px] text-muted-foreground uppercase tracking-widest">ID SQL: {mat.id_material}</p>
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell><span className="text-lg font-mono font-bold text-foreground">{mat.Stock_Disponible}</span></TableCell>
+                          <TableCell><span className="text-lg font-mono font-bold text-foreground">{mat.stock_disponible}</span></TableCell>
                           <TableCell>
-                            {mat.Stock_Disponible < 10 ? (
+                            {mat.stock_disponible < 10 ? (
                               <Badge className="bg-red-500/10 text-red-500 border-none font-bold uppercase text-[9px]">{t.materials.critical}</Badge>
                             ) : (
                               <Badge className="bg-emerald-500/10 text-emerald-500 border-none font-bold uppercase text-[9px]">{t.materials.optimal}</Badge>
@@ -380,14 +366,14 @@ export default function MaterialsPage() {
                               size="icon" 
                               className="text-muted-foreground hover:text-accent mr-1" 
                               onClick={() => {
-                                setStockToUpdate({ id: mat.ID_Material, name: mat.Nombre_Material, current: mat.Stock_Disponible, added: 0 });
+                                setStockToUpdate({ id: mat.id_material, name: mat.nombre_material, current: mat.stock_disponible, added: 0 });
                                 setIsUpdateStockOpen(true);
                               }}
                               title="Aumentar Stock"
                             >
                               <PlusCircle className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMaterial(mat.ID_Material)} title="Eliminar Material">
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMaterial(mat.id_material)} title="Eliminar Material">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </TableCell>
@@ -408,16 +394,16 @@ export default function MaterialsPage() {
           <TabsContent value="templates" className="mt-0">
             <div className="grid md:grid-cols-2 gap-6">
               {checklists.map((check) => (
-                <Card key={check.ID_Checklist_Servicio} className="bg-card border-border group hover:border-accent/50 transition-all">
+                <Card key={check.id_checklist_servicio} className="bg-card border-border group hover:border-accent/50 transition-all">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="p-3 rounded-2xl bg-accent/10 text-accent group-hover:bg-accent/20 transition-colors">
-                        {check.servicio?.Tipo === 'Mantenimiento' ? <Wrench className="h-8 w-8" /> : <Zap className="h-8 w-8" />}
+                        {check.servicios?.tipo === 'Mantenimiento' ? <Wrench className="h-8 w-8" /> : <Zap className="h-8 w-8" />}
                       </div>
-                      <Badge variant="outline" className="text-[10px] uppercase font-bold text-accent border-accent/30">SQL TEMPLATE</Badge>
+                      <Badge variant="outline" className="text-[10px] uppercase font-bold text-accent border-accent/30">PLANTILLA</Badge>
                     </div>
-                    <CardTitle className="text-foreground mt-4 text-xl">{check.Nombre}</CardTitle>
-                    <CardDescription>{check.servicio?.Descripcion || "Configuración de materiales requeridos"}</CardDescription>
+                    <CardTitle className="text-foreground mt-4 text-xl">{check.nombre}</CardTitle>
+                    <CardDescription>{check.servicios?.tipo ? `Servicio: ${check.servicios.tipo}` : "Configuración de materiales requeridos"}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button 
@@ -441,7 +427,7 @@ export default function MaterialsPage() {
             <DialogHeader>
               <DialogTitle className="text-accent flex items-center gap-2">
                 <Settings2 className="h-5 w-5" /> 
-                {editingChecklist?.Nombre}
+                {editingChecklist?.nombre}
               </DialogTitle>
               <DialogDescription>
                 Define la lista y cantidad de los materiales necesarios para este tipo de proyecto.
@@ -456,8 +442,8 @@ export default function MaterialsPage() {
                       <SelectValue placeholder="Seleccionar material..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {materials.map(m => (
-                        <SelectItem key={m.ID_Material} value={m.ID_Material.toString()}>{m.Nombre_Material}</SelectItem>
+                      {materiales.map(m => (
+                        <SelectItem key={m.id_material} value={m.id_material.toString()}>{m.nombre_material}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -611,9 +597,9 @@ export default function MaterialsPage() {
               <Button 
                 className="bg-accent hover:bg-accent/90 text-white font-bold" 
                 onClick={handleUpdateStock}
-                disabled={!stockToUpdate?.added || stockToUpdate.added <= 0 || isSubmitting}
+                disabled={!stockToUpdate?.added || stockToUpdate.added <= 0 || actualizar.isPending}
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} Confirmar
+                {actualizar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} Confirmar
               </Button>
             </DialogFooter>
           </DialogContent>

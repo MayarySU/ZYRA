@@ -103,6 +103,14 @@ export function useCrearEquipo() {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.equipos }),
   });
 }
+export function useActualizarEquipo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: number; patch: Tablas["equipos"]["Update"] }) =>
+      ac.actualizarEquipo(id, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.equipos }),
+  });
+}
 export function useEliminarEquipo() {
   const qc = useQueryClient();
   return useMutation({

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Search, 
@@ -9,6 +9,7 @@ import {
   Users, 
   Building2, 
   ClipboardList, 
+  Package,
   ArrowRight,
   Loader2,
   X
@@ -19,12 +20,13 @@ import {
   PopoverContent, 
   PopoverTrigger 
 } from "@/components/ui/popover";
-import { 
-  projectsAPI, 
-  clientsAPI, 
-  employeesAPI, 
-  reportsAPI 
-} from "@/lib/api-client";
+import {
+  useProyectos,
+  useClientes,
+  useServicios,
+  useMateriales,
+  useEmpleados,
+} from "@/hooks/queries";
 import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -37,50 +39,18 @@ export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = profile?.rol === 'admin';
 
-  const [sqlData, setSqlData] = useState<{
-    projects: any[],
-    clients: any[],
-    employees: any[],
-    reports: any[]
-  }>({
-    projects: [],
-    clients: [],
-    employees: [],
-    reports: []
-  });
-  const [isApiLoading, setIsApiLoading] = useState(false);
+  const { data: projects = [], isLoading: isLoadingProjects } = useProyectos();
+  const { data: clients = [], isLoading: isLoadingClients } = useClientes();
+  const { data: services = [], isLoading: isLoadingServices } = useServicios();
+  const { data: materials = [], isLoading: isLoadingMaterials } = useMateriales();
+  const { data: employees = [], isLoading: isLoadingEmployees } = useEmpleados();
 
-  useEffect(() => {
-    const loadSearchData = async () => {
-      if (!profile || !isOpen) return;
-      try {
-        setIsApiLoading(true);
-        // If admin, load everything. If not, only what's allowed.
-        const [pData, clData, eData, rData] = await Promise.all([
-          isAdmin ? projectsAPI.getAll() : Promise.resolve([]),
-          isAdmin ? clientsAPI.getAll() : Promise.resolve([]),
-          isAdmin ? employeesAPI.getAll() : Promise.resolve([]),
-          reportsAPI.getAll()
-        ]);
-
-        setSqlData({
-          projects: Array.isArray(pData) ? pData : [],
-          clients: Array.isArray(clData) ? clData : [],
-          employees: Array.isArray(eData) ? eData : [],
-          reports: Array.isArray(rData) ? rData : []
-        });
-      } catch (e) {
-        console.error("Error loading search data from SQL", e);
-      } finally {
-        setIsApiLoading(false);
-      }
-    };
-
-    loadSearchData();
-  }, [profile, isAdmin, isOpen]);
-
-  const { projects, clients, employees, reports } = sqlData;
-  const isLoading = isApiLoading;
+  const isLoading =
+    isLoadingProjects ||
+    isLoadingClients ||
+    isLoadingServices ||
+    isLoadingMaterials ||
+    isLoadingEmployees;
 
   const results = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return null;
@@ -89,36 +59,38 @@ export function GlobalSearch() {
 
     return {
       projects: projects?.filter(p => 
-        p.Pry_Nombre_Proyecto?.toLowerCase().includes(term) ||
-        p.ubicacion?.toLowerCase().includes(term) ||
-        p.clientName?.toLowerCase().includes(term)
+        p.nombre_proyecto?.toLowerCase().includes(term) ||
+        p.ubicacion?.toLowerCase().includes(term)
       ).slice(0, 4) || [],
       
       clients: clients?.filter(c => 
-        c.Cl_Nombre?.toLowerCase().includes(term) || 
-        c.Cl_RazonSocial?.toLowerCase().includes(term) ||
-        c.Cl_Correo?.toLowerCase().includes(term)
+        c.nombre?.toLowerCase().includes(term) || 
+        c.razon_social?.toLowerCase().includes(term) ||
+        c.correo?.toLowerCase().includes(term)
+      ).slice(0, 4) || [],
+
+      services: services?.filter(s => 
+        s.tipo?.toLowerCase().includes(term) ||
+        s.descripcion?.toLowerCase().includes(term)
+      ).slice(0, 4) || [],
+
+      materials: materials?.filter(m => 
+        m.nombre_material?.toLowerCase().includes(term)
       ).slice(0, 4) || [],
       
       employees: employees?.filter(e => 
-        (e.nombre || e.Emp_Nombre)?.toLowerCase().includes(term) || 
-        (e.email || e.emailAcceso)?.toLowerCase().includes(term) ||
-        e.id?.toLowerCase().includes(term)
-      ).slice(0, 4) || [],
-      
-      reports: reports?.filter(r => 
-        r.content?.toLowerCase().includes(term) || 
-        r.projectName?.toLowerCase().includes(term) ||
-        r.authorName?.toLowerCase().includes(term)
+        e.nombre?.toLowerCase().includes(term) || 
+        e.correo?.toLowerCase().includes(term)
       ).slice(0, 4) || []
     };
-  }, [searchTerm, projects, clients, employees, reports]);
+  }, [searchTerm, projects, clients, services, materials, employees]);
 
   const hasResults = results && (
     results.projects.length > 0 || 
     results.clients.length > 0 || 
-    results.employees.length > 0 || 
-    results.reports.length > 0
+    results.services.length > 0 ||
+    results.materials.length > 0 ||
+    results.employees.length > 0
   );
 
   const handleNavigate = (path: string) => {
@@ -184,12 +156,12 @@ export function GlobalSearch() {
                     </h4>
                     {results.projects.map(p => (
                       <button
-                        key={p.id}
+                        key={p.id_proyecto}
                         onClick={() => handleNavigate(`/projects`)}
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-accent/10 transition-all flex items-center justify-between group"
                       >
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-foreground truncate">{p.Pry_Nombre_Proyecto}</span>
+                          <span className="text-sm font-bold text-foreground truncate">{p.nombre_proyecto}</span>
                           <span className="text-[10px] text-muted-foreground truncate uppercase">{p.ubicacion}</span>
                         </div>
                         <ArrowRight className="h-4 w-4 text-accent opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
@@ -205,13 +177,13 @@ export function GlobalSearch() {
                     </h4>
                     {results.clients.map(c => (
                       <button
-                        key={c.id}
+                        key={c.id_cliente}
                         onClick={() => handleNavigate(`/clients`)}
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-emerald-500/10 transition-all flex items-center justify-between group"
                       >
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-foreground truncate">{c.Cl_Nombre}</span>
-                          <span className="text-[10px] text-muted-foreground truncate uppercase">{c.Cl_RazonSocial}</span>
+                          <span className="text-sm font-bold text-foreground truncate">{c.nombre}</span>
+                          <span className="text-[10px] text-muted-foreground truncate uppercase">{c.razon_social}</span>
                         </div>
                         <ArrowRight className="h-4 w-4 text-emerald-500 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                       </button>
@@ -226,13 +198,13 @@ export function GlobalSearch() {
                     </h4>
                     {results.employees.map(e => (
                       <button
-                        key={e.id}
+                        key={e.id_empleado}
                         onClick={() => handleNavigate(`/employees`)}
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-blue-500/10 transition-all flex items-center justify-between group"
                       >
                         <div className="flex flex-col text-left">
-                          <span className="text-sm font-bold text-foreground">{e.nombre || e.Emp_Nombre}</span>
-                          <span className="text-[10px] text-muted-foreground truncate uppercase">{e.email || e.emailAcceso}</span>
+                          <span className="text-sm font-bold text-foreground">{e.nombre}</span>
+                          <span className="text-[10px] text-muted-foreground truncate uppercase">{e.correo}</span>
                         </div>
                         <ArrowRight className="h-4 w-4 text-blue-500 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                       </button>
@@ -240,23 +212,43 @@ export function GlobalSearch() {
                   </div>
                 )}
 
-                {results.reports.length > 0 && (
+                {results.services.length > 0 && (
                   <div className="p-2">
                     <h4 className="px-3 py-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                      <ClipboardList className="h-3 w-3 text-orange-500" /> {t.nav.reports}
+                      <ClipboardList className="h-3 w-3 text-orange-500" /> Servicios
                     </h4>
-                    {results.reports.map(r => (
+                    {results.services.map(s => (
                       <button
-                        key={r.id}
-                        onClick={() => handleNavigate(`/reports`)}
+                        key={s.id_servicio}
+                        onClick={() => handleNavigate(`/settings/services`)}
                         className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-orange-500/10 transition-all flex items-center justify-between group"
                       >
                         <div className="flex flex-col text-left">
-                          <span className="text-[10px] font-black text-accent uppercase tracking-tighter mb-0.5">{r.projectName}</span>
-                          <span className="text-sm font-bold text-foreground truncate max-w-[300px]">{r.content}</span>
-                          <span className="text-[9px] text-muted-foreground uppercase">{r.authorName}</span>
+                          <span className="text-sm font-bold text-foreground truncate">{s.tipo}</span>
+                          <span className="text-[10px] text-muted-foreground truncate uppercase">{s.descripcion}</span>
                         </div>
                         <ArrowRight className="h-4 w-4 text-orange-500 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {results.materials.length > 0 && (
+                  <div className="p-2">
+                    <h4 className="px-3 py-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                      <Package className="h-3 w-3 text-amber-500" /> {t.nav.materials}
+                    </h4>
+                    {results.materials.map(m => (
+                      <button
+                        key={m.id_material}
+                        onClick={() => handleNavigate(`/materials`)}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-amber-500/10 transition-all flex items-center justify-between group"
+                      >
+                        <div className="flex flex-col text-left">
+                          <span className="text-sm font-bold text-foreground truncate">{m.nombre_material}</span>
+                          <span className="text-[10px] text-muted-foreground truncate uppercase">{m.unidad}</span>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-amber-500 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                       </button>
                     ))}
                   </div>
