@@ -1,6 +1,5 @@
 "use client";
 
-import { rpcRegistrarEvidencia } from "@/lib/data/rpc";
 import {
   contarEvidenciasPendientes,
   eliminarEvidenciaPendiente,
@@ -16,59 +15,39 @@ export interface SubidaEvidenciaResultado {
   encolada: boolean;
 }
 
-function tipoDesdeMime(mime: string): TipoEvidencia {
-  if (mime.startsWith("video/")) return "video";
-  if (mime === "application/pdf") return "documento";
-  return "foto";
-}
-
 function sinConexion(): boolean {
   return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
-async function firmarSubida(
-  proyectoId: number,
-  file: File
-): Promise<{ url: string; key: string }> {
-  const res = await fetch("/api/upload/url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ proyectoId, fileName: file.name, contentType: file.type }),
-  });
-  if (!res.ok) {
-    const { error } = await res.json().catch(() => ({ error: "No se pudo firmar la subida" }));
-    throw new Error(error);
-  }
-  return res.json();
-}
-
-/** Subida directa navegador → R2 + registro de metadata (requiere red). */
+/**
+ * Sube una evidencia vía el servidor (`/api/upload/object`). El servidor
+ * escribe el objeto en R2 (evita el CORS del navegador) y registra la
+ * metadata con `registrar_evidencia` (idempotente por operation_id).
+ */
 async function subirEvidenciaOnline(input: {
   proyectoId: number;
   file: File;
   descripcion?: string;
   avanceId?: number;
+  operationId?: string;
 }): Promise<string> {
-  const { proyectoId, file, descripcion, avanceId } = input;
-  const { url, key } = await firmarSubida(proyectoId, file);
+  const { proyectoId, file, descripcion, avanceId, operationId } = input;
 
-  const put = await fetch(url, {
-    method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
-  });
-  if (!put.ok) throw new Error("No se pudo subir la evidencia a R2");
+  const form = new FormData();
+  form.append("file", file);
+  form.append("proyectoId", String(proyectoId));
+  if (descripcion) form.append("descripcion", descripcion);
+  if (avanceId != null) form.append("avanceId", String(avanceId));
+  if (operationId) form.append("operationId", operationId);
 
-  await rpcRegistrarEvidencia({
-    proyectoId,
-    objectKey: key,
-    descripcion,
-    tipo: tipoDesdeMime(file.type),
-    contentType: file.type,
-    sizeBytes: file.size,
-    avanceId,
-  });
-
+  const res = await fetch("/api/upload/object", { method: "POST", body: form });
+  if (!res.ok) {
+    const { error } = await res
+      .json()
+      .catch(() => ({ error: "No se pudo subir la evidencia" }));
+    throw new Error(error);
+  }
+  const { key } = (await res.json()) as { key: string };
   return key;
 }
 
@@ -114,6 +93,7 @@ export async function flushEvidenciasPendientes(): Promise<{ ok: number; fail: n
         file,
         descripcion: p.descripcion,
         avanceId: p.avanceId,
+        operationId: p.id,
       });
       await eliminarEvidenciaPendiente(p.id);
       ok++;

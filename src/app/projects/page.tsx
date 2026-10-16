@@ -57,6 +57,7 @@ import {
   useChecklist,
   useDetalleChecklist,
   useActualizarDetalleChecklist,
+  useValidarChecklist,
   useIniciarProyecto,
   useEnviarReporte,
   useFinalizarProyecto,
@@ -453,6 +454,7 @@ function OperatorSheetBody({
 }) {
   const { toast } = useToast();
   const { t } = useI18n();
+  const { profile } = useAuth();
 
   const pid = project.id_proyecto as number;
   const { data: checklist } = useChecklist(pid);
@@ -461,6 +463,7 @@ function OperatorSheetBody({
 
   const qc = useQueryClient();
   const actualizarDetalle = useActualizarDetalleChecklist();
+  const validar = useValidarChecklist(pid);
   const iniciar = useIniciarProyecto(pid);
   const enviar = useEnviarReporte(pid);
 
@@ -471,13 +474,18 @@ function OperatorSheetBody({
   const [reportPhotos, setReportPhotos] = useState<{ name: string; dataUrl: string; file: File }[]>([]);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  const materiales = detalle.map((d) => ({
-    id: d.id_checklist_detalle as number,
-    name: d.nombre_material || "Material",
-    quantity: d.cantidad_requerida || 1,
-    done: d.marcado ?? false,
-    takenQuantity: d.cantidad_cargada ?? d.cantidad_requerida ?? 0,
-  }));
+  const materiales = detalle.map((d) => {
+    const req = d.cantidad_requerida || 1;
+    const cargada = d.cantidad_cargada;
+    const taken = cargada != null && cargada > 0 ? cargada : req;
+    return {
+      id: d.id_checklist_detalle as number,
+      name: d.nombre_material || "Material",
+      quantity: req,
+      done: d.marcado ?? false,
+      takenQuantity: taken,
+    };
+  });
 
   const accesoValido =
     materiales.length === 0 ||
@@ -498,6 +506,7 @@ function OperatorSheetBody({
     const patch = {
       marcado: nuevoDone,
       cantidad_cargada: nuevoDone ? mat.takenQuantity || mat.quantity : 0,
+      empleado_id: profile?.empleadoId ?? null,
     };
     optimizarDetalle(mat.id, patch);
     actualizarDetalle.mutate(
@@ -509,7 +518,7 @@ function OperatorSheetBody({
   const updateQuantity = (idx: number, qty: number) => {
     const mat = materiales[idx];
     if (!mat) return;
-    const patch = { cantidad_cargada: qty, marcado: qty >= mat.quantity };
+    const patch = { cantidad_cargada: qty, marcado: qty >= mat.quantity, empleado_id: profile?.empleadoId ?? null };
     optimizarDetalle(mat.id, patch);
     actualizarDetalle.mutate(
       { id: mat.id, patch },
@@ -517,19 +526,27 @@ function OperatorSheetBody({
     );
   };
 
-  const handleStartDay = () => {
+  const handleStartDay = async () => {
     const offline = typeof navigator !== "undefined" && !navigator.onLine;
-    iniciar.mutate(undefined, {
-      onSuccess: () => {
-        toast({ title: t.projects.day_started });
-        onClose();
-      },
-      onError: (e) =>
-        toast({ variant: "destructive", title: "Error al iniciar jornada", description: e.message }),
-    });
+    // El checklist debe VALIDARSE (pasa el proyecto a "listo_para_iniciar")
+    // antes de iniciar la jornada; si no, la RPC `iniciar_proyecto` rechaza.
     if (offline) {
+      if (checklistId) validar.mutate(checklistId);
+      iniciar.mutate(undefined, {
+        onError: (e) =>
+          toast({ variant: "destructive", title: "Error al iniciar jornada", description: e.message }),
+      });
       toast({ title: "Sin conexión", description: "La jornada se iniciará al reconectar." });
       onClose();
+      return;
+    }
+    try {
+      if (checklistId) await validar.mutateAsync(checklistId);
+      await iniciar.mutateAsync();
+      toast({ title: t.projects.day_started });
+      onClose();
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al iniciar jornada", description: (e as Error).message });
     }
   };
 
@@ -592,7 +609,8 @@ function OperatorSheetBody({
     }
   };
 
-  const isLoading = iniciar.isPending || enviar.isPending;
+  const guardandoChecklist = actualizarDetalle.isPending;
+  const busy = validar.isPending || iniciar.isPending || enviar.isPending;
 
   return (
     <div className="max-w-xl mx-auto pb-10">
@@ -621,9 +639,9 @@ function OperatorSheetBody({
             <Button
               onClick={handleStartDay}
               className="w-full h-12 bg-accent text-white font-bold"
-              disabled={isLoading || !accesoValido}
+              disabled={busy || guardandoChecklist || !accesoValido}
             >
-              {isLoading ? "Iniciando..." : "CONFIRMAR E INICIAR JORNADA"}
+              {busy ? "Iniciando..." : "CONFIRMAR E INICIAR JORNADA"}
             </Button>
           </div>
         ) : (
@@ -642,10 +660,10 @@ function OperatorSheetBody({
             </div>
             <Button
               onClick={handleFinishDayAndReport}
-              disabled={isLoading}
+              disabled={busy}
               className={cn("w-full h-12 text-white font-bold", esRechazado ? "bg-red-500 hover:bg-red-600" : "bg-emerald-600")}
             >
-              {isLoading ? "Enviando..." : (esRechazado ? "REENVIAR REPORTE Y TERMINAR" : "ENVIAR REPORTE Y TERMINAR")}
+              {busy ? "Enviando..." : (esRechazado ? "REENVIAR REPORTE Y TERMINAR" : "ENVIAR REPORTE Y TERMINAR")}
             </Button>
           </div>
         )}

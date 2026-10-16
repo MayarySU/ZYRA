@@ -137,13 +137,14 @@ export interface EquipoConMiembros extends Equipo {
 }
 
 export async function listarEquipos(): Promise<EquipoConMiembros[]> {
-  return (await db()
-    .from("equipos")
-    .select(
-      "*, empleado_equipo(empleado_id, cargo, es_lider, empleados(nombre, correo, telefono))"
-    )
-    .order("nombre_equipo")
-    .returns<EquipoConMiembros[]>()) as unknown as EquipoConMiembros[];
+  return unwrap(
+    await db()
+      .from("equipos")
+      .select(
+        "*, empleado_equipo(empleado_id, cargo, es_lider, empleados(nombre, correo, telefono))"
+      )
+      .order("nombre_equipo")
+  ) as EquipoConMiembros[];
 }
 
 export async function crearEquipo(input: {

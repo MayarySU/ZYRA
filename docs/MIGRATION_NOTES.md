@@ -688,3 +688,97 @@ imports/iconos sin usar, `any` explícitos y `catch (e: any)` con `e` sin usar.
 - Sin nuevas migraciones ni tablas; solo inserciones/borrados sobre tablas ya
   existentes protegidas por RLS admin.
 
+
+## 18. Cierre — Verificación E2E extremo a extremo - COMPLETADO
+
+### 18.1 Infraestructura Playwright
+
+- `playwright.config.ts`: `testDir: ./e2e`, `workers: 1`, `fullyParallel: false`
+  (la ejecución comparte datos sembrados), timeouts 120 s/20 s, `globalSetup` +
+  `globalTeardown`, `webServer: "npm run build && npm run start -- -p 9002"`
+  (**modo producción**: es el único modo en el que Serwist/SW está activo).
+- `e2e/support/`: `env.ts` (credenciales de la ejecución), `state.ts`
+  (prefijo único `E2E-<runId>` + técnico de prueba, compartido entre el
+  `globalSetup` y los workers), `supabase.ts` (cliente service-role y admin),
+  `factory.ts` (datos de dominio con prefijo único, RPC del ciclo de vida y
+  `cleanupByPrefix` que borra filas **y** objetos de R2), `test.ts` (fixtures
+  `state`, `service`, `admin`, `loginAs`, `loginAsAdmin`, `loginAsTech`).
+- `e2e/global-setup.ts` / `global-teardown.ts`: crea el técnico de prueba,
+  hace **snapshot** del stock de materiales y lo **restaura** tras cada
+  ejecución (los proyectos inciden en el stock).
+- Selectores: `getByRole` / `getByLabel` / `getByText`; **sin `data-testid`**
+  (la UI resultó estable: nav, títulos por rol, sheet del operador, reportes).
+  La única especi­alidad: la búsqueda "Buscar..." es ambigua (cabecera + lista),
+  por lo que los tests acceden a la tarjeta por su nombre de proyecto, que es
+  único gracias al prefijo de ejecución.
+
+### 18.2 Casos ejecutados (`npx playwright test` → **16/16 PASS**)
+
+| Spec | Cobertura |
+| --- | --- |
+| `01-auth.spec.ts` (7) | Rutas protegidas + `?redirect`, credenciales inválidas, login admin, `/login`→dashboard con sesión, logout y reprotección |
+| `02-permissions.spec.ts` (4) | Navegación admin vs técnico, títulos "Proyectos"/"Mis Proyectos", paneles administrativos ocultos al técnico |
+| `03-admin-project.spec.ts` (1) | Alta de proyecto por UI (cliente/servicio/equipo) con checklist generado y detalle |
+| `04-technician-lifecycle.spec.ts` (2) | Checklist → iniciar → evidencia (R2) → reporte → aprobación de admin → finalizar con puntos; e idempotencia/`avanzar_estado` inválido por API |
+| `05-offline.spec.ts` (2) | Evidencia sin conexión (Dexie) que **sobrevive una recarga offline** y se sube al reconectar; y reanudación de la mutación de reporte en pausa al reconectar |
+
+### 18.3 Bugs reales detectados y corregidos durante los tests
+
+1. **`/dashboard` se rompía**: `listarReportes`, `listarReportesDeEquipo`,
+   `listarEquipos`, `listarPlantillas` y `listarRecordatorios` devolvían la
+   *respuesta* de Supabase en lugar del array (`.returns<T[]>()` sin `unwrap`),
+   lo que producía `TypeError: (e || []).filter is not a function` en
+   `NotificationCenter`. Ahora usan `unwrap(...) as T[]`.
+2. **El botón "CONFIRMAR E INICIAR JORNADA" nunca llamaba a
+   `validar_checklist`**, así que `iniciar_proyecto` fallaba siempre en la UI.
+   Añadido `useValidarChecklist` en `src/app/projects/page.tsx` (ruta online:
+   `validar` → `iniciar`; offline: ambas se encolan).
+3. **El detalle del checklist no se podía guardar por RLS**: los `update` de
+   `checklist_detalle` iban sin `empleado_id`, y la policy `cd_update` exige
+   `empleado_id = mi_empleado_id()` (o admin). Se añade `empleado_id` del
+   perfil autenticado en `toggleMaterial` / `updateQuantity`.
+4. **Materiales marcables en rojo de inicio**: `cantidad_cargada` guarda `0`
+   cuando no se ha cargado nada, y la UI lo interpretaba como "insuficiente",
+   dejando **todos los checkboxes deshabilitados**. Ahora un valor `0`/nulo se
+   muestra como lo requerido por defecto, y las guardas (`busy`,
+   `guardandoChecklist`) impiden iniciar antes de que se confirmen los cambios.
+5. **El bucket de R2 estaba mal escrito en `.env.local`** (`ZYRA` en lugar de
+   `zyra-evidencias`): el token S3 devolvía `Access Denied` en cualquier
+   operación. Corregido en `.env.local` (gitignored). `.env.example` ya
+   apuntaba a `zyra-evidencias`.
+6. **La subida navegador→R2 con URL prefirmada estaba bloqueada por CORS**
+   (preflight sin `Access-Control-Allow-Origin`; el bucket no admite reglas de
+   CORS con las credenciales disponibles). Nuevo route handler
+   **`POST /api/upload/object`** que recibe `multipart/form-data` en same-origin
+   y escribe el objeto en R2 **desde el servidor** (`PutObjectCommand`) y
+   registra `registrar_evidencia` (con `operation_id` para idempotencia y
+   *rollback* del objeto si la RPC falla). Así **no se necesita ninguna regla
+   CORS de R2** y `evidencias-client.ts` deja de depender de `api/upload/url`
+   para subir.
+7. **`SyncProvider.syncQueue` era frágil**: si `resumePausedMutations()`
+   rechazaba, `flushEvidenciasPendientes()` no se ejecutaba. Cada paso va en
+   `try/catch` para que la reconexión siempre descuente la cola de evidencias.
+
+### 18.4 Limitación documentada (no enmascarada)
+
+- **Las mutaciones RPC en pausa se reanudan dentro de la misma sesión** al
+  reconectar (verificado: `enviar_reporte` pasa `en_proceso` →
+  `pendiente_de_cierre`), y **persisten** en `PersistQueryClientProvider`
+  (`shouldDehydrateMutation: (m) => m.state.isPaused`).
+  **No se pueden reanudar automáticamente tras recargar/cerrar la app**: la
+  función de mutación es una clausura que no es serializable, y las claves de
+  mutación de los hooks no incluyen el `proyecto_id` para reconstruirlas. Por
+  eso `05-offline` valida cada garantía por separado: (a) la **evidencia** es
+  cola real de Dexie, sobrevive recarga offline y se sube al reconectar;
+  (b) la **mutación** se reanuda en la misma sesión. El caso de "reabrir la
+  app offline con un reporte pendiente" requeriría una cola materializada en
+  la tabla `outbox` (ya definida en Dexie pero sin executor) o mutaciones con
+  `mutationKey` + `setMutationDefaults` por RPC.
+
+### 18.5 Comandos finales
+
+- `npm run lint` → **0 errores, 0 warnings**.
+- `npm run typecheck` → limpio (incluye `e2e/**`).
+- `npm run build` → **24 rutas + `/api/upload/{url,download,delete,object}`**.
+- `npm run db:smoke` → **26/26 PASS**.
+- `npx playwright test` → **16/16 PASS** (~1,2 min).

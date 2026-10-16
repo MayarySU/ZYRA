@@ -18,13 +18,14 @@ export interface PlantillaConDetalle extends ChecklistServicio {
 }
 
 export async function listarPlantillas(): Promise<PlantillaConDetalle[]> {
-  return (await db()
-    .from("checklist_servicio")
-    .select(
-      "*, servicios(tipo), checklist_servicio_detalle(id_checklist_servicio_detalle, material_id, cantidad_requerida, materiales(nombre_material, unidad))"
-    )
-    .order("id_checklist_servicio")
-    .returns<PlantillaConDetalle[]>()) as unknown as PlantillaConDetalle[];
+  return unwrap(
+    await db()
+      .from("checklist_servicio")
+      .select(
+        "*, servicios(tipo), checklist_servicio_detalle(id_checklist_servicio_detalle, material_id, cantidad_requerida, materiales(nombre_material, unidad))"
+      )
+      .order("id_checklist_servicio")
+  ) as PlantillaConDetalle[];
 }
 
 export async function crearPlantilla(input: {

@@ -40,11 +40,20 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const syncQueue = useCallback(async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     // 1) Reanuda las RPC que quedaron en pausa (idempotentes por operation_id).
-    await queryClient.resumePausedMutations();
+    //    Un fallo de reanudación no debe impedir subir las evidencias.
+    try {
+      await queryClient.resumePausedMutations();
+    } catch {
+      // Ignora: la mutación queda en estado de error y se reintenta al reusar.
+    }
     // 2) Sube las evidencias capturadas offline.
-    await flushEvidenciasPendientes();
+    try {
+      await flushEvidenciasPendientes();
+    } catch {
+      // Ignora: se reintentará en el próximo ciclo online.
+    }
     // 3) Reconcilia con el servidor (fuente de verdad).
-    await queryClient.invalidateQueries();
+    await queryClient.invalidateQueries().catch(() => {});
     await refreshPending();
   }, [queryClient, refreshPending]);
 

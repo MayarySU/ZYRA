@@ -14,11 +14,12 @@ export interface RecordatorioConDestinatarios extends Recordatorio {
 }
 
 export async function listarRecordatorios(): Promise<RecordatorioConDestinatarios[]> {
-  return (await db()
-    .from("recordatorios")
-    .select("*, recordatorio_destinatarios(empleado_id, leido, empleados(nombre, correo))")
-    .order("creado_en", { ascending: false })
-    .returns<RecordatorioConDestinatarios[]>()) as unknown as RecordatorioConDestinatarios[];
+  return unwrap(
+    await db()
+      .from("recordatorios")
+      .select("*, recordatorio_destinatarios(empleado_id, leido, empleados(nombre, correo))")
+      .order("creado_en", { ascending: false })
+  ) as RecordatorioConDestinatarios[];
 }
 
 export async function crearRecordatorio(input: {

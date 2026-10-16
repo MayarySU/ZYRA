@@ -38,6 +38,14 @@ const eslintConfig = [
       "@next/next/no-page-custom-font": "off",
     },
   },
+  {
+    // Los tests E2E de Playwright usan fixtures cuyo parámetro se llama `use`
+    // (la API de Playwright), lo que `react-hooks` interpreta como un hook.
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

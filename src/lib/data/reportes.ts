@@ -9,11 +9,12 @@ export interface ReporteConProyecto extends Reporte {
 }
 
 export async function listarReportes(): Promise<ReporteConProyecto[]> {
-  return (await db()
-    .from("reportes")
-    .select("*, proyectos(nombre_proyecto, equipo_id), empleados(nombre)")
-    .order("fecha_reporte", { ascending: false })
-    .returns<ReporteConProyecto[]>()) as unknown as ReporteConProyecto[];
+  return unwrap(
+    await db()
+      .from("reportes")
+      .select("*, proyectos(nombre_proyecto, equipo_id), empleados(nombre)")
+      .order("fecha_reporte", { ascending: false })
+  ) as ReporteConProyecto[];
 }
 
 export async function listarReportesDeProyecto(proyectoId: number): Promise<Reporte[]> {
@@ -27,10 +28,11 @@ export async function listarReportesDeProyecto(proyectoId: number): Promise<Repo
 }
 
 export async function listarReportesDeEquipo(equipoId: number): Promise<ReporteConProyecto[]> {
-  return (await db()
-    .from("reportes")
-    .select("*, proyectos(nombre_proyecto, equipo_id), empleados(nombre)")
-    .eq("equipo_id", equipoId)
-    .order("fecha_reporte", { ascending: false })
-    .returns<ReporteConProyecto[]>()) as unknown as ReporteConProyecto[];
+  return unwrap(
+    await db()
+      .from("reportes")
+      .select("*, proyectos(nombre_proyecto, equipo_id), empleados(nombre)")
+      .eq("equipo_id", equipoId)
+      .order("fecha_reporte", { ascending: false })
+  ) as ReporteConProyecto[];
 }
