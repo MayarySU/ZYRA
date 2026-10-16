@@ -3,12 +3,13 @@
 import React, { createContext, useContext, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { flushEvidenciasPendientes, contarEvidenciasPendientes } from "@/lib/evidencias-client";
+import { contarOperacionesPendientes, procesarOutbox } from "@/lib/offline/outbox";
 
 interface SyncContextType {
   isOnline: boolean;
-  /** Nº de operaciones pendientes (mutaciones pausadas + evidencias en cola). */
+  /** Nº de operaciones pendientes (outbox + evidencias en cola). */
   pending: number;
-  /** Fuerza el vaciado de la cola (mutaciones pausadas + evidencias). */
+  /** Fuerza el vaciado de la cola (outbox + mutaciones pausadas + evidencias). */
   syncQueue: () => Promise<void>;
 }
 
@@ -30,29 +31,36 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   const refreshPending = useCallback(async () => {
     const evidencias = await contarEvidenciasPendientes();
+    const outbox = await contarOperacionesPendientes();
     const mutaciones = queryClient
       .getMutationCache()
       .getAll()
       .filter((m) => m.state.isPaused).length;
-    setPending(evidencias + mutaciones);
+    setPending(evidencias + outbox + mutaciones);
   }, [queryClient]);
 
   const syncQueue = useCallback(async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
-    // 1) Reanuda las RPC que quedaron en pausa (idempotentes por operation_id).
-    //    Un fallo de reanudación no debe impedir subir las evidencias.
+    // 1) Drena el outbox Dexie (operaciones guardadas sin conexión, en orden).
+    //    Un fallo no debe impedir el resto del ciclo.
+    try {
+      await procesarOutbox();
+    } catch {
+      // Ignora: la operación queda pendiente y se reintenta en el próximo ciclo.
+    }
+    // 2) Reanuda las RPC que quedaran en pausa (idempotentes por operation_id).
     try {
       await queryClient.resumePausedMutations();
     } catch {
       // Ignora: la mutación queda en estado de error y se reintenta al reusar.
     }
-    // 2) Sube las evidencias capturadas offline.
+    // 3) Sube las evidencias capturadas offline.
     try {
       await flushEvidenciasPendientes();
     } catch {
       // Ignora: se reintentará en el próximo ciclo online.
     }
-    // 3) Reconcilia con el servidor (fuente de verdad).
+    // 4) Reconcilia con el servidor (fuente de verdad).
     await queryClient.invalidateQueries().catch(() => {});
     await refreshPending();
   }, [queryClient, refreshPending]);

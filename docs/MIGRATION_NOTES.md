@@ -556,8 +556,9 @@ de forma visible (estado de error de la mutación) sin sobrescribir el servidor.
 
 ### 15.4 Protocolo E2E (manual, navegador)
 
-No hay runner de navegador en el repo; el flujo se verifica manualmente con
-DevTools → Network → *Offline*:
+> Nota: en la Fase 9 se añadió Playwright (ver §18); este protocolo manual se
+> conserva como referencia histórica de la Fase 7. El flujo se verifica también
+> manualmente con DevTools → Network → *Offline*:
 
 1. Login como técnico → abrir un proyecto asignado.
 2. Poner *Offline* → marcar el checklist (responde al instante) →
@@ -701,7 +702,10 @@ imports/iconos sin usar, `any` explícitos y `catch (e: any)` con `e` sin usar.
   (prefijo único `E2E-<runId>` + técnico de prueba, compartido entre el
   `globalSetup` y los workers), `supabase.ts` (cliente service-role y admin),
   `factory.ts` (datos de dominio con prefijo único, RPC del ciclo de vida y
-  `cleanupByPrefix` que borra filas **y** objetos de R2), `test.ts` (fixtures
+  `cleanupByPrefix` que borra filas **y** objetos de R2), `projects.ts`
+  (helpers de proyecto: `proyectoEnProceso`, `proyectoListoParaIniciar`,
+  apertura de la hoja del operador), `image.ts` (genera PNG reales de tamaño
+  representativo para las pruebas de subida), `test.ts` (fixtures
   `state`, `service`, `admin`, `loginAs`, `loginAsAdmin`, `loginAsTech`).
 - `e2e/global-setup.ts` / `global-teardown.ts`: crea el técnico de prueba,
   hace **snapshot** del stock de materiales y lo **restaura** tras cada
@@ -712,7 +716,7 @@ imports/iconos sin usar, `any` explícitos y `catch (e: any)` con `e` sin usar.
   por lo que los tests acceden a la tarjeta por su nombre de proyecto, que es
   único gracias al prefijo de ejecución.
 
-### 18.2 Casos ejecutados (`npx playwright test` → **16/16 PASS**)
+### 18.2 Casos ejecutados (`npx playwright test` → **21/21 PASS**)
 
 | Spec | Cobertura |
 | --- | --- |
@@ -721,6 +725,8 @@ imports/iconos sin usar, `any` explícitos y `catch (e: any)` con `e` sin usar.
 | `03-admin-project.spec.ts` (1) | Alta de proyecto por UI (cliente/servicio/equipo) con checklist generado y detalle |
 | `04-technician-lifecycle.spec.ts` (2) | Checklist → iniciar → evidencia (R2) → reporte → aprobación de admin → finalizar con puntos; e idempotencia/`avanzar_estado` inválido por API |
 | `05-offline.spec.ts` (2) | Evidencia sin conexión (Dexie) que **sobrevive una recarga offline** y se sube al reconectar; y reanudación de la mutación de reporte en pausa al reconectar |
+| `06-outbox.spec.ts` (2) | Outbox persistente: reporte y edición de checklist guardados offline **sobreviven una recarga completa** y se **sincronizan solos** al reconectar (ver 18.4) |
+| `07-upload.spec.ts` (3) | Subida real de una foto de ~5,5 MB por `/api/upload/object` (fila + round-trip + cleanup); validaciones 401/415/413/403; idempotencia (ver 18.5) |
 
 ### 18.3 Bugs reales detectados y corregidos durante los tests
 
@@ -758,27 +764,100 @@ imports/iconos sin usar, `any` explícitos y `catch (e: any)` con `e` sin usar.
 7. **`SyncProvider.syncQueue` era frágil**: si `resumePausedMutations()`
    rechazaba, `flushEvidenciasPendientes()` no se ejecutaba. Cada paso va en
    `try/catch` para que la reconexión siempre descuente la cola de evidencias.
+8. **`checklist_detalle.actualizado_en` no se actualizaba nunca**: la lista de
+   tablas con trigger `set_actualizado_en` en `0001_schema.sql` omitía
+   `checklist_detalle`, así que el control de versión optimista del outbox no
+   podía detectar ediciones concurrentes. Añadida
+   `supabase/migrations/0006_checklist_detalle_actualizado.sql` (idempotente).
 
-### 18.4 Limitación documentada (no enmascarada)
+### 18.4 Offline-First completo: outbox persistente (Dexie) con executor
 
-- **Las mutaciones RPC en pausa se reanudan dentro de la misma sesión** al
-  reconectar (verificado: `enviar_reporte` pasa `en_proceso` →
-  `pendiente_de_cierre`), y **persisten** en `PersistQueryClientProvider`
-  (`shouldDehydrateMutation: (m) => m.state.isPaused`).
-  **No se pueden reanudar automáticamente tras recargar/cerrar la app**: la
-  función de mutación es una clausura que no es serializable, y las claves de
-  mutación de los hooks no incluyen el `proyecto_id` para reconstruirlas. Por
-  eso `05-offline` valida cada garantía por separado: (a) la **evidencia** es
-  cola real de Dexie, sobrevive recarga offline y se sube al reconectar;
-  (b) la **mutación** se reanuda en la misma sesión. El caso de "reabrir la
-  app offline con un reporte pendiente" requeriría una cola materializada en
-  la tabla `outbox` (ya definida en Dexie pero sin executor) o mutaciones con
-  `mutationKey` + `setMutationDefaults` por RPC.
+La limitación previa (las mutaciones RPC en pausa **no** se podían reanudar
+tras recargar/cerrar la app) queda **resuelta** con un **outbox materializado**
+y un **executor explícito** sobre la tabla Dexie `outbox` (declarada en la v2
+del esquema, hasta ahora nunca escrita). Sigue siendo válida la reanudación
+in-session de TanStack, pero **ya no es la única garantía**.
 
-### 18.5 Comandos finales
+- **Modelo** (`src/lib/offline/db.ts`, esquema **v3**):
+  `outbox: "id, seq, kind, clave, estado, createdAt"` con
+  `OutboxEntry { id, seq, kind, datos, version?, clave, estado, createdAt, intentos, ultimoError? }`
+  y `estado ∈ { "pendiente", "conflicto" }`.
+- **Cola** (`src/lib/offline/outbox.ts`): `encolarOperacion()` serializa las
+  inserciones con una cadena de promesas (asigna un `seq` determinista) y
+  **coalesce por `clave`**: una segunda edición del mismo checklist **actualiza
+  `datos`** conservando `seq`/`version`, en lugar de encolar otra operación.
+- **Handlers** por `kind`:
+  - `checklist-detalle`: **control de versión optimista** comparando
+    `actualizado_en` de la vista; si el registro ya no existe o cambió en otro
+    dispositivo → `ConflictoOutbox`.
+  - `validar-checklist`, `iniciar-proyecto`, `enviar-reporte`: llaman a su RPC
+    con `operation_id = entry.id` (idempotencia real vía
+    `operaciones_procesadas`).
+- **Executor** (`procesarOutbox()`): reentrante (flag `enProceso`), se dispara
+  en el arranque y al reconectar (`SyncProvider.syncQueue`:
+  `procesarOutbox → resumePausedMutations → flushEvidenciasPendientes →
+  invalidate/invalidateQueries`). **Guarda de sesión**: sin `getSession()` no
+  procesa (la cola se conserva hasta el login). Clasificación de errores:
+  **red** → `registrarIntentoFallido` y `break` (preserva el orden);
+  **conflicto de negocio/versión** → `marcarConflicto` y continúa. Una operación
+  **solo se elimina tras éxito confirmado**.
+- **Interceptación offline** (`useIdempotente` en `use-proyectos.ts`): si
+  `navigator.onLine === false`, la mutación **se encola y no pasa por TanStack**;
+  un `descriptor` aporta `{ kind, datos, version?, clave }`. Cableado en
+  `useActualizarDetalleChecklist`, `useValidarChecklist`, `useIniciarProyecto`
+  y `useEnviarReporte`. `projects/page.tsx` propaga `version` (=
+  `actualizado_en`) en cada edición de material.
+- **Garantías verificadas por `06-outbox.spec.ts`** (2 tests), todas con
+  **recarga completa de la página estando offline** y **sync automático al
+  reconectar (sin intervención manual)**:
+  1. **Reporte**: offline → outbox `enviar-reporte`; recarga offline → el outbox
+     persiste y el proyecto sigue `en_proceso`; reconectar → se drena solo
+     (`pendiente_de_cierre`, fila en `reportes`, outbox vacío).
+  2. **Checklist**: offline → desmarcar material (`checklist-detalle`); recarga
+     offline → la edición local sigue y el outbox persiste; reconectar → el
+     detalle se aplica en el servidor (contadores) y el outbox se vacía.
+- **Nota de robustez del test**: durante la reconexión el service worker de
+  Serwist provoca una navegación que destruye el contexto de evaluación de
+  Playwright; los sondeos del outbox toleran ese estado (no dan falso positivo)
+  y reintentan en lugar de fallar.
+
+### 18.5 Auditoría de la subida de evidencias (`/api/upload/object`)
+
+Se revisó y endureció el proxy server-side
+(`src/app/api/upload/object/route.ts`). Se **mantiene el proxy same-origin** en
+lugar de la subida directa navegador→R2 porque el bucket no admite reglas CORS
+con las credenciales S3 disponibles (decisión consciente, ver 18.3.6).
+
+| Control | Implementación |
+| --- | --- |
+| Autenticación | `supabase.auth.getUser()`; sin usuario → **401** |
+| Autorización por proyecto | `select` sobre `proyectos` con RLS (admin o miembro del equipo) → **403** |
+| MIME permitido | whitelist `jpeg/png/webp/heic/pdf/mp4` → **415** |
+| Tamaño máximo | **25 MB**, más guarda previa por `Content-Length` (rechaza **413** antes de bufferizar el cuerpo) |
+| Claves de objeto | `proyectos/{id}/{uuid}-{nombre_saneado}`; el uuid evita colisiones y la sobrescritura de objetos ajenos |
+| `avance_id` | debe existir y pertenecer al **mismo proyecto** → **400** si no |
+| Cleanup | `DeleteObject` si falla la RPC o cualquier paso posterior (rollback best-effort) |
+| Errores de R2 | se propagan como **500** tras intentar el rollback del objeto |
+| Idempotencia | `operation_id` → `registrar_evidencia`; en un reintento la RPC devuelve el `object_key` **canónico** y el objeto recién subido se **elimina** (sin huérfanos en R2) |
+| `descripcion` | truncada a 2000 caracteres |
+
+Prueba real (`07-upload.spec.ts`, 3 tests):
+1. **Foto representativa real** (PNG RGB 1600×1200 ≈ **5,5 MB** generado en el
+   propio test): sube por `/api/upload/object` → **201**; la fila de `evidencias`
+   coincide (`object_key`, `size_bytes`, `content_type`, `tipo`); un **round-trip**
+   por `/api/upload/download` devuelve el objeto con el mismo tamaño; y se hace
+   **cleanup** explícito (fila + objeto R2).
+2. **Validaciones**: sin sesión → 401; MIME no permitido → 415; 27 MB → 413;
+   proyecto sin acceso → 403.
+3. **Idempotencia**: dos subidas con el mismo `operationId` → misma clave
+   canónica y una sola fila en `evidencias`.
+
+### 18.6 Comandos finales
 
 - `npm run lint` → **0 errores, 0 warnings**.
 - `npm run typecheck` → limpio (incluye `e2e/**`).
-- `npm run build` → **24 rutas + `/api/upload/{url,download,delete,object}`**.
+- `npm run build` → correcto (25 páginas generadas; incluye
+  `/api/upload/{url,download,delete,object}`).
+- `npm run db:apply` → **6 migraciones** aplicadas.
 - `npm run db:smoke` → **26/26 PASS**.
-- `npx playwright test` → **16/16 PASS** (~1,2 min).
+- `npx playwright test` → **21/21 PASS** (~1,4 min).

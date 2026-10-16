@@ -484,6 +484,7 @@ function OperatorSheetBody({
       quantity: req,
       done: d.marcado ?? false,
       takenQuantity: taken,
+      version: d.actualizado_en ?? undefined,
     };
   });
 
@@ -510,7 +511,7 @@ function OperatorSheetBody({
     };
     optimizarDetalle(mat.id, patch);
     actualizarDetalle.mutate(
-      { id: mat.id, patch },
+      { id: mat.id, patch, version: mat.version },
       { onError: (e) => toast({ variant: "destructive", title: "Error", description: e.message }) }
     );
   };
@@ -521,7 +522,7 @@ function OperatorSheetBody({
     const patch = { cantidad_cargada: qty, marcado: qty >= mat.quantity, empleado_id: profile?.empleadoId ?? null };
     optimizarDetalle(mat.id, patch);
     actualizarDetalle.mutate(
-      { id: mat.id, patch },
+      { id: mat.id, patch, version: mat.version },
       { onError: (e) => toast({ variant: "destructive", title: "Error", description: e.message }) }
     );
   };

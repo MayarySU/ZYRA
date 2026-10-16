@@ -1,16 +1,5 @@
 import { test, expect } from "./support/test";
-import {
-  getEmpresaId,
-  getServicioId,
-  createCliente,
-  createEquipo,
-  addEquipoMember,
-  createProyecto,
-  generarChecklist,
-  marcarChecklistCompleto,
-  validarChecklist,
-  iniciarProyecto,
-} from "./support/factory";
+import { proyectoEnProceso, abrirSheetReportar } from "./support/projects";
 import type { Page } from "@playwright/test";
 
 const PNG_1x1 = Buffer.from(
@@ -52,48 +41,7 @@ async function queuedEvidenceCount(page: Page): Promise<number> {
   }
 }
 
-/** Crea un proyecto asignado al técnico y lo deja en `en_proceso`. */
-async function proyectoEnProceso(
-  service: Parameters<typeof getEmpresaId>[0],
-  admin: Parameters<typeof generarChecklist>[0],
-  techEmpleadoId: number,
-  prefix: string,
-  sufijo: string
-) {
-  const empresaId = await getEmpresaId(service);
-  const servicioId = await getServicioId(service, "Mantenimiento");
-  const clienteId = await createCliente(service, empresaId, `${prefix} Cliente ${sufijo}`);
-  const equipoId = await createEquipo(service, empresaId, `${prefix} Equipo ${sufijo}`);
-  await addEquipoMember(service, equipoId, techEmpleadoId, true);
-  const proyecto = await createProyecto(service, {
-    empresaId,
-    clienteId,
-    servicioId,
-    equipoId,
-    nombre: `${prefix} ${sufijo}`,
-  });
-  const checklist = await generarChecklist(admin, proyecto.id);
-  await marcarChecklistCompleto(admin, checklist.id_checklist, techEmpleadoId);
-  await validarChecklist(admin, checklist.id_checklist);
-  await iniciarProyecto(admin, proyecto.id);
-  return proyecto;
-}
-
-/** Abre el sheet del técnico limitado a la tarjeta del proyecto dado. */
-async function abrirSheetReportar(page: Page, nombreProyecto: string) {
-  const name = page.getByText(nombreProyecto, { exact: true }).first();
-  await expect(name).toBeVisible();
-  // Sube al contenedor (la Card) que además contiene el botón de acción.
-  const card = name.locator(
-    'xpath=ancestor::div[.//button[contains(normalize-space(.), "Reportar Avance")]][1]'
-  );
-  const btn = card.getByRole("button", { name: "Reportar Avance" });
-  await expect(btn).toHaveCount(1);
-  await btn.click();
-}
-
-test.describe("Offline-First (Dexie + reconexión)", () => {
-  test("evidencia capturada sin conexión persiste tras recargar y se sube al reconectar", async ({
+test.describe("Offline-First (Dexie + reconexión)", () => {  test("evidencia capturada sin conexión persiste tras recargar y se sube al reconectar", async ({
     page,
     service,
     admin,

@@ -23,24 +23,38 @@ export interface EvidenciaPendiente {
   ultimoError?: string;
 }
 
+/** Estado de una operación del outbox. */
+export type OutboxEstado = "pendiente" | "conflicto";
+
 /**
- * Entrada de la cola de operaciones (outbox). Se usa como respaldo lógico
- * para reintentos idempotentes; la cola de mutaciones de TanStack Query
- * (persistida en `kv`) es la que ejecuta las RPC.
+ * Entrada de la cola de operaciones (outbox). Es la fuente de verdad de las
+ * mutaciones hechas sin conexión: el ejecutor (`lib/offline/outbox.ts`) la
+ * procesa en orden al arrancar la app y al reconectar, ejecutando el handler
+ * del `kind` correspondiente. Solo se borra tras un éxito confirmado.
  */
 export interface OutboxEntry {
+  /** Idempotency key: coincide con el `operation_id` de la RPC. */
   id: string;
+  /** Orden determinista de procesamiento (asignado al encolar). */
+  seq: number;
   kind: string;
-  payload: string;
+  /** Payload serializable específico del `kind`. */
+  datos: unknown;
+  /** Versión (p.ej. `actualizado_en`) capturada al encolar, para detectar conflictos. */
+  version?: string;
+  /** Clave de coalescencia: dos operaciones pendientes con la misma clave se fusionan. */
+  clave: string;
+  estado: OutboxEstado;
   createdAt: number;
   intentos: number;
+  ultimoError?: string;
 }
 
 /**
  * Base de datos offline (IndexedDB vía Dexie).
  * - `kv`: persister de TanStack Query (caché de queries + mutaciones pausadas).
  * - `evidencias_pendientes`: blobs de evidencias capturadas offline.
- * - `outbox`: cola lógica de operaciones para reintentos idempotentes.
+ * - `outbox`: cola de operaciones offline procesada por el ejecutor explícito.
  */
 class ZyraOfflineDB extends Dexie {
   kv!: Table<KvEntry, string>;
@@ -55,6 +69,12 @@ class ZyraOfflineDB extends Dexie {
       kv: "key",
       evidencias_pendientes: "id, proyectoId, createdAt",
       outbox: "id, kind, createdAt",
+    });
+    // v3: outbox con orden determinista, coalescencia y estado explícito.
+    this.version(3).stores({
+      kv: "key",
+      evidencias_pendientes: "id, proyectoId, createdAt",
+      outbox: "id, seq, kind, clave, estado, createdAt",
     });
   }
 }

@@ -18,7 +18,11 @@ const MIME_PERMITIDOS = [
 ];
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+// El multipart añade algo de framing sobre el fichero; damos 1 MB de margen
+// para poder rechazar por Content-Length antes de bufferizar el cuerpo entero.
+const MAX_FORM_BYTES = MAX_BYTES + 1024 * 1024;
 const MAX_NOMBRE = 120;
+const MAX_DESCRIPCION = 2000;
 
 function tipoDesdeMime(mime: string): "foto" | "documento" | "video" {
   if (mime.startsWith("video/")) return "video";
@@ -26,9 +30,17 @@ function tipoDesdeMime(mime: string): "foto" | "documento" | "video" {
   return "foto";
 }
 
+/** Borra un objeto de R2 sin propagar errores (best-effort de rollback). */
+async function borrarObjeto(key: string): Promise<void> {
+  await r2Client
+    .send(new DeleteObjectCommand({ Bucket: serverEnv.r2.bucketName, Key: key }))
+    .catch(() => {});
+}
+
 export async function POST(req: Request) {
   let objectKey: string | null = null;
   try {
+    // 1) Autenticación.
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
@@ -37,15 +49,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    // 2) Tamaño máximo explícito ANTES de bufferizar el cuerpo.
+    const contentLength = Number(req.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_FORM_BYTES) {
+      return NextResponse.json({ error: "El archivo excede el tamaño máximo" }, { status: 413 });
+    }
+
     const form = await req.formData();
     const file = form.get("file");
     const pid = Number(form.get("proyectoId"));
-    const descripcion = (form.get("descripcion") as string | null) || undefined;
+    const descripcion = (form.get("descripcion") as string | null)?.slice(0, MAX_DESCRIPCION) || undefined;
     const avanceRaw = form.get("avanceId");
     const avanceId = avanceRaw ? Number(avanceRaw) : undefined;
     const operationId = (form.get("operationId") as string | null) || undefined;
 
-    if (!(file instanceof Blob) || !pid) {
+    if (!(file instanceof Blob) || !Number.isInteger(pid) || pid <= 0) {
       return NextResponse.json({ error: "file y proyectoId son requeridos" }, { status: 400 });
     }
     if (!file.type || !MIME_PERMITIDOS.includes(file.type)) {
@@ -55,7 +73,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "El archivo excede el tamaño máximo" }, { status: 413 });
     }
 
-    // Acceso por proyecto: RLS (admin o miembro del equipo) actúa aquí.
+    // 3) Autorización por proyecto: RLS (admin o miembro del equipo) actúa aquí.
     const { data: proyecto } = await supabase
       .from("proyectos")
       .select("id_proyecto")
@@ -65,6 +83,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Sin acceso al proyecto" }, { status: 403 });
     }
 
+    // El avance, si se indica, debe pertenecer al mismo proyecto.
+    if (avanceId != null && (!Number.isInteger(avanceId) || avanceId <= 0)) {
+      return NextResponse.json({ error: "avanceId inválido" }, { status: 400 });
+    }
+    if (avanceId != null) {
+      const { data: avance } = await supabase
+        .from("avances")
+        .select("id_avance")
+        .eq("id_avance", avanceId)
+        .eq("proyecto_id", pid)
+        .maybeSingle();
+      if (!avance) {
+        return NextResponse.json({ error: "El avance no pertenece al proyecto" }, { status: 400 });
+      }
+    }
+
+    // 4) Clave de objeto segura y única (uuid evita colisiones/sobrescritura).
     const safeName = (file instanceof File ? file.name : "evidencia")
       .replace(/[^a-zA-Z0-9._-]/g, "_")
       .slice(-MAX_NOMBRE);
@@ -79,6 +114,7 @@ export async function POST(req: Request) {
       })
     );
 
+    // 5) Registrar metadata (idempotente por operation_id).
     const { data, error } = await supabase.rpc("registrar_evidencia", {
       p_proyecto_id: pid,
       p_object_key: objectKey,
@@ -92,19 +128,22 @@ export async function POST(req: Request) {
 
     if (error) {
       // Rollback del objeto si no se pudo registrar la metadata.
-      await r2Client
-        .send(new DeleteObjectCommand({ Bucket: serverEnv.r2.bucketName, Key: objectKey }))
-        .catch(() => {});
+      await borrarObjeto(objectKey);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 6) Reintento idempotente: si la evidencia ya existía, la RPC devuelve su
+    // object_key original y el objeto recién subido queda huérfano → se borra
+    // y se devuelve la clave canónica.
+    const registeredKey = (data as { object_key?: string } | null)?.object_key;
+    if (registeredKey && registeredKey !== objectKey) {
+      await borrarObjeto(objectKey);
+      objectKey = registeredKey;
     }
 
     return NextResponse.json({ key: objectKey, evidencia: data }, { status: 201 });
   } catch (e) {
-    if (objectKey) {
-      await r2Client
-        .send(new DeleteObjectCommand({ Bucket: serverEnv.r2.bucketName, Key: objectKey }))
-        .catch(() => {});
-    }
+    if (objectKey) await borrarObjeto(objectKey);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
