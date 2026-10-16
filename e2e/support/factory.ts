@@ -336,6 +336,7 @@ export interface CleanupResult {
   equipos: number;
   empleados: number;
   objetosR2: number;
+  reportes: number;
 }
 
 /**
@@ -351,7 +352,7 @@ export async function cleanupByPrefix(
   techEmail: string,
   techUserId: string
 ): Promise<CleanupResult> {
-  const result: CleanupResult = { proyectos: 0, clientes: 0, equipos: 0, empleados: 0, objetosR2: 0 };
+  const result: CleanupResult = { proyectos: 0, clientes: 0, equipos: 0, empleados: 0, objetosR2: 0, reportes: 0 };
 
   // 1) Recoge las claves de objeto de R2 de las evidencias de esos proyectos.
   const keys = await withPg(async (client) => {
@@ -369,6 +370,22 @@ export async function cleanupByPrefix(
   await withPg(async (client) => {
     await client.query("begin");
     try {
+      // Los reportes usan `on delete set null` sobre proyectos: NO se arrastran
+      // al borrar el proyecto, así que se eliminan explícitamente antes.
+      const rpProy = await client.query(
+        `delete from reportes r
+           using proyectos p
+          where r.proyecto_id = p.id_proyecto
+            and p.nombre_proyecto like $1`,
+        [`${prefix}%`]
+      );
+      // Huérfanos de ejecuciones anteriores (proyecto ya borrado → proyecto_id NULL).
+      const rpOrf = await client.query(
+        "delete from reportes where proyecto_id is null and comentarios like $1",
+        ["E2E-%"]
+      );
+      result.reportes = (rpProy.rowCount ?? 0) + (rpOrf.rowCount ?? 0);
+
       const p = await client.query(
         "delete from proyectos where nombre_proyecto like $1",
         [`${prefix}%`]
@@ -387,6 +404,19 @@ export async function cleanupByPrefix(
       }
       const em = await client.query("delete from empleados where correo = $1", [techEmail]);
       result.empleados = em.rowCount ?? 0;
+
+      // Empleados/usuarios auxiliares creados por las pruebas cuyo correo usa el
+      // prefijo único de ejecución (p. ej. especialistas de viabilidad).
+      const aux = await client.query(
+        "select id_usuario from usuarios u join empleados e on e.id_empleado = u.empleado_id where e.correo like $1",
+        [`${prefix}%`]
+      );
+      const auxUserIds: string[] = aux.rows.map((r) => r.id_usuario);
+      if (auxUserIds.length > 0) {
+        await client.query("delete from auth.users where id = any($1::uuid[])", [auxUserIds]);
+      }
+      const emAux = await client.query("delete from empleados where correo like $1", [`${prefix}%`]);
+      result.empleados += emAux.rowCount ?? 0;
 
       await client.query("commit");
     } catch (e) {
