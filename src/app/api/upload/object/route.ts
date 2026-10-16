@@ -63,6 +63,17 @@ export async function POST(req: Request) {
     const avanceId = avanceRaw ? Number(avanceRaw) : undefined;
     const operationId = (form.get("operationId") as string | null) || undefined;
 
+    // Enlace opcional a un destino de viabilidad (revisión + padre concreto).
+    const numOpt = (v: FormDataEntryValue | null): number | undefined => {
+      if (v == null || String(v) === "") return undefined;
+      const n = Number(v);
+      return Number.isInteger(n) ? n : undefined;
+    };
+    const revisionId = numOpt(form.get("revisionId"));
+    const preguntaId = numOpt(form.get("preguntaId"));
+    const accionId = numOpt(form.get("accionId"));
+    const validacionId = numOpt(form.get("validacionId"));
+
     if (!(file instanceof Blob) || !Number.isInteger(pid) || pid <= 0) {
       return NextResponse.json({ error: "file y proyectoId son requeridos" }, { status: 400 });
     }
@@ -73,29 +84,44 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "El archivo excede el tamaño máximo" }, { status: 413 });
     }
 
-    // 3) Autorización por proyecto: RLS (admin o miembro del equipo) actúa aquí.
-    const { data: proyecto } = await supabase
-      .from("proyectos")
-      .select("id_proyecto")
-      .eq("id_proyecto", pid)
-      .maybeSingle();
-    if (!proyecto) {
-      return NextResponse.json({ error: "Sin acceso al proyecto" }, { status: 403 });
-    }
-
-    // El avance, si se indica, debe pertenecer al mismo proyecto.
-    if (avanceId != null && (!Number.isInteger(avanceId) || avanceId <= 0)) {
-      return NextResponse.json({ error: "avanceId inválido" }, { status: 400 });
-    }
-    if (avanceId != null) {
-      const { data: avance } = await supabase
-        .from("avances")
-        .select("id_avance")
-        .eq("id_avance", avanceId)
-        .eq("proyecto_id", pid)
+    // 3) Autorización.
+    //    - viabilidad (`revisionId`): se exige ser participante de ESA revisión
+    //      (RLS de `viabilidad_revisiones`). No se otorga membresía general del
+    //      proyecto; la revisión además debe ser del mismo `proyectoId`.
+    //    - resto: pertenencia al proyecto (RLS admin/miembro del equipo).
+    if (revisionId != null) {
+      const { data: revision } = await supabase
+        .from("viabilidad_revisiones")
+        .select("id_revision_viabilidad, proyecto_id")
+        .eq("id_revision_viabilidad", revisionId)
         .maybeSingle();
-      if (!avance) {
-        return NextResponse.json({ error: "El avance no pertenece al proyecto" }, { status: 400 });
+      if (!revision || revision.proyecto_id !== pid) {
+        return NextResponse.json({ error: "Sin acceso a la revisión de viabilidad" }, { status: 403 });
+      }
+    } else {
+      const { data: proyecto } = await supabase
+        .from("proyectos")
+        .select("id_proyecto")
+        .eq("id_proyecto", pid)
+        .maybeSingle();
+      if (!proyecto) {
+        return NextResponse.json({ error: "Sin acceso al proyecto" }, { status: 403 });
+      }
+
+      // El avance, si se indica, debe pertenecer al mismo proyecto.
+      if (avanceId != null && (!Number.isInteger(avanceId) || avanceId <= 0)) {
+        return NextResponse.json({ error: "avanceId inválido" }, { status: 400 });
+      }
+      if (avanceId != null) {
+        const { data: avance } = await supabase
+          .from("avances")
+          .select("id_avance")
+          .eq("id_avance", avanceId)
+          .eq("proyecto_id", pid)
+          .maybeSingle();
+        if (!avance) {
+          return NextResponse.json({ error: "El avance no pertenece al proyecto" }, { status: 400 });
+        }
       }
     }
 
@@ -114,23 +140,40 @@ export async function POST(req: Request) {
       })
     );
 
-    // 5) Registrar metadata (idempotente por operation_id).
-    const { data, error } = await supabase.rpc("registrar_evidencia", {
-      p_proyecto_id: pid,
-      p_object_key: objectKey,
-      p_descripcion: descripcion,
-      p_tipo: tipoDesdeMime(file.type),
-      p_content_type: file.type,
-      p_size_bytes: file.size,
-      p_avance_id: avanceId,
-      p_operation_id: operationId ?? crypto.randomUUID(),
-    });
+    // 5) Registrar metadata (idempotente por operation_id). Para viabilidad la
+    //    RPC además enlaza la evidencia al padre concreto de la revisión.
+    let data: unknown = null;
+    const registro =
+      revisionId != null
+        ? await supabase.rpc("registrar_evidencia_viabilidad", {
+            p_revision_id: revisionId,
+            p_object_key: objectKey,
+            p_pregunta_id: preguntaId,
+            p_accion_id: accionId,
+            p_validacion_id: validacionId,
+            p_descripcion: descripcion,
+            p_tipo: tipoDesdeMime(file.type),
+            p_content_type: file.type,
+            p_size_bytes: file.size,
+            p_operation_id: operationId ?? crypto.randomUUID(),
+          })
+        : await supabase.rpc("registrar_evidencia", {
+            p_proyecto_id: pid,
+            p_object_key: objectKey,
+            p_descripcion: descripcion,
+            p_tipo: tipoDesdeMime(file.type),
+            p_content_type: file.type,
+            p_size_bytes: file.size,
+            p_avance_id: avanceId,
+            p_operation_id: operationId ?? crypto.randomUUID(),
+          });
 
-    if (error) {
+    if (registro.error) {
       // Rollback del objeto si no se pudo registrar la metadata.
       await borrarObjeto(objectKey);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: registro.error.message }, { status: 500 });
     }
+    data = registro.data;
 
     // 6) Reintento idempotente: si la evidencia ya existía, la RPC devuelve su
     // object_key original y el objeto recién subido queda huérfano → se borra
@@ -141,7 +184,8 @@ export async function POST(req: Request) {
       objectKey = registeredKey;
     }
 
-    return NextResponse.json({ key: objectKey, evidencia: data }, { status: 201 });
+    const idEvidencia = (data as { id_evidencia?: string } | null)?.id_evidencia ?? null;
+    return NextResponse.json({ key: objectKey, evidencia: data, idEvidencia }, { status: 201 });
   } catch (e) {
     if (objectKey) await borrarObjeto(objectKey);
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

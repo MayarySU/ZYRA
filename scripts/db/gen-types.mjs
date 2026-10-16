@@ -25,7 +25,13 @@ console.log('Generando tipos...');
 const stdout = execFileSync(
   npx,
   ['--yes', 'supabase@latest', 'gen', 'types', 'typescript', '--db-url', process.env.DATABASE_URL, '--schema', 'public'],
-  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }
+  {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    maxBuffer: 64 * 1024 * 1024,
+    // Windows: Node 24 ya no permite spawnear .cmd sin shell (EINVAL).
+    shell: process.platform === 'win32',
+  }
 );
 
 writeFileSync(salida, stdout, 'utf8');

@@ -2,14 +2,15 @@
 "use client";
 
 import * as React from "react";
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Users, 
-  ClipboardList, 
+import {
+  LayoutDashboard,
+  Briefcase,
+  Users,
+  ClipboardList,
   Building2,
   Package,
-  UserCircle
+  UserCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
@@ -36,6 +37,7 @@ export function AppSidebar() {
   const navItems = isAdmin ? [
     { title: t.nav.dashboard, icon: LayoutDashboard, href: "/dashboard" },
     { title: t.nav.projects, icon: Briefcase, href: "/projects" },
+    { title: t.nav.viabilidad, icon: ShieldCheck, href: "/viabilidad" },
     { title: t.nav.clients, icon: Building2, href: "/clients" },
     { title: t.nav.teams, icon: Users, href: "/team" },
     { title: t.nav.employees, icon: UserCircle, href: "/employees" },
@@ -44,9 +46,13 @@ export function AppSidebar() {
   ] : [
     { title: t.nav.dashboard, icon: LayoutDashboard, href: "/dashboard" },
     { title: t.nav.projects, icon: Briefcase, href: "/projects" },
+    { title: t.nav.viabilidad, icon: ShieldCheck, href: "/viabilidad" },
     { title: t.nav.teams, icon: Users, href: "/team" },
     { title: t.nav.reports, icon: ClipboardList, href: "/reports" },
   ];
+
+  const activo = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border">
@@ -74,12 +80,12 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     asChild 
-                    isActive={pathname === item.href}
+                    isActive={activo(item.href)}
                     tooltip={item.title}
                     className="hover:bg-accent/10 active:bg-accent/20"
                   >
                     <a href={item.href} className="flex items-center gap-3">
-                      <item.icon className={pathname === item.href ? "text-accent" : "text-muted-foreground"} />
+                      <item.icon className={activo(item.href) ? "text-accent" : "text-muted-foreground"} />
                       <span className="font-medium text-foreground group-data-[collapsible=icon]:hidden">
                         {item.title}
                       </span>

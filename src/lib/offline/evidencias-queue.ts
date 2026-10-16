@@ -12,6 +12,10 @@ export async function encolarEvidencia(input: {
   file: File;
   descripcion?: string;
   avanceId?: number;
+  revisionId?: number;
+  preguntaId?: number;
+  accionId?: number;
+  validacionId?: number;
 }): Promise<string> {
   const id = crypto.randomUUID();
   await getOfflineDB().evidencias_pendientes.put({
@@ -19,6 +23,10 @@ export async function encolarEvidencia(input: {
     proyectoId: input.proyectoId,
     descripcion: input.descripcion,
     avanceId: input.avanceId,
+    revisionId: input.revisionId,
+    preguntaId: input.preguntaId,
+    accionId: input.accionId,
+    validacionId: input.validacionId,
     fileName: input.file.name,
     contentType: input.file.type,
     blob: input.file,
@@ -30,6 +38,16 @@ export async function encolarEvidencia(input: {
 
 export async function listarEvidenciasPendientes(): Promise<EvidenciaPendiente[]> {
   return getOfflineDB().evidencias_pendientes.orderBy("createdAt").toArray();
+}
+
+/** Evidencias capturadas sin conexión para una revisión de viabilidad. */
+export async function listarEvidenciasPendientesRevision(
+  revisionId: number
+): Promise<EvidenciaPendiente[]> {
+  return getOfflineDB()
+    .evidencias_pendientes.where("revisionId")
+    .equals(revisionId)
+    .toArray();
 }
 
 export async function contarEvidenciasPendientes(): Promise<number> {

@@ -239,8 +239,75 @@ async function main() {
     check('anon no lee evidencias (RLS)', !error && (data?.length ?? 0) === 0, error?.message || `${data?.length ?? 0} filas`);
   }
 
+  // ── 16. Viabilidad: aplicabilidad y compuerta fail-closed ───────────
+  let pidV;
+  {
+    const { data: proyV, error: errProyV } = await supabase
+      .from('proyectos')
+      .insert({
+        empresa_id: empresa.id_empresa,
+        cliente_id: cliente.id_cliente,
+        servicio_id: servicio.id_servicio,
+        equipo_id: equipo.id_equipo,
+        nombre_proyecto: 'Proyecto Vii ' + Date.now(),
+        ubicacion: 'Managua',
+        creado_por: sesion.user.id,
+      })
+      .select().single();
+    if (errProyV) throw errProyV;
+    pidV = proyV.id_proyecto;
+
+    const { data: cfg } = await supabase
+      .from('viabilidad_config_servicio').select('*').eq('servicio_id', servicio.id_servicio).maybeSingle();
+    check('config viabilidad por defecto inactiva',
+      cfg?.requiere_previabilidad === false && cfg?.requiere_ingenieria === false,
+      JSON.stringify(cfg));
+
+    const rAp = await supabase.rpc('establecer_aplicabilidad_viabilidad', {
+      p_proyecto_id: pidV, p_requiere_previabilidad: true, p_requiere_ingenieria: false, p_operation_id: OP(),
+    });
+    check('establecer_aplicabilidad_viabilidad', !rAp.error && rAp.data.requiere_previabilidad === true,
+      rAp.error?.message || JSON.stringify(rAp.data));
+
+    const rBad = await supabase.rpc('establecer_aplicabilidad_viabilidad', {
+      p_proyecto_id: pidV, p_requiere_previabilidad: false, p_requiere_ingenieria: true, p_operation_id: OP(),
+    });
+    check('ingenieria sin previabilidad bloqueada', !!rBad.error, rBad.error?.message || 'permitido!');
+
+    await supabase.rpc('generar_checklist', { p_proyecto_id: pidV, p_operation_id: OP() });
+    const { data: chkV } = await supabase
+      .from('checklists').select('id_checklist').eq('proyecto_id', pidV).single();
+    const { data: itemsV } = await supabase
+      .from('checklist_detalle').select('id_checklist_detalle, cantidad_requerida').eq('checklist_id', chkV.id_checklist);
+    for (const it of itemsV) {
+      await supabase.from('checklist_detalle')
+        .update({ marcado: true, cantidad_cargada: it.cantidad_requerida, empleado_id: adminUsr.empleado_id })
+        .eq('id_checklist_detalle', it.id_checklist_detalle);
+    }
+
+    const rVal = await supabase.rpc('validar_checklist', { p_checklist_id: chkV.id_checklist, p_operation_id: OP() });
+    check('validar_checklist completo bloqueado por compuerta', !!rVal.error, rVal.error?.message || 'permitido!');
+    const { data: chkPost } = await supabase.from('checklists').select('estado').eq('id_checklist', chkV.id_checklist).single();
+    check('checklist sigue incompleto (rollback)', chkPost.estado !== 'completo', chkPost.estado);
+
+    const rIni = await supabase.rpc('iniciar_proyecto', { p_proyecto_id: pidV, p_operation_id: OP() });
+    check('iniciar_proyecto bloqueado por compuerta', !!rIni.error, rIni.error?.message || 'permitido!');
+
+    const rRev = await supabase.rpc('crear_revision_viabilidad', {
+      p_proyecto_id: pidV, p_tipo_etapa: 'previabilidad', p_operation_id: OP(),
+    });
+    check('crear_revision_viabilidad (previabilidad)',
+      !rRev.error && rRev.data.estado === 'borrador', rRev.error?.message || JSON.stringify(rRev.data));
+
+    const rLock = await supabase.rpc('establecer_aplicabilidad_viabilidad', {
+      p_proyecto_id: pidV, p_requiere_previabilidad: false, p_requiere_ingenieria: false, p_operation_id: OP(),
+    });
+    check('aplicabilidad bloqueada tras crear revisión', !!rLock.error, rLock.error?.message || 'permitido!');
+  }
+
   // ── Limpieza ────────────────────────────────────────────────────────
   await supabase.from('proyectos').delete().eq('id_proyecto', pid);
+  if (pidV) await supabase.from('proyectos').delete().eq('id_proyecto', pidV);
   await supabase.from('clientes').delete().eq('id_cliente', cliente.id_cliente);
   await supabase.from('empleado_equipo').delete().eq('equipo_id', equipo.id_equipo);
   await supabase.from('equipos').delete().eq('id_equipo', equipo.id_equipo);

@@ -18,4 +18,15 @@ export const qk = {
   reportesEquipo: (equipoId: number) => ["reportes", "equipo", equipoId] as const,
   plantillas: ["plantillas"] as const,
   recordatorios: ["recordatorios"] as const,
+  viabilidadConfig: ["viabilidad", "config"] as const,
+  viabilidadPlantillas: ["viabilidad", "plantillas"] as const,
+  viabilidadPlantilla: (id: number) => ["viabilidad", "plantillas", id] as const,
+  viabilidadRevisiones: (proyectoId: number) =>
+    ["viabilidad", "revisiones", proyectoId] as const,
+  viabilidadRevision: (id: number) => ["viabilidad", "revision", id] as const,
+  viabilidadRevisionesAsignadas: ["viabilidad", "hub", "revisiones"] as const,
+  viabilidadValidacionesAsignadas: ["viabilidad", "hub", "validaciones"] as const,
+  viabilidadHistorial: ["viabilidad", "hub", "historial"] as const,
+  evidenciasPendientesRevision: (revisionId: number) =>
+    ["viabilidad", "evidencias-pendientes", revisionId] as const,
 };

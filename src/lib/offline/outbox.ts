@@ -27,15 +27,29 @@ export type OutboxKind =
   | "checklist-detalle"
   | "validar-checklist"
   | "iniciar-proyecto"
-  | "enviar-reporte";
+  | "enviar-reporte"
+  | "viabilidad-respuesta"
+  | "viabilidad-entregar";
 
-/** Error de negocio (no reintentable): la operación se marca como conflicto. */
+/**
+ * Error de concurrencia real (versión obsoleta): la operación se marca como
+ * `conflicto` y NO se sobrescribe; exige decisión explícita del usuario.
+ */
 export class ConflictoOutbox extends Error {}
+
+/**
+ * Señal del motor de negocio (p.ej. faltan obligatorias, estado inválido):
+ * NO es un conflicto de concurrencia. La operación se marca `error_negocio`
+ * y se reintentará cuando el usuario corrija la causa.
+ */
+export class ErrorNegocioOutbox extends Error {}
 
 export interface ResultadoProcesar {
   ok: number;
   conflictos: number;
   fallos: number;
+  /** Operaciones rechazadas por el motor de negocio (reintentables tras corregir). */
+  negocios: number;
 }
 
 export interface NuevaOperacion {
@@ -65,13 +79,27 @@ async function insertarOperacion(op: NuevaOperacion): Promise<void> {
   // mismo usuario que edita dos veces offline no provoca un conflicto consigo
   // mismo).
   const existente = await store.where("clave").equals(op.clave).first();
-  if (existente && existente.estado === "pendiente") {
-    await store.update(existente.id, {
-      datos: op.datos,
-      intentos: 0,
-      ultimoError: undefined,
-    });
-    return;
+  if (existente) {
+    if (existente.estado === "pendiente") {
+      await store.update(existente.id, {
+        datos: op.datos,
+        intentos: 0,
+        ultimoError: undefined,
+      });
+      return;
+    }
+    // Un intento nuevo del usuario deja sin efecto la entrada que el motor
+    // rechazó (sigue sin aplicarse en el servidor). Los `conflicto` se
+    // conservan: la concurrencia solo se resuelve de forma explícita.
+    if (existente.estado === "error_negocio") {
+      await store.update(existente.id, {
+        datos: op.datos,
+        estado: "pendiente",
+        intentos: 0,
+        ultimoError: undefined,
+      });
+      return;
+    }
   }
   const ultimo = await store.orderBy("seq").last();
   await store.put({
@@ -125,10 +153,96 @@ export async function marcarConflicto(id: string, motivo: string): Promise<void>
   });
 }
 
+export async function marcarErrorNegocio(id: string, motivo: string): Promise<void> {
+  const store = getOfflineDB().outbox;
+  const row = await store.get(id);
+  if (!row) return;
+  await store.update(id, {
+    estado: "error_negocio",
+    intentos: row.intentos + 1,
+    ultimoError: motivo,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Operaciones que exigen atención del usuario (conflicto o error de negocio)
+// ─────────────────────────────────────────────────────────────────────
+export async function listarOperacionesAtascadas(): Promise<OutboxEntry[]> {
+  const todas = await getOfflineDB().outbox.orderBy("seq").toArray();
+  return todas.filter((e) => e.estado === "conflicto" || e.estado === "error_negocio");
+}
+
+/** Vuelve a encolar una operación detenida para reintentarla. */
+export async function reintentarOperacion(id: string): Promise<void> {
+  await getOfflineDB().outbox.update(id, {
+    estado: "pendiente",
+    intentos: 0,
+    ultimoError: undefined,
+  });
+}
+
+/** Descarta una operación detenida (no se aplicó en el servidor). */
+export async function descartarOperacion(id: string): Promise<void> {
+  await getOfflineDB().outbox.delete(id);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Viabilidad: encolado y orden de drenado
+// ─────────────────────────────────────────────────────────────────────
+/**
+ * Encola la respuesta de una pregunta. Además reordena cualquier entrega de
+ * la misma revisión para que se ejecute DESPUÉS de las respuestas: el
+ * vaciado del outbox ocurre antes que el de evidencias, así que la entrega
+ * debe ver las respuestas ya aplicadas.
+ */
+export async function encolarRespuestaViabilidad(datos: {
+  revisionId: number;
+  preguntaId: number;
+  valor: unknown;
+  version: number | null;
+}): Promise<void> {
+  await encolarOperacion({
+    id: crypto.randomUUID(),
+    kind: "viabilidad-respuesta",
+    datos,
+    clave: `viabilidad-respuesta:${datos.revisionId}:${datos.preguntaId}`,
+  });
+  await reordenarEntregaViabilidad(datos.revisionId);
+}
+
+/** Hace que la entrega de la revisión se procese tras la última respuesta encolada. */
+async function reordenarEntregaViabilidad(revisionId: number): Promise<void> {
+  const store = getOfflineDB().outbox;
+  const claveEntrega = `viabilidad-entregar:${revisionId}`;
+  const entrega = await store.where("clave").equals(claveEntrega).first();
+  if (!entrega) return;
+  // Un conflicto de entrega solo se levanta de forma explícita: no lo tocamos.
+  if (entrega.estado === "conflicto") return;
+  const ultimo = await store.orderBy("seq").last();
+  await store.update(entrega.id, {
+    seq: (ultimo?.seq ?? 0) + 1,
+    estado: "pendiente",
+    intentos: 0,
+    ultimoError: undefined,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Handlers por `kind`
 // ─────────────────────────────────────────────────────────────────────
 type Handler = (entry: OutboxEntry) => Promise<void>;
+
+/** Traduce los errores de una RPC de viabilidad a los tipos del outbox. */
+async function clasificarViabilidad(promesa: Promise<unknown>): Promise<void> {
+  try {
+    await promesa;
+  } catch (e) {
+    const mensaje = e instanceof Error ? e.message : String(e);
+    if (/^CONFLICTO/.test(mensaje)) throw new ConflictoOutbox(mensaje);
+    if (esErrorDeRed(e)) throw e;
+    throw new ErrorNegocioOutbox(mensaje);
+  }
+}
 
 const handlers: Record<OutboxKind, Handler> = {
   "checklist-detalle": async (entry) => {
@@ -170,6 +284,23 @@ const handlers: Record<OutboxKind, Handler> = {
     };
     await rpc.rpcEnviarReporte(proyectoId, comentarios, entry.id);
   },
+
+  "viabilidad-respuesta": async (entry) => {
+    const { revisionId, preguntaId, valor, version } = entry.datos as {
+      revisionId: number;
+      preguntaId: number;
+      valor: unknown;
+      version: number | null;
+    };
+    await clasificarViabilidad(
+      rpc.rpcGuardarRespuestaViabilidad(revisionId, preguntaId, valor, version, entry.id)
+    );
+  },
+
+  "viabilidad-entregar": async (entry) => {
+    const { revisionId } = entry.datos as { revisionId: number };
+    await clasificarViabilidad(rpc.rpcEntregarRevisionViabilidad(revisionId, entry.id));
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -187,7 +318,7 @@ export function procesarOutbox(): Promise<ResultadoProcesar> {
 }
 
 async function ejecutar(): Promise<ResultadoProcesar> {
-  const resultado: ResultadoProcesar = { ok: 0, conflictos: 0, fallos: 0 };
+  const resultado: ResultadoProcesar = { ok: 0, conflictos: 0, fallos: 0, negocios: 0 };
   if (typeof navigator !== "undefined" && !navigator.onLine) return resultado;
 
   // Sin sesión no se procesa (RLS rechazaría por no autorizado): la cola se
@@ -212,6 +343,11 @@ async function ejecutar(): Promise<ResultadoProcesar> {
       if (e instanceof ConflictoOutbox) {
         await marcarConflicto(entry.id, e.message);
         resultado.conflictos++;
+        continue;
+      }
+      if (e instanceof ErrorNegocioOutbox) {
+        await marcarErrorNegocio(entry.id, e.message);
+        resultado.negocios++;
         continue;
       }
       if (esErrorDeRed(e)) {

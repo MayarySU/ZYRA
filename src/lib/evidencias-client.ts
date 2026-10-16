@@ -5,6 +5,7 @@ import {
   eliminarEvidenciaPendiente,
   encolarEvidencia,
   listarEvidenciasPendientes,
+  listarEvidenciasPendientesRevision,
   registrarIntentoFallido,
 } from "@/lib/offline/evidencias-queue";
 
@@ -13,6 +14,16 @@ export type TipoEvidencia = "foto" | "documento" | "video";
 export interface SubidaEvidenciaResultado {
   objectKey: string | null;
   encolada: boolean;
+  /** Id de la fila `evidencias` cuando la subida fue online. */
+  idEvidencia?: string | null;
+}
+
+/** Campos de enlace a un destino de viabilidad (revisión + padre concreto). */
+export interface EnlaceViabilidad {
+  revisionId?: number;
+  preguntaId?: number;
+  accionId?: number;
+  validacionId?: number;
 }
 
 function sinConexion(): boolean {
@@ -23,6 +34,9 @@ function sinConexion(): boolean {
  * Sube una evidencia vía el servidor (`/api/upload/object`). El servidor
  * escribe el objeto en R2 (evita el CORS del navegador) y registra la
  * metadata con `registrar_evidencia` (idempotente por operation_id).
+ * Si se le pasa `revisionId`, el servidor la registra Y la enlaza a la
+ * revisión con `registrar_evidencia_viabilidad` (autorización acotada al
+ * participante asignado).
  */
 async function subirEvidenciaOnline(input: {
   proyectoId: number;
@@ -30,8 +44,18 @@ async function subirEvidenciaOnline(input: {
   descripcion?: string;
   avanceId?: number;
   operationId?: string;
-}): Promise<string> {
-  const { proyectoId, file, descripcion, avanceId, operationId } = input;
+} & EnlaceViabilidad): Promise<{ key: string; idEvidencia: string | null }> {
+  const {
+    proyectoId,
+    file,
+    descripcion,
+    avanceId,
+    operationId,
+    revisionId,
+    preguntaId,
+    accionId,
+    validacionId,
+  } = input;
 
   const form = new FormData();
   form.append("file", file);
@@ -39,6 +63,10 @@ async function subirEvidenciaOnline(input: {
   if (descripcion) form.append("descripcion", descripcion);
   if (avanceId != null) form.append("avanceId", String(avanceId));
   if (operationId) form.append("operationId", operationId);
+  if (revisionId != null) form.append("revisionId", String(revisionId));
+  if (preguntaId != null) form.append("preguntaId", String(preguntaId));
+  if (accionId != null) form.append("accionId", String(accionId));
+  if (validacionId != null) form.append("validacionId", String(validacionId));
 
   const res = await fetch("/api/upload/object", { method: "POST", body: form });
   if (!res.ok) {
@@ -47,8 +75,11 @@ async function subirEvidenciaOnline(input: {
       .catch(() => ({ error: "No se pudo subir la evidencia" }));
     throw new Error(error);
   }
-  const { key } = (await res.json()) as { key: string };
-  return key;
+  const { key, idEvidencia } = (await res.json()) as {
+    key: string;
+    idEvidencia?: string | null;
+  };
+  return { key, idEvidencia: idEvidencia ?? null };
 }
 
 /**
@@ -61,19 +92,19 @@ export async function subirEvidencia(input: {
   file: File;
   descripcion?: string;
   avanceId?: number;
-}): Promise<SubidaEvidenciaResultado> {
+} & EnlaceViabilidad): Promise<SubidaEvidenciaResultado> {
   if (sinConexion()) {
     const id = await encolarEvidencia(input);
-    return { objectKey: null, encolada: !!id };
+    return { objectKey: null, encolada: !!id, idEvidencia: null };
   }
   try {
-    const key = await subirEvidenciaOnline(input);
-    return { objectKey: key, encolada: false };
+    const { key, idEvidencia } = await subirEvidenciaOnline(input);
+    return { objectKey: key, encolada: false, idEvidencia };
   } catch (e) {
     const esRed = e instanceof TypeError || sinConexion();
     if (esRed) {
       const id = await encolarEvidencia(input);
-      return { objectKey: null, encolada: !!id };
+      return { objectKey: null, encolada: !!id, idEvidencia: null };
     }
     throw e;
   }
@@ -94,6 +125,10 @@ export async function flushEvidenciasPendientes(): Promise<{ ok: number; fail: n
         descripcion: p.descripcion,
         avanceId: p.avanceId,
         operationId: p.id,
+        revisionId: p.revisionId,
+        preguntaId: p.preguntaId,
+        accionId: p.accionId,
+        validacionId: p.validacionId,
       });
       await eliminarEvidenciaPendiente(p.id);
       ok++;
@@ -105,7 +140,11 @@ export async function flushEvidenciasPendientes(): Promise<{ ok: number; fail: n
   return { ok, fail };
 }
 
-export { contarEvidenciasPendientes };
+export {
+  contarEvidenciasPendientes,
+  listarEvidenciasPendientes,
+  listarEvidenciasPendientesRevision,
+};
 
 /** URL prefirmada temporal de lectura (solo si el usuario puede ver la evidencia). */
 export async function urlEvidencia(objectKey: string): Promise<string | null> {
