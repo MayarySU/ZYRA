@@ -187,6 +187,17 @@ export async function addEquipoMember(
   if (error) throw new Error(`No se pudo añadir el miembro: ${error.message}`);
 }
 
+export interface CleanupResult {
+  proyectos: number;
+  clientes: number;
+  equipos: number;
+  empleados: number;
+  objetosR2: number;
+  reportes: number;
+  plantillas: number;
+  servicios: number;
+}
+
 export interface ProyectoFixture {
   id: number;
   nombre: string;
@@ -330,15 +341,6 @@ export async function deleteR2Objects(keys: string[]): Promise<number> {
   return eliminados;
 }
 
-export interface CleanupResult {
-  proyectos: number;
-  clientes: number;
-  equipos: number;
-  empleados: number;
-  objetosR2: number;
-  reportes: number;
-}
-
 /**
  * Borra todo lo creado por la ejecución E2E:
  * - Proyectos cuyo nombre empieza por `prefix` (arrastra checklist, avances,
@@ -348,19 +350,32 @@ export interface CleanupResult {
  * - Objetos de evidencia en R2 (recogidos antes de borrar las filas).
  */
 export async function cleanupByPrefix(
-  prefix: string,
+  _prefix: string,
   techEmail: string,
   techUserId: string
 ): Promise<CleanupResult> {
-  const result: CleanupResult = { proyectos: 0, clientes: 0, equipos: 0, empleados: 0, objetosR2: 0, reportes: 0 };
+  void _prefix; // cleanup ahora es global (purga todos los datos con prefijo E2E-)
+  const result: CleanupResult = {
+    proyectos: 0,
+    clientes: 0,
+    equipos: 0,
+    empleados: 0,
+    objetosR2: 0,
+    reportes: 0,
+    plantillas: 0,
+    servicios: 0,
+  };
 
   // 1) Recoge las claves de objeto de R2 de las evidencias de esos proyectos.
+  //    Se usa el prefijo global `E2E-%` (no el de la ejecución) para que la
+  //    limpieza sea auto-reparable: si una ejecución anterior murió sin
+  //    teardown, sus residuos también se recogen y eliminan.
   const keys = await withPg(async (client) => {
     const r = await client.query<{ object_key: string }>(
       `select e.object_key from evidencias e
          join proyectos p on p.id_proyecto = e.proyecto_id
         where p.nombre_proyecto like $1`,
-      [`${prefix}%`]
+      ["E2E-%"]
     );
     return r.rows.map((row) => row.object_key);
   });
@@ -377,7 +392,7 @@ export async function cleanupByPrefix(
            using proyectos p
           where r.proyecto_id = p.id_proyecto
             and p.nombre_proyecto like $1`,
-        [`${prefix}%`]
+        ["E2E-%"]
       );
       // Huérfanos de ejecuciones anteriores (proyecto ya borrado → proyecto_id NULL).
       const rpOrf = await client.query(
@@ -388,14 +403,29 @@ export async function cleanupByPrefix(
 
       const p = await client.query(
         "delete from proyectos where nombre_proyecto like $1",
-        [`${prefix}%`]
+        ["E2E-%"]
       );
       result.proyectos = p.rowCount ?? 0;
 
-      const c = await client.query("delete from clientes where nombre like $1", [`${prefix}%`]);
+      // Plantillas de viabilidad creadas por las pruebas (por nombre). Se
+      // eliminan tras los proyectos para que no queden revisiones que las
+      // referencien (FK `on delete restrict`).
+      const vp = await client.query(
+        "delete from viabilidad_plantillas where nombre like $1",
+        ["E2E-%"]
+      );
+      result.plantillas = vp.rowCount ?? 0;
+
+      // Servicios dedicados creados por las pruebas (cascadea config y plantillas).
+      const sv = await client.query("delete from servicios where tipo like $1", [
+        "E2E-%",
+      ]);
+      result.servicios = sv.rowCount ?? 0;
+
+      const c = await client.query("delete from clientes where nombre like $1", ["E2E-%"]);
       result.clientes = c.rowCount ?? 0;
 
-      const eq = await client.query("delete from equipos where nombre_equipo like $1", [`${prefix}%`]);
+      const eq = await client.query("delete from equipos where nombre_equipo like $1", ["E2E-%"]);
       result.equipos = eq.rowCount ?? 0;
 
       // El usuario de Auth (cascade usuarios). Se borra primero para liberar FK.
@@ -406,16 +436,17 @@ export async function cleanupByPrefix(
       result.empleados = em.rowCount ?? 0;
 
       // Empleados/usuarios auxiliares creados por las pruebas cuyo correo usa el
-      // prefijo único de ejecución (p. ej. especialistas de viabilidad).
+      // prefijo `E2E-` (p. ej. especialistas de viabilidad), incluyendo residuos
+      // de ejecuciones anteriores interrumpidas.
       const aux = await client.query(
         "select id_usuario from usuarios u join empleados e on e.id_empleado = u.empleado_id where e.correo like $1",
-        [`${prefix}%`]
+        ["E2E-%"]
       );
       const auxUserIds: string[] = aux.rows.map((r) => r.id_usuario);
       if (auxUserIds.length > 0) {
         await client.query("delete from auth.users where id = any($1::uuid[])", [auxUserIds]);
       }
-      const emAux = await client.query("delete from empleados where correo like $1", [`${prefix}%`]);
+      const emAux = await client.query("delete from empleados where correo like $1", ["E2E-%"]);
       result.empleados += emAux.rowCount ?? 0;
 
       await client.query("commit");

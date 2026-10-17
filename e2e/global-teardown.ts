@@ -18,6 +18,7 @@ export default async function globalTeardown(): Promise<void> {
   console.log(
     `[E2E] Eliminados: ${res.proyectos} proyectos, ${res.clientes} clientes, ` +
       `${res.equipos} equipos, ${res.empleados} empleados, ${res.reportes} reportes, ` +
+      `${res.plantillas} plantillas, ${res.servicios} servicios, ` +
       `${res.objetosR2} objetos R2.`
   );
 

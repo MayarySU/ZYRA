@@ -305,6 +305,99 @@ async function main() {
     check('aplicabilidad bloqueada tras crear revisión', !!rLock.error, rLock.error?.message || 'permitido!');
   }
 
+  // ── 17. Plantillas de viabilidad: gestión admin (borrador/publicación) ─
+  let servicioPlantillaId;
+  let plantillaV1;
+  let plantillaV2;
+  let seccionPlantillaId;
+  {
+    const { data: srv, error: errSrv } = await supabase
+      .from('servicios')
+      .insert({ empresa_id: empresa.id_empresa, tipo: `Smoke Plantillas ${Date.now()}` })
+      .select('id_servicio').single();
+    check('servicio dedicado para plantillas', !errSrv && !!srv, errSrv?.message || '');
+    servicioPlantillaId = srv?.id_servicio;
+
+    const rC = await supabase.rpc('crear_plantilla_viabilidad', {
+      p_empresa_id: empresa.id_empresa, p_servicio_id: servicioPlantillaId,
+      p_tipo_etapa: 'previabilidad', p_nombre: 'Smoke Plantilla', p_operation_id: OP(),
+    });
+    check('crear_plantilla_viabilidad => borrador',
+      !rC.error && rC.data.estado === 'borrador', rC.error?.message || JSON.stringify(rC.data));
+    plantillaV1 = rC.data?.id_plantilla_viabilidad;
+
+    const rV = await supabase.rpc('validar_plantilla_viabilidad', { p_plantilla_id: plantillaV1 });
+    check('validar plantilla vacía => inválida', !rV.error && rV.data.ok === false, JSON.stringify(rV.data));
+
+    const rPub = await supabase.rpc('publicar_plantilla_viabilidad', { p_plantilla_id: plantillaV1, p_operation_id: OP() });
+    check('publicar plantilla inválida bloqueada', !!rPub.error, rPub.error?.message || 'permitido!');
+    const rAh = await supabase.rpc('archivar_plantilla_viabilidad', { p_plantilla_id: plantillaV1, p_operation_id: OP() });
+    check('archivar plantilla no activa bloqueada', !!rAh.error, rAh.error?.message || 'permitido!');
+
+    const { data: sec } = await supabase
+      .from('viabilidad_secciones')
+      .insert({ plantilla_id: plantillaV1, orden: 1, codigo: 's1', titulo: 'Sección Smoke' })
+      .select('id_seccion_viabilidad').single();
+    seccionPlantillaId = sec?.id_seccion_viabilidad;
+    const { data: pre } = await supabase
+      .from('viabilidad_preguntas')
+      .insert({
+        seccion_id: seccionPlantillaId, orden: 1, codigo: 'p1', texto: '¿Pregunta Smoke?',
+        tipo_respuesta: 'opcion_unica', obligatoria: true,
+      })
+      .select('id_pregunta_viabilidad').single();
+    const { error: errNoOpt } = await supabase
+      .from('viabilidad_opciones')
+      .insert({ pregunta_id: pre.id_pregunta_viabilidad, orden: 1, valor: 'x', etiqueta: '' });
+    check('opción sin etiqueta insertada para validar', !errNoOpt, errNoOpt?.message || '');
+    await supabase.from('viabilidad_opciones').update({ etiqueta: 'Opción Smoke' })
+      .eq('pregunta_id', pre.id_pregunta_viabilidad);
+
+    const rV2 = await supabase.rpc('validar_plantilla_viabilidad', { p_plantilla_id: plantillaV1 });
+    check('validar plantilla completa => ok', !rV2.error && rV2.data.ok === true, JSON.stringify(rV2.data));
+
+    const rPubOk = await supabase.rpc('publicar_plantilla_viabilidad', { p_plantilla_id: plantillaV1, p_operation_id: OP() });
+    check('publicar plantilla válida => activa', !rPubOk.error && rPubOk.data.estado === 'activa',
+      rPubOk.error?.message || JSON.stringify(rPubOk.data));
+
+    const { error: errEdit } = await supabase
+      .from('viabilidad_secciones').update({ titulo: 'Hack' }).eq('id_seccion_viabilidad', seccionPlantillaId);
+    check('editar hijo de plantilla publicada bloqueado (BD)', !!errEdit, errEdit?.message || 'permitido!');
+
+    const rClone = await supabase.rpc('crear_version_plantilla_viabilidad', { p_origen_id: plantillaV1, p_operation_id: OP() });
+    check('crear_version_plantilla_viabilidad => borrador v2',
+      !rClone.error && rClone.data.estado === 'borrador' && rClone.data.version === 2,
+      rClone.error?.message || JSON.stringify(rClone.data));
+    plantillaV2 = rClone.data?.id_plantilla_viabilidad;
+
+    const { data: estructura } = await supabase
+      .from('viabilidad_preguntas').select('id_pregunta_viabilidad')
+      .eq('seccion_id', (await supabase.from('viabilidad_secciones')
+        .select('id_seccion_viabilidad').eq('plantilla_id', plantillaV2).single()).data?.id_seccion_viabilidad);
+    check('clone replica estructura', (estructura?.length ?? 0) === 1, `${estructura?.length ?? 0} preguntas`);
+
+    const rPub2 = await supabase.rpc('publicar_plantilla_viabilidad', { p_plantilla_id: plantillaV2, p_operation_id: OP() });
+    check('publicar v2 archiva v1', !rPub2.error && rPub2.data.archivadas === 1,
+      rPub2.error?.message || JSON.stringify(rPub2.data));
+    const { data: estados } = await supabase
+      .from('viabilidad_plantillas').select('id_plantilla_viabilidad, estado')
+      .in('id_plantilla_viabilidad', [plantillaV1, plantillaV2]);
+    check('v1 archivada y v2 activa',
+      estados?.find((e) => e.id_plantilla_viabilidad === plantillaV1)?.estado === 'archivada'
+      && estados?.find((e) => e.id_plantilla_viabilidad === plantillaV2)?.estado === 'activa',
+      JSON.stringify(estados));
+  }
+
+  // ── 18. Plantillas/RPC admin: roles no admin bloqueados ─────────────
+  {
+    const anon = createClient(url, pub, { auth: { autoRefreshToken: false, persistSession: false } });
+    const r = await anon.rpc('crear_plantilla_viabilidad', {
+      p_empresa_id: empresa.id_empresa, p_servicio_id: servicioPlantillaId,
+      p_tipo_etapa: 'previabilidad', p_nombre: 'Smoke anon', p_operation_id: OP(),
+    });
+    check('crear_plantilla_viabilidad como anon bloqueada', !!r.error, r.error?.message || 'permitido!');
+  }
+
   // ── Limpieza ────────────────────────────────────────────────────────
   await supabase.from('proyectos').delete().eq('id_proyecto', pid);
   if (pidV) await supabase.from('proyectos').delete().eq('id_proyecto', pidV);
@@ -312,11 +405,16 @@ async function main() {
   await supabase.from('empleado_equipo').delete().eq('equipo_id', equipo.id_equipo);
   await supabase.from('equipos').delete().eq('id_equipo', equipo.id_equipo);
 
-  // Restaurar stock consumido
+  // Restaurar stock consumido + limpiar plantillas/servicio (bypass RLS/trigger
+  // como SQL directo: auth.uid() es null).
   const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await client.connect();
   for (const s of stockAntes) {
     await client.query('update materiales set stock_disponible = $1 where id_material = $2', [s.stock_disponible, s.id_material]);
+  }
+  if (servicioPlantillaId) {
+    await client.query('delete from viabilidad_plantillas where servicio_id = $1', [servicioPlantillaId]);
+    await client.query('delete from servicios where id_servicio = $1', [servicioPlantillaId]);
   }
   await client.end();
 
