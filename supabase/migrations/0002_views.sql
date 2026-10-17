@@ -32,6 +32,11 @@ as $$
   ))::int;
 $$;
 
+-- `create or replace view` no puede eliminar columnas de una vista existente;
+-- 0008 extiende v_proyectos con columnas al final, así que para mantener el
+-- re-aplicado idempotente se recrea desde cero.
+drop view if exists public.v_proyectos;
+
 create or replace view public.v_proyectos
 with (security_invoker = true)
 as

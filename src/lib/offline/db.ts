@@ -15,6 +15,14 @@ export interface EvidenciaPendiente {
   proyectoId: number;
   descripcion?: string;
   avanceId?: number;
+  /** Enlace opcional a una revisión de viabilidad (v4). */
+  revisionId?: number;
+  /** Pregunta del cuestionario a la que se ancla (tipo `evidencia`). */
+  preguntaId?: number;
+  /** Destino de viabilidad alternativo (resolución de acción/validación). */
+  accionId?: number;
+  /** Destino de viabilidad alternativo (validación de especialista). */
+  validacionId?: number;
   fileName: string;
   contentType: string;
   blob: Blob;
@@ -23,8 +31,16 @@ export interface EvidenciaPendiente {
   ultimoError?: string;
 }
 
-/** Estado de una operación del outbox. */
-export type OutboxEstado = "pendiente" | "conflicto";
+/**
+ * Estado de una operación del outbox.
+ * - `pendiente`: esperando drenado (online).
+ * - `conflicto`: edición concurrente real (versión obsoleta). Requiere decisión
+ *   del usuario; nunca se resuelve sobrescribiendo.
+ * - `error_negocio`: el motor rechazó la operación (p.ej. faltan obligatorias,
+ *   estado no válido). No es un conflicto de concurrencia: se reintentará
+ *   cuando el usuario corrija el dato que lo causó.
+ */
+export type OutboxEstado = "pendiente" | "conflicto" | "error_negocio";
 
 /**
  * Entrada de la cola de operaciones (outbox). Es la fuente de verdad de las
@@ -74,6 +90,12 @@ class ZyraOfflineDB extends Dexie {
     this.version(3).stores({
       kv: "key",
       evidencias_pendientes: "id, proyectoId, createdAt",
+      outbox: "id, seq, kind, clave, estado, createdAt",
+    });
+    // v4: evidencias enlazables a una revisión de viabilidad.
+    this.version(4).stores({
+      kv: "key",
+      evidencias_pendientes: "id, proyectoId, revisionId, createdAt",
       outbox: "id, seq, kind, clave, estado, createdAt",
     });
   }

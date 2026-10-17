@@ -68,6 +68,7 @@ import type { ChecklistDetalleVista } from "@/lib/data/proyectos";
 import { subirEvidencia as subirEvidenciaR2 } from "@/lib/evidencias-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/hooks/queries/keys";
+import { ViabilidadPanel } from "@/components/viabilidad/viabilidad-panel";
 
 // Estados canónicos (español snake_case) → etiqueta de UI usada por la tarjeta.
 type DisplayStatus = "Pendiente" | "EnProceso" | "EnRevision" | "Finalizado" | "Rechazado" | "Cancelado";
@@ -425,12 +426,15 @@ export default function ProjectsPage() {
         </div>
 
         <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
-          <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogContent className="sm:max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{managedProject?.nombre_proyecto}</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Acción sobre el estado</Label><Select value={managedAccion} onValueChange={setManagedAccion}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{accionesDesdeEstado(managedProject?.estado || "preparacion").map((a) => (<SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>))}</SelectContent></Select></div>
               <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">Equipo</Label><Select value={managedTeamId} onValueChange={setManagedTeamId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no-team">Sin Equipo</SelectItem>{equipos.map(t => <SelectItem key={t.id_equipo} value={t.id_equipo.toString()}>{t.nombre_equipo}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1"><Label className="text-xs font-bold text-muted-foreground">📍 Dirección de Obra</Label><Input placeholder="Ej. Av. Principal 123, Colonia..." value={managedUbicacion} onChange={(e) => setManagedUbicacion(e.target.value)} /></div>
+              {managedProject && (
+                <ViabilidadPanel key={managedProject.id_proyecto} proyecto={managedProject} />
+              )}
             </div>
             <DialogFooter><Button onClick={handleSaveManagement} disabled={savingManage} className="w-full bg-accent text-white font-bold">{savingManage ? "Guardando..." : "Guardar"}</Button></DialogFooter>
           </DialogContent>

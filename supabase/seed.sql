@@ -159,3 +159,30 @@ begin
     on conflict (checklist_servicio_id, material_id) do nothing;
   end if;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────────
+-- Viabilidad — aplicabilidad opt-in por servicio (desactivada por
+-- defecto). El CUESTIONARIO FUNCIONAL DEFINITIVO se publica como
+-- plantillas GLOBALES (servicio_id = null) mediante el sembrador
+-- idempotente definido en la migración 0014. Las plantillas provisionales
+-- por servicio quedan archivadas (trazabilidad).
+--
+-- El módulo es opt-in: los proyectos nuevos heredan requiere_*=false y
+-- un admin lo habilita por proyecto con establecer_aplicabilidad_viabilidad.
+-- ─────────────────────────────────────────────────────────────────────
+do $$
+declare
+  v_empresa integer;
+begin
+  select id_empresa into v_empresa from empresas where nombre = 'ESSE Solar' limit 1;
+  if v_empresa is null then return; end if;
+
+  insert into viabilidad_config_servicio (servicio_id, requiere_previabilidad, requiere_ingenieria)
+  select s.id_servicio, false, false
+  from servicios s
+  where s.empresa_id = v_empresa
+    and s.tipo in ('Instalación Residencial', 'Instalación Comercial')
+  on conflict (servicio_id) do nothing;
+
+  perform public.sembrar_cuestionario_viabilidad_definitivo('ESSE Solar');
+end $$;
