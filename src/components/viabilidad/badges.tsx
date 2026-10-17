@@ -42,6 +42,36 @@ export function EstadoRevisionBadge({
   );
 }
 
+const PLANTILLA_ESTADO_STYLES: Record<string, string> = {
+  borrador: "bg-muted text-muted-foreground border-border",
+  activa: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+  archivada: "bg-muted text-muted-foreground border-border",
+};
+
+export function PlantillaEstadoBadge({
+  estado,
+  className,
+}: {
+  estado: string;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  const tv = t.viabilidad.plantillasAdmin;
+  const labels: Record<string, string> = {
+    borrador: tv.estado_borrador,
+    activa: tv.estado_activa,
+    archivada: tv.estado_archivada,
+  };
+  return (
+    <Badge
+      variant="outline"
+      className={cn(PLANTILLA_ESTADO_STYLES[estado], className)}
+    >
+      {labels[estado] ?? estado}
+    </Badge>
+  );
+}
+
 export function ResultadoBadge({
   resultado,
   className,

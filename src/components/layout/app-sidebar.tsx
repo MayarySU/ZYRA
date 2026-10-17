@@ -6,11 +6,12 @@ import {
   LayoutDashboard,
   Briefcase,
   Users,
+  UserCircle,
   ClipboardList,
   Building2,
   Package,
-  UserCircle,
   ShieldCheck,
+  ListChecks,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
@@ -38,6 +39,11 @@ export function AppSidebar() {
     { title: t.nav.dashboard, icon: LayoutDashboard, href: "/dashboard" },
     { title: t.nav.projects, icon: Briefcase, href: "/projects" },
     { title: t.nav.viabilidad, icon: ShieldCheck, href: "/viabilidad" },
+    {
+      title: t.viabilidad.plantillasAdmin.title,
+      icon: ListChecks,
+      href: "/settings/viabilidad/plantillas",
+    },
     { title: t.nav.clients, icon: Building2, href: "/clients" },
     { title: t.nav.teams, icon: Users, href: "/team" },
     { title: t.nav.employees, icon: UserCircle, href: "/employees" },

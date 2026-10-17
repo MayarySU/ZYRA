@@ -83,11 +83,21 @@ function useInvalidarPlantillas(plantillaId?: number) {
 }
 
 export function useCrearPlantillaViabilidad() {
-  const invalidar = useInvalidarPlantillas();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: Tablas["viabilidad_plantillas"]["Insert"]) =>
-      vv.crearPlantillaViabilidad(input),
-    onSuccess: invalidar,
+    mutationFn: (input: {
+      empresaId: number;
+      servicioId: number;
+      tipoEtapa: rpc.TipoEtapaViabilidad;
+      nombre: string;
+    }) =>
+      rpc.rpcCrearPlantillaViabilidad(
+        input.empresaId,
+        input.servicioId,
+        input.tipoEtapa,
+        input.nombre
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.viabilidadPlantillas }),
   });
 }
 
@@ -103,11 +113,35 @@ export function useActualizarPlantillaViabilidad() {
   });
 }
 
-export function useEliminarPlantillaViabilidad() {
-  const invalidar = useInvalidarPlantillas();
+export function useCrearVersionPlantillaViabilidad() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => vv.eliminarPlantillaViabilidad(id),
-    onSuccess: invalidar,
+    mutationFn: (origenId: number) => rpc.rpcCrearVersionPlantillaViabilidad(origenId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.viabilidadPlantillas }),
+  });
+}
+
+export function useValidarPlantillaViabilidad() {
+  return useMutation({
+    mutationFn: (plantillaId: number) => rpc.rpcValidarPlantillaViabilidad(plantillaId),
+  });
+}
+
+export function usePublicarPlantillaViabilidad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plantillaId: number) => rpc.rpcPublicarPlantillaViabilidad(plantillaId),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["viabilidad"] }),
+  });
+}
+
+export function useArchivarPlantillaViabilidad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plantillaId: number) => rpc.rpcArchivarPlantillaViabilidad(plantillaId),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["viabilidad"] }),
   });
 }
 

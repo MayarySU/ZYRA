@@ -101,6 +101,37 @@ export interface ResultadoEvaluarViabilidad {
   senales: SenalViabilidad[];
 }
 
+// ── Plantillas: gestión admin ────────────────────────────────────────
+export interface ErrorValidacionPlantilla {
+  codigo: string;
+  mensaje: string;
+  ref?: string | null;
+}
+export interface ResultadoValidarPlantilla {
+  ok: boolean;
+  errores: ErrorValidacionPlantilla[];
+}
+export interface ResultadoCrearPlantillaViabilidad {
+  id_plantilla_viabilidad: number;
+  version: number;
+  estado: string;
+}
+export interface ResultadoCrearVersionPlantillaViabilidad
+  extends ResultadoCrearPlantillaViabilidad {
+  origen_id: number;
+}
+export interface ResultadoPublicarPlantillaViabilidad {
+  id_plantilla_viabilidad: number;
+  version: number;
+  estado: string;
+  archivadas: number;
+}
+export interface ResultadoArchivarPlantillaViabilidad {
+  id_plantilla_viabilidad: number;
+  version: number;
+  estado: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // RPC
 // ─────────────────────────────────────────────────────────────────────
@@ -348,9 +379,74 @@ export async function rpcAnularRevisionViabilidad(
 }
 
 export async function rpcEvaluarViabilidad(
-  p_revision_id: number
+  revisionId: number
 ): Promise<ResultadoEvaluarViabilidad> {
   return unwrap(
-    await db().rpc("evaluar_viabilidad", { p_revision_id })
+    await db().rpc("evaluar_viabilidad", { p_revision_id: revisionId })
   ) as unknown as ResultadoEvaluarViabilidad;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RPC de gestión de plantillas (solo admin)
+// ─────────────────────────────────────────────────────────────────────
+export async function rpcCrearPlantillaViabilidad(
+  p_empresa_id: number,
+  p_servicio_id: number,
+  p_tipo_etapa: TipoEtapaViabilidad,
+  p_nombre: string,
+  p_operation_id: string = nuevoOperationId()
+): Promise<ResultadoCrearPlantillaViabilidad> {
+  return unwrap(
+    await db().rpc("crear_plantilla_viabilidad", {
+      p_empresa_id,
+      p_servicio_id,
+      p_tipo_etapa,
+      p_nombre,
+      p_operation_id,
+    })
+  ) as unknown as ResultadoCrearPlantillaViabilidad;
+}
+
+export async function rpcCrearVersionPlantillaViabilidad(
+  p_origen_id: number,
+  p_operation_id: string = nuevoOperationId()
+): Promise<ResultadoCrearVersionPlantillaViabilidad> {
+  return unwrap(
+    await db().rpc("crear_version_plantilla_viabilidad", {
+      p_origen_id,
+      p_operation_id,
+    })
+  ) as unknown as ResultadoCrearVersionPlantillaViabilidad;
+}
+
+export async function rpcValidarPlantillaViabilidad(
+  p_plantilla_id: number
+): Promise<ResultadoValidarPlantilla> {
+  return unwrap(
+    await db().rpc("validar_plantilla_viabilidad", { p_plantilla_id })
+  ) as unknown as ResultadoValidarPlantilla;
+}
+
+export async function rpcPublicarPlantillaViabilidad(
+  p_plantilla_id: number,
+  p_operation_id: string = nuevoOperationId()
+): Promise<ResultadoPublicarPlantillaViabilidad> {
+  return unwrap(
+    await db().rpc("publicar_plantilla_viabilidad", {
+      p_plantilla_id,
+      p_operation_id,
+    })
+  ) as unknown as ResultadoPublicarPlantillaViabilidad;
+}
+
+export async function rpcArchivarPlantillaViabilidad(
+  p_plantilla_id: number,
+  p_operation_id: string = nuevoOperationId()
+): Promise<ResultadoArchivarPlantillaViabilidad> {
+  return unwrap(
+    await db().rpc("archivar_plantilla_viabilidad", {
+      p_plantilla_id,
+      p_operation_id,
+    })
+  ) as unknown as ResultadoArchivarPlantillaViabilidad;
 }

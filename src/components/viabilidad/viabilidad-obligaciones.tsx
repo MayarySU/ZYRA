@@ -289,7 +289,8 @@ export function ViabilidadObligaciones({
             (e) => e.validacion_id === v.id_validacion_viabilidad
           );
           const pendientesVal = pendientes.filter((p) => p.validacionId === v.id_validacion_viabilidad);
-          const tipoLabel = (tv as Record<string, string>)[`val_${v.tipo}`] ?? v.tipo;
+          const tipoLabel =
+            (tv as unknown as Record<string, string>)[`val_${v.tipo}`] ?? v.tipo;
           return (
             <Card key={v.id_validacion_viabilidad} className="border-border bg-card">
               <CardHeader className="pb-2">

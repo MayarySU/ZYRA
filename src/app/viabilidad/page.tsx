@@ -2,6 +2,7 @@
 
 import DashboardLayout from "../dashboard/layout";
 import { useMemo } from "react";
+import Link from "next/link";
 import {
   Loader2,
   ShieldCheck,
@@ -10,8 +11,10 @@ import {
   ChevronRight,
   CalendarClock,
   FileText,
+  ListChecks,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAuth } from "@/providers/auth-provider";
 import { useI18n } from "@/components/providers/i18n-provider";
@@ -164,11 +167,21 @@ export default function ViabilidadPage() {
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-5xl space-y-6">
-        <header className="space-y-1">
-          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight text-foreground">
-            <ShieldCheck className="h-6 w-6 text-accent" /> {tv.title}
-          </h1>
-          <p className="text-sm text-muted-foreground">{tv.hub_subtitle}</p>
+        <header className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight text-foreground">
+              <ShieldCheck className="h-6 w-6 text-accent" /> {tv.title}
+            </h1>
+            <p className="text-sm text-muted-foreground">{tv.hub_subtitle}</p>
+          </div>
+          {isAdmin && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/viabilidad/plantillas">
+                <ListChecks className="mr-1 h-4 w-4" />
+                {tv.plantillasAdmin.title}
+              </Link>
+            </Button>
+          )}
         </header>
 
         {cargando ? (

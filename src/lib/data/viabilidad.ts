@@ -149,14 +149,6 @@ export async function obtenerPlantillaViabilidadDetalle(
   return data;
 }
 
-export async function crearPlantillaViabilidad(
-  input: Tablas["viabilidad_plantillas"]["Insert"]
-): Promise<ViabilidadPlantilla> {
-  return unwrap(
-    await db().from("viabilidad_plantillas").insert(input).select().single()
-  ) as unknown as ViabilidadPlantilla;
-}
-
 export async function actualizarPlantillaViabilidad(
   id: number,
   patch: Tablas["viabilidad_plantillas"]["Update"]
@@ -169,11 +161,6 @@ export async function actualizarPlantillaViabilidad(
       .select()
       .single()
   ) as unknown as ViabilidadPlantilla;
-}
-
-export async function eliminarPlantillaViabilidad(id: number): Promise<void> {
-  const res = await db().from("viabilidad_plantillas").delete().eq("id_plantilla_viabilidad", id);
-  if (res.error) throw new Error(res.error.message);
 }
 
 // ── Secciones ────────────────────────────────────────────────────────

@@ -1049,8 +1049,14 @@ isOneToOne: false
 "_otorgar_puntos":
 { Args: { "p_cantidad": number,"p_empleado_id": number,"p_motivo": string,"p_proyecto_id": number,"p_tipo_evento": string }; Returns: undefined
                            },
+"_viabilidad_bypass_plantilla":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "_viabilidad_condicion_cumple":
 { Args: { "p_operador": string,"p_texto": string,"p_valor": Json }; Returns: boolean
+                           },
+"_viabilidad_dependencias_ciclicas":
+{ Args: { "p_plantilla_id": number }; Returns: boolean
                            },
 "_viabilidad_exigir_previabilidad":
 { Args: { "p_proyecto_id": number }; Returns: undefined
@@ -1066,6 +1072,9 @@ isOneToOne: false
                            },
 "_viabilidad_pregunta_visible":
 { Args: { "p_pregunta_id": number,"p_revision_id": number }; Returns: boolean
+                           },
+"_viabilidad_regla_error":
+{ Args: { "p_regla": Json }; Returns: string
                            },
 "_viabilidad_respuesta_activa":
 { Args: { "p_tipo": string,"p_valor": Json }; Returns: boolean
@@ -1085,14 +1094,23 @@ isOneToOne: false
 "aprobar_reporte":
 { Args: { "p_operation_id"?: string,"p_reporte_id": number }; Returns: Json
                            },
+"archivar_plantilla_viabilidad":
+{ Args: { "p_operation_id"?: string,"p_plantilla_id": number }; Returns: Json
+                           },
 "avanzar_estado":
 { Args: { "p_nuevo_estado": string,"p_operation_id"?: string,"p_proyecto_id": number }; Returns: Json
                            },
 "calcular_progreso":
 { Args: { "p_proyecto_id": number }; Returns: number
                            },
+"crear_plantilla_viabilidad":
+{ Args: { "p_empresa_id": number,"p_nombre": string,"p_operation_id"?: string,"p_servicio_id": number,"p_tipo_etapa": string }; Returns: Json
+                           },
 "crear_revision_viabilidad":
 { Args: { "p_asignado_empleado_id"?: number,"p_operation_id"?: string,"p_proyecto_id": number,"p_tipo_etapa": string }; Returns: Json
+                           },
+"crear_version_plantilla_viabilidad":
+{ Args: { "p_operation_id"?: string,"p_origen_id": number }; Returns: Json
                            },
 "entregar_revision_viabilidad":
 { Args: { "p_operation_id"?: string,"p_revision_id": number }; Returns: Json
@@ -1139,6 +1157,9 @@ isOneToOne: false
 "mi_empresa_id":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"publicar_plantilla_viabilidad":
+{ Args: { "p_operation_id"?: string,"p_plantilla_id": number }; Returns: Json
+                           },
 "rechazar_reporte":
 { Args: { "p_motivo"?: string,"p_operation_id"?: string,"p_reporte_id": number }; Returns: Json
                            },
@@ -1159,6 +1180,9 @@ isOneToOne: false
                            },
 "validar_checklist":
 { Args: { "p_checklist_id": number,"p_operation_id"?: string }; Returns: Json
+                           },
+"validar_plantilla_viabilidad":
+{ Args: { "p_plantilla_id": number }; Returns: Json
                            }
           }
           Enums: {
