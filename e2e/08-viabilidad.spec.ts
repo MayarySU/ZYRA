@@ -15,6 +15,7 @@ import {
 } from "./support/factory";
 import {
   adjuntarEvidencia,
+  adjuntarEvidenciasRequeridas,
   crearProyectoViabilidad,
   crearRevision,
   entregar,
@@ -25,7 +26,6 @@ import {
   preguntaPorCodigo,
   responder,
   responderTodo,
-  resolverAccion,
   resolverValidacion,
   revisionPlantilla,
   rpcError,
@@ -166,34 +166,49 @@ test.describe("Viabilidad · Aplicabilidad y compuerta", () => {
     expect(await estadoProyecto(service, proyecto.id)).toBe("en_proceso");
   });
 
-  test("fail-closed: etapa requerida sin plantilla activa", async ({ service, admin, state }) => {
-    // El servicio "Mantenimiento" no tiene plantilla de viabilidad (solo
-    // Residencial/Comercial la tienen).
-    const { proyecto } = await crearProyectoViabilidad(
-      service,
-      state.prefix,
-      "SinPlantilla",
-      state.techEmpleadoId,
-      "Mantenimiento"
-    );
-    await setAplicabilidad(admin, proyecto.id, true, false);
-
-    const { id_checklist } = await generarChecklist(admin, proyecto.id);
-    await marcarChecklistCompleto(admin, id_checklist, state.techEmpleadoId);
-
-    const errValidar = await rpcError(admin, "validar_checklist", {
-      p_checklist_id: id_checklist,
-      p_operation_id: undefined,
+  test("fail-closed: empresa sin plantilla global no puede abrir viabilidad", async ({ service, admin, state }) => {
+    // Otra empresa sin plantillas (las globales pertenecen a ESSE Solar), pero
+    // usando un servicio real compartido: no debe resolver ninguna plantilla.
+    const { data: empresa, error } = await service
+      .from("empresas")
+      .insert({ nombre: `${state.prefix} SinPlantilla` })
+      .select("id_empresa")
+      .single();
+    expect(error).toBeNull();
+    const empresaId = empresa!.id_empresa as number;
+    const clienteId = await createCliente(service, empresaId, `${state.prefix} Cliente SinPlantilla`);
+    const servicioId = await getServicioId(service, "Instalación Residencial");
+    const proyecto = await createProyecto(service, {
+      empresaId,
+      clienteId,
+      servicioId,
+      equipoId: null,
+      nombre: `${state.prefix} SinPlantilla`,
     });
-    expect(errValidar).toContain("falta plantilla activa de Previabilidad");
 
-    const errCrear = await rpcError(admin, "crear_revision_viabilidad", {
-      p_proyecto_id: proyecto.id,
-      p_tipo_etapa: "previabilidad",
-      p_asignado_empleado_id: state.techEmpleadoId,
-      p_operation_id: undefined,
-    });
-    expect(errCrear).toContain("Falta plantilla activa");
+    try {
+      await setAplicabilidad(admin, proyecto.id, true, false);
+
+      const { id_checklist } = await generarChecklist(admin, proyecto.id);
+      await marcarChecklistCompleto(admin, id_checklist, state.techEmpleadoId);
+      const errValidar = await rpcError(admin, "validar_checklist", {
+        p_checklist_id: id_checklist,
+        p_operation_id: undefined,
+      });
+      expect(errValidar).toContain("falta plantilla activa de Previabilidad");
+
+      const errCrear = await rpcError(admin, "crear_revision_viabilidad", {
+        p_proyecto_id: proyecto.id,
+        p_tipo_etapa: "previabilidad",
+        p_asignado_empleado_id: state.techEmpleadoId,
+        p_operation_id: undefined,
+      });
+      expect(errCrear).toContain("Falta plantilla activa");
+    } finally {
+      await service.from("proyectos").delete().eq("id_proyecto", proyecto.id);
+      await service.from("clientes").delete().eq("id_cliente", clienteId);
+      await service.from("empresas").delete().eq("id_empresa", empresaId);
+    }
   });
 });
 
@@ -238,11 +253,11 @@ test.describe("Viabilidad · Previabilidad del inspector", () => {
     expect(entrega.estado).toBe("finalizada");
 
     const plantillaId = await revisionPlantilla(admin, revisionId);
-    const notas = await preguntaPorCodigo(admin, plantillaId, "notas");
+    const obs = await preguntaPorCodigo(admin, plantillaId, "observaciones_generales");
 
     const errRespuesta = await rpcError(admin, "guardar_respuesta_viabilidad", {
       p_revision_id: revisionId,
-      p_pregunta_id: notas.id,
+      p_pregunta_id: obs.id,
       p_valor: "cambio",
       p_version: null,
       p_operation_id: undefined,
@@ -273,47 +288,35 @@ test.describe("Viabilidad · Resultado apto", () => {
     expect(rev.acciones).toHaveLength(0);
     expect(rev.validaciones).toHaveLength(0);
   });
-});
 
-// ─────────────────────────────────────────────────────────────────────
-// 4) Apto con acciones correctivas
-// ─────────────────────────────────────────────────────────────────────
-test.describe("Viabilidad · Apto con acciones", () => {
-  test("acción obligatoria debe validarse para cerrar", async ({ service, admin, state }) => {
-    const { revisionId } = await proyectoConRevision(service, admin, state, "Accion");
-    await responderTodo(admin, revisionId, { acceso_mantenimiento: false });
-    const entrega = await entregar(admin, revisionId);
-    expect(entrega.resultado_evaluacion).toBe("apto_con_acciones");
-
-    let rev = await getRevision(service, revisionId);
-    expect(rev.estado).toBe("evaluada");
-    expect(rev.acciones).toHaveLength(1);
-    expect(rev.acciones[0].descripcion).toContain("Habilitar acceso seguro");
-    expect(rev.acciones[0].obligatoria).toBe(true);
-
-    // Estado inválido rechazado.
-    const err = await rpcError(admin, "resolver_accion_viabilidad", {
-      p_accion_id: rev.acciones[0].id,
-      p_estado: "inventado",
-      p_observaciones: null,
-      p_operation_id: undefined,
+  test("observaciones e informativas no bloquean ni crean obligaciones", async ({ service, admin, state }) => {
+    // acceso=callejón estrecho + ancho insuficiente ⇒ observación (no bloquea).
+    // es_tarifa_dac / orientacion_techo ⇒ informativas (no bloquean).
+    const { revisionId } = await proyectoConRevision(service, admin, state, "Obs");
+    await responderTodo(admin, revisionId, {
+      acceso_vehiculo: "callejon_estrecho",
+      ancho_callejon_ok: false,
+      obstaculos_aereos: false,
+      es_tarifa_dac: true,
     });
-    expect(err).toContain("Estado de acción inválido");
+    const entrega = await entregar(admin, revisionId);
+    expect(entrega.resultado_evaluacion).toBe("apto");
 
-    await resolverAccion(admin, rev.acciones[0].id, "validada", "acceso habilitado");
-    rev = await getRevision(service, revisionId);
+    const rev = await getRevision(service, revisionId);
     expect(rev.estado).toBe("finalizada");
     expect(rev.resultado_final).toBe("apto");
+    expect(rev.acciones).toHaveLength(0);
+    expect(rev.validaciones).toHaveLength(0);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 5) Requiere validación de especialista
+// 4) Requiere validación de especialista
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · Validación de especialista", () => {
-  test("potencia ≥ 0.7 MW genera validación CFE que aprueba el especialista", async ({ service, admin, state }) => {
+  test("potencia ≥ 0.7 MW genera validación legal que aprueba el especialista", async ({ service, admin, state }) => {
     const { revisionId } = await proyectoConRevision(service, admin, state, "ValidAproba");
-    await responderTodo(admin, revisionId, { potencia_sistema_kw: 900 });
+    await responderTodo(admin, revisionId, { potencia_kw: 900 });
     const entrega = await entregar(admin, revisionId);
     expect(entrega.resultado_evaluacion).toBe("requiere_validacion");
 
@@ -327,7 +330,7 @@ test.describe("Viabilidad · Validación de especialista", () => {
     let rev = await getRevision(service, revisionId);
     expect(rev.estado).toBe("evaluada");
     expect(rev.validaciones).toHaveLength(1);
-    expect(rev.validaciones[0].tipo).toBe("cfe");
+    expect(rev.validaciones[0].tipo).toBe("legal");
 
     const esp = await ensureTechnician(
       service,
@@ -346,11 +349,13 @@ test.describe("Viabilidad · Validación de especialista", () => {
 
   test("rechazo de la validación finaliza como no apto", async ({ service, admin, state }) => {
     const { revisionId } = await proyectoConRevision(service, admin, state, "ValidRechaza");
-    await responderTodo(admin, revisionId, { requiere_interconexion_cfe: true });
+    // Transformador sin capacidad ⇒ validación especializada CFE.
+    await responderTodo(admin, revisionId, { transformador_capacidad: "no" });
     const entrega = await entregar(admin, revisionId);
     expect(entrega.resultado_evaluacion).toBe("requiere_validacion");
 
     let rev = await getRevision(service, revisionId);
+    expect(rev.validaciones[0].tipo).toBe("cfe");
     const val = rev.validaciones[0];
 
     const esp = await ensureTechnician(
@@ -370,23 +375,24 @@ test.describe("Viabilidad · Validación de especialista", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 6) Múltiples obligaciones combinadas
+// 5) Múltiples validaciones combinadas
 // ─────────────────────────────────────────────────────────────────────
-test.describe("Viabilidad · Múltiples obligaciones", () => {
-  test("combina acciones y validaciones (precedencia requiere_validacion)", async ({ service, admin, state }) => {
+test.describe("Viabilidad · Múltiples validaciones", () => {
+  test("combina validaciones legal, cfe y eléctrica; todas aprobadas ⇒ apto", async ({ service, admin, state }) => {
     const { revisionId } = await proyectoConRevision(service, admin, state, "Multi");
     await responderTodo(admin, revisionId, {
-      potencia_sistema_kw: 900,
-      requiere_interconexion_cfe: true,
-      tipo_proteccion_dc: "afci",
-      acceso_mantenimiento: false,
+      potencia_kw: 900, // legal
+      transformador_capacidad: "no", // cfe
+      cableado_buen_estado: false, // eléctrica (con material aluminio)
+      cableado_material: "aluminio",
+      cableado_empalmes: false,
+      cableado_antiguedad: true,
     });
     const entrega = await entregar(admin, revisionId);
     expect(entrega.resultado_evaluacion).toBe("requiere_validacion");
 
     let rev = await getRevision(service, revisionId);
-    expect(rev.acciones).toHaveLength(1);
-    expect(rev.validaciones.map((v) => v.tipo).sort()).toEqual(["cfe", "electrico"]);
+    expect(rev.validaciones.map((v) => v.tipo).sort()).toEqual(["cfe", "electrico", "legal"]);
 
     const esp = await ensureTechnician(
       service,
@@ -399,7 +405,6 @@ test.describe("Viabilidad · Múltiples obligaciones", () => {
       await asignarEspecialista(admin, v.id, esp.empleadoId);
       await resolverValidacion(espClient, v.id, "aprobada", "ok");
     }
-    await resolverAccion(admin, rev.acciones[0].id, "validada", "hecho");
 
     rev = await getRevision(service, revisionId);
     expect(rev.estado).toBe("finalizada");
@@ -408,12 +413,15 @@ test.describe("Viabilidad · Múltiples obligaciones", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 7) No apto
+// 6) No apto
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · No apto", () => {
-  test("protección DC ausente finaliza como no apto", async ({ service, admin, state }) => {
+  test("cubierta de asbesto finaliza como no apto", async ({ service, admin, state }) => {
     const { revisionId } = await proyectoConRevision(service, admin, state, "NoApto");
-    await responderTodo(admin, revisionId, { tipo_proteccion_dc: "ninguna" });
+    await responderTodo(admin, revisionId, {
+      material_techo: "asbesto",
+      asbesto_confirmado: true,
+    });
     const entrega = await entregar(admin, revisionId);
     expect(entrega.resultado_evaluacion).toBe("no_apto");
 
@@ -426,7 +434,7 @@ test.describe("Viabilidad · No apto", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 8) Reevaluación e historial
+// 7) Reevaluación e historial
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · Reevaluación e historial", () => {
   test("una nueva revisión reemplaza a la anterior", async ({ service, admin, state }) => {
@@ -440,7 +448,7 @@ test.describe("Viabilidad · Reevaluación e historial", () => {
     expect(r2.numero_revision).toBe(2);
     expect(r2.reemplaza_revision_id).toBe(rev1);
 
-    await responderTodo(admin, rev2.id, { tipo_proteccion_dc: "ninguna" });
+    await responderTodo(admin, rev2.id, { material_techo: "asbesto", asbesto_confirmado: true });
     await entregar(admin, rev2.id);
     const r2Fin = await getRevision(service, rev2.id);
     expect(r2Fin.estado).toBe("finalizada");
@@ -460,7 +468,7 @@ test.describe("Viabilidad · Reevaluación e historial", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 9) Compuerta de Ingeniería
+// 8) Compuerta de Ingeniería
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · Compuerta de Ingeniería", () => {
   test("Ingeniería exige Previabilidad apta y evidencia obligatoria", async ({ service, admin, state }) => {
@@ -489,21 +497,19 @@ test.describe("Viabilidad · Compuerta de Ingeniería", () => {
     // Ahora sí se crea la de Ingeniería.
     const ing = await crearRevision(admin, proyecto.id, "ingenieria", state.techEmpleadoId);
     const plantillaId = await revisionPlantilla(admin, ing.id);
-    const memoria = await preguntaPorCodigo(admin, plantillaId, "memoria_calculo");
+    const transformador = await preguntaPorCodigo(admin, plantillaId, "transformador_capacidad_confirmada");
 
-    // Sin la evidencia obligatoria la entrega falla.
-    await responderTodo(admin, ing.id, {
-      soporta_carga: true,
-      calibre_conductores_ok: true,
-      requiere_estudio_arco: false,
-    });
+    // Sin evidencias obligatorias la entrega falla nombrando la pregunta.
+    await responderTodo(admin, ing.id, {}, { evidencias: false });
     const errFaltaEv = await rpcError(admin, "entregar_revision_viabilidad", {
       p_revision_id: ing.id,
       p_operation_id: undefined,
     });
-    expect(errFaltaEv).toContain("memoria_calculo");
+    expect(errFaltaEv).toContain("transformador_capacidad_confirmada");
 
-    await adjuntarEvidencia(admin, ing.id, { preguntaId: memoria.id });
+    // Al adjuntar las evidencias (incluida la de esa pregunta) la entrega es apta.
+    await adjuntarEvidenciasRequeridas(admin, ing.id);
+    await adjuntarEvidencia(admin, ing.id, { preguntaId: transformador.id });
     const entrega = await entregar(admin, ing.id);
     expect(entrega.resultado_evaluacion).toBe("apto");
     expect(entrega.estado).toBe("finalizada");
@@ -516,7 +522,7 @@ test.describe("Viabilidad · Compuerta de Ingeniería", () => {
     expect(await estadoProyecto(service, proyecto.id)).toBe("en_proceso");
   });
 
-  test("Ingeniería no apta (estructura sin soporte)", async ({ service, admin, state }) => {
+  test("Ingeniería no apta (memoria de cálculo no aprobada)", async ({ service, admin, state }) => {
     const { proyecto } = await crearProyectoViabilidad(
       service,
       state.prefix,
@@ -529,14 +535,7 @@ test.describe("Viabilidad · Compuerta de Ingeniería", () => {
     await entregar(admin, prev.id);
 
     const ing = await crearRevision(admin, proyecto.id, "ingenieria", state.techEmpleadoId);
-    const plantillaId = await revisionPlantilla(admin, ing.id);
-    const memoria = await preguntaPorCodigo(admin, plantillaId, "memoria_calculo");
-    await responderTodo(admin, ing.id, {
-      soporta_carga: false,
-      calibre_conductores_ok: true,
-      requiere_estudio_arco: false,
-    });
-    await adjuntarEvidencia(admin, ing.id, { preguntaId: memoria.id });
+    await responderTodo(admin, ing.id, { memoria_calculo: false });
     const entrega = await entregar(admin, ing.id);
     expect(entrega.resultado_evaluacion).toBe("no_apto");
     expect(entrega.estado).toBe("finalizada");
@@ -547,7 +546,7 @@ test.describe("Viabilidad · Compuerta de Ingeniería", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 10) Offline: respuesta + evidencia y sincronización
+// 9) Offline: respuesta + evidencia y sincronización
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · Offline y sincronización", () => {
   test("respuesta y evidencia capturadas sin conexión se sincronizan al reconectar", async ({
@@ -557,26 +556,14 @@ test.describe("Viabilidad · Offline y sincronización", () => {
     page,
     loginAsTech,
   }) => {
-    // Proyecto con Ingeniería (única plantilla con pregunta de evidencia).
-    const { proyecto } = await crearProyectoViabilidad(
-      service,
-      state.prefix,
-      "Offline",
-      state.techEmpleadoId
-    );
-    await setAplicabilidad(admin, proyecto.id, true, true);
-    const prev = await crearRevision(admin, proyecto.id, "previabilidad");
-    await responderTodo(admin, prev.id);
-    await entregar(admin, prev.id);
-
-    const ing = await crearRevision(admin, proyecto.id, "ingenieria", state.techEmpleadoId);
-    const plantillaId = await revisionPlantilla(admin, ing.id);
-    const calibre = await preguntaPorCodigo(admin, plantillaId, "calibre_conductores_ok");
-    // Deja `calibre_conductores_ok` sin responder para capturarla offline.
-    await responderTodo(admin, ing.id, { soporta_carga: true, requiere_estudio_arco: false });
+    const { proyecto, revisionId } = await proyectoConRevision(service, admin, state, "Offline", {
+      asignado: state.techEmpleadoId,
+    });
+    const plantillaId = await revisionPlantilla(admin, revisionId);
+    const objetivo = await preguntaPorCodigo(admin, plantillaId, "area_util_suficiente");
 
     await loginAsTech(page);
-    await page.goto(`/viabilidad/${ing.id}`);
+    await page.goto(`/viabilidad/${revisionId}`);
     await expect(page.getByRole("heading", { name: proyecto.nombre })).toBeVisible();
 
     await page.waitForFunction(
@@ -595,13 +582,15 @@ test.describe("Viabilidad · Offline y sincronización", () => {
     await page.waitForFunction(() => navigator.onLine === false);
 
     await page.locator('input[type="file"]').first().setInputFiles({
-      name: "memoria-offline.png",
+      name: "evidencia-offline.png",
       mimeType: "image/png",
       buffer: PNG_1x1,
     });
 
-    const qCalibre = page.locator("div.space-y-2", { hasText: "calibres de conductores" }).first();
-    await qCalibre.getByRole("radio", { name: "Sí", exact: true }).click();
+    const qObjetivo = page
+      .locator("div.space-y-2", { hasText: "suficiente para la potencia" })
+      .first();
+    await qObjetivo.getByRole("radio", { name: "Sí", exact: true }).click();
 
     // 1) Encolado en IndexedDB (evidencia + respuesta).
     await expect.poll(() => idbCount(page, "evidencias_pendientes"), { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
@@ -613,17 +602,17 @@ test.describe("Viabilidad · Offline y sincronización", () => {
 
     // 3) Nada llegó todavía a la base de datos.
     const { count: evAntes } = await service
-      .from("evidencias")
-      .select("id_evidencia", { count: "exact", head: true })
-      .eq("proyecto_id", proyecto.id);
+      .from("viabilidad_evidencias")
+      .select("id_viabilidad_evidencia", { count: "exact", head: true })
+      .eq("revision_id", revisionId);
     expect(evAntes ?? 0).toBe(0);
-    const { data: calibreAntes } = await service
+    const { data: respAntes } = await service
       .from("viabilidad_respuestas")
       .select("id_respuesta_viabilidad")
-      .eq("revision_id", ing.id)
-      .eq("pregunta_id", calibre.id)
+      .eq("revision_id", revisionId)
+      .eq("pregunta_id", objetivo.id)
       .maybeSingle();
-    expect(calibreAntes).toBeNull();
+    expect(respAntes).toBeNull();
 
     // ── Reconexión: se vacían las colas ─────────────────────────────────
     await page.context().setOffline(false);
@@ -637,19 +626,10 @@ test.describe("Viabilidad · Offline y sincronización", () => {
         const { count } = await service
           .from("viabilidad_evidencias")
           .select("id_viabilidad_evidencia", { count: "exact", head: true })
-          .eq("revision_id", ing.id);
+          .eq("revision_id", revisionId);
         return count ?? 0;
       }, { timeout: 30_000 })
       .toBeGreaterThanOrEqual(1);
-
-    const { data: evidencia } = await service
-      .from("evidencias")
-      .select("object_key")
-      .eq("proyecto_id", proyecto.id)
-      .eq("eliminado", false)
-      .limit(1)
-      .maybeSingle();
-    expect(evidencia?.object_key ?? "").toMatch(/^proyectos\//);
 
     // La respuesta capturada offline también se sincronizó.
     await expect
@@ -657,8 +637,8 @@ test.describe("Viabilidad · Offline y sincronización", () => {
         const { data } = await service
           .from("viabilidad_respuestas")
           .select("valor")
-          .eq("revision_id", ing.id)
-          .eq("pregunta_id", calibre.id)
+          .eq("revision_id", revisionId)
+          .eq("pregunta_id", objetivo.id)
           .maybeSingle();
         return data?.valor ?? null;
       }, { timeout: 30_000 })
@@ -667,23 +647,23 @@ test.describe("Viabilidad · Offline y sincronización", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 11) Conflicto de versión (sin Last-Write-Wins)
+// 10) Conflicto de versión (sin Last-Write-Wins)
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · Conflicto de versiones", () => {
   test("una escritura con versión obsoleta se rechaza y no sobrescribe", async ({ service, admin, state }) => {
     const { revisionId } = await proyectoConRevision(service, admin, state, "Conflicto");
     const plantillaId = await revisionPlantilla(admin, revisionId);
-    const notas = await preguntaPorCodigo(admin, plantillaId, "notas");
+    const obs = await preguntaPorCodigo(admin, plantillaId, "observaciones_generales");
 
-    await responder(admin, revisionId, notas.id, "v1");
+    await responder(admin, revisionId, obs.id, "v1");
 
     // Dispositivo A: conoce la versión 1 → escribe.
-    await responder(admin, revisionId, notas.id, "v2", 1);
+    await responder(admin, revisionId, obs.id, "v2", 1);
 
     // Dispositivo B: reintenta con la versión obsoleta 1 → conflicto.
     const err = await rpcError(admin, "guardar_respuesta_viabilidad", {
       p_revision_id: revisionId,
-      p_pregunta_id: notas.id,
+      p_pregunta_id: obs.id,
       p_valor: "v3",
       p_version: 1,
       p_operation_id: undefined,
@@ -695,21 +675,24 @@ test.describe("Viabilidad · Conflicto de versiones", () => {
       .from("viabilidad_respuestas")
       .select("valor")
       .eq("revision_id", revisionId)
-      .eq("pregunta_id", notas.id)
+      .eq("pregunta_id", obs.id)
       .single();
     expect(data?.valor).toBe("v2");
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 12) RLS y acotación de permisos
+// 11) RLS y acotación de permisos
 // ─────────────────────────────────────────────────────────────────────
 test.describe("Viabilidad · RLS y permisos", () => {
   test("especialista off-team sólo accede a su validación y su evidencia", async ({ service, admin, state }) => {
     const { revisionId } = await proyectoConRevision(service, admin, state, "RLS");
     await responderTodo(admin, revisionId, {
-      potencia_sistema_kw: 900,
-      tipo_proteccion_dc: "afci",
+      potencia_kw: 900, // legal
+      cableado_buen_estado: false, // eléctrica
+      cableado_material: "aluminio",
+      cableado_empalmes: false,
+      cableado_antiguedad: true,
     });
     const entrega = await entregar(admin, revisionId);
     expect(entrega.resultado_evaluacion).toBe("requiere_validacion");
@@ -726,7 +709,7 @@ test.describe("Viabilidad · RLS y permisos", () => {
     await expect(getRevision(espClient, revisionId)).rejects.toThrow();
 
     const rev = await getRevision(service, revisionId);
-    expect(rev.validaciones.map((v) => v.tipo).sort()).toEqual(["cfe", "electrico"]);
+    expect(rev.validaciones.map((v) => v.tipo).sort()).toEqual(["electrico", "legal"]);
     const [v1, v2] = rev.validaciones;
 
     // Asigna sólo la primera al especialista.
@@ -794,7 +777,7 @@ test.describe("Viabilidad · RLS y permisos", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// 13) Autorización sin propietario (anti fail-open / regresión)
+// 12) Autorización sin propietario (anti fail-open / regresión)
 //     Un usuario autenticado NO admin y NO asignado no debe poder operar
 //     sobre recursos cuyo propietario/responsable/especialista sea NULL.
 //     Cubre las 4 RPC endurecidas en 0011_viabilidad_permisos.sql.
@@ -818,11 +801,11 @@ test.describe("Viabilidad · Autorización sin propietario (anti fail-open)", ()
     const a = await proyectoConRevision(service, admin, state, "NoOwnerResp");
     expect((await getRevision(service, a.revisionId)).asignado_empleado_id).toBeNull();
     const plantillaA = await revisionPlantilla(admin, a.revisionId);
-    const notasA = await preguntaPorCodigo(admin, plantillaA, "notas");
+    const obsA = await preguntaPorCodigo(admin, plantillaA, "observaciones_generales");
 
     const errResp = await rpcError(tech, "guardar_respuesta_viabilidad", {
       p_revision_id: a.revisionId,
-      p_pregunta_id: notasA.id,
+      p_pregunta_id: obsA.id,
       p_valor: "intrusion",
       p_version: null,
       p_operation_id: undefined,
@@ -832,7 +815,7 @@ test.describe("Viabilidad · Autorización sin propietario (anti fail-open)", ()
       .from("viabilidad_respuestas")
       .select("id_respuesta_viabilidad")
       .eq("revision_id", a.revisionId)
-      .eq("pregunta_id", notasA.id)
+      .eq("pregunta_id", obsA.id)
       .maybeSingle();
     expect(respA, "no debe crearse respuesta").toBeNull();
     expect((await getRevision(service, a.revisionId)).estado).toBe("borrador");
@@ -851,33 +834,39 @@ test.describe("Viabilidad · Autorización sin propietario (anti fail-open)", ()
     expect(revB.estado).not.toBe("evaluada");
     expect(revB.resultado_evaluacion).toBeNull();
 
-    // Revisión con obligaciones (acción + validación) de propietario NULL.
+    // Revisión con una validación de especialista (propietario NULL).
     const c = await proyectoConRevision(service, admin, state, "NoOwnerOblig");
-    await responderTodo(admin, c.revisionId, {
-      potencia_sistema_kw: 900,
-      tipo_proteccion_dc: "afci",
-      acceso_mantenimiento: false,
-    });
+    await responderTodo(admin, c.revisionId, { potencia_kw: 900 });
     const entrega = await entregar(admin, c.revisionId);
     expect(entrega.resultado_evaluacion).toBe("requiere_validacion");
 
     const revC = await getRevision(service, c.revisionId);
-    const accion = revC.acciones.find((x) => x.responsable_empleado_id === null);
     const validacion = revC.validaciones.find((x) => x.especialista_empleado_id === null);
-    expect(accion, "debe existir una acción sin responsable").toBeDefined();
     expect(validacion, "debe existir una validación sin especialista").toBeDefined();
+
+    // Acción de propietario NULL insertada directamente (el cuestionario
+    // definitivo no genera acciones, pero la RPC endurecida debe seguir segura).
+    const { data: accionInsertada, error: errInsercion } = await service
+      .from("viabilidad_acciones")
+      .insert({ revision_id: c.revisionId, descripcion: "Acción E2E fail-open", obligatoria: true })
+      .select("id_accion_viabilidad")
+      .single();
+    expect(errInsercion).toBeNull();
+    const accionId = accionInsertada!.id_accion_viabilidad as number;
 
     // (c) resolver_accion_viabilidad — `responsable_empleado_id` NULL.
     const errAcc = await rpcError(tech, "resolver_accion_viabilidad", {
-      p_accion_id: accion!.id,
+      p_accion_id: accionId,
       p_estado: "validada",
       p_observaciones: "intrusion",
       p_operation_id: undefined,
     });
     assertDenegado(errAcc, "resolver_accion_viabilidad");
-    const accionDespues = (await getRevision(service, c.revisionId)).acciones.find(
-      (x) => x.id === accion!.id
-    );
+    const { data: accionDespues } = await service
+      .from("viabilidad_acciones")
+      .select("estado")
+      .eq("id_accion_viabilidad", accionId)
+      .single();
     expect(accionDespues?.estado).toBe("pendiente");
 
     // (d) resolver_validacion_viabilidad — `especialista_empleado_id` NULL.

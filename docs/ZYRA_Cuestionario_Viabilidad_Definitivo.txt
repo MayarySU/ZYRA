@@ -1,0 +1,7368 @@
+ZYRA — CUESTIONARIO FUNCIONAL DEFINITIVO DE VIABILIDAD
+Fuente funcional para el agente de implementación
+Basado en la Especificación ZYRA v3.1.1
+
+======================================================================
+INSTRUCCIONES PARA EL AGENTE
+======================================================================
+
+Este archivo sustituye, como FUENTE FUNCIONAL DEL CUESTIONARIO, las plantillas seed simplificadas creadas durante el desarrollo técnico del módulo de Viabilidad.
+
+NO MODIFIQUES ESTE ARCHIVO DURANTE LA IMPLEMENTACIÓN.
+
+Antes de cambiar código:
+1. Lee el archivo COMPLETO.
+2. Inspecciona el esquema, motor de reglas, editor de plantillas, evidencias, versionado, RLS, offline/outbox y pruebas actuales.
+3. Compara la implementación existente contra este documento.
+4. Devuelve un plan corto de compatibilidad.
+5. NO IMPLEMENTES hasta que el usuario apruebe ese plan.
+
+REGLAS DE INTERPRETACIÓN:
+
+- Conserva exactamente cada CODIGO.
+- No elimines, combines, resumas ni sustituyas preguntas.
+- No inventes opciones, condiciones, unidades, evidencias, umbrales ni consecuencias.
+- ETAPA solo puede ser previabilidad o ingenieria en este documento.
+- Una pregunta OBLIGATORIA solo bloquea el cierre cuando está ACTIVA.
+- Una pregunta inactiva por ACTIVACION no debe bloquear la entrega.
+- EVIDENCIA = foto significa fotografía.
+- EVIDENCIA = documento significa archivo/documento.
+- EVIDENCIA = foto_o_documento admite cualquiera de los dos.
+- Si EVIDENCIA_OBLIGATORIA = si, una pregunta activa no se considera completa sin evidencia válida y sincronizada.
+- Si EVIDENCIA_OBLIGATORIA contiene una condición, la evidencia solo es obligatoria cuando dicha condición se cumple.
+- UNIDAD debe modelarse como metadato estructurado; no debe depender únicamente del texto visible.
+- La especificación original usa el concepto "medicion". En el modelo actual puede representarse como numero + unidad, siempre que se conserve la semántica.
+- Previabilidad captura condiciones observables, datos preliminares y documentación de sitio.
+- Previabilidad NO sustituye dictámenes estructurales, eléctricos, legales o de CFE.
+- Ingeniería contiene diseño final, documentación técnica y validaciones especializadas.
+- No conviertas una observación en no_apto solo para hacerla compatible con el motor.
+- No conviertas una regla de validacion_especializada en no_apto.
+- No inventes umbrales profesionales.
+- lamina_espesor_mm es un dato. NO existe un umbral universal de 0.7 mm autorizado.
+- La ausencia de protección de falla por arco, en la condición definida, requiere validación eléctrica especializada; NO produce no_apto automático.
+- Si el esquema actual no soporta UNIDAD, EVIDENCIA, EVIDENCIA_OBLIGATORIA o EVIDENCIA_INSTRUCCION, amplía el modelo mediante migración/versionado. No escondas esos datos dentro de TEXTO o AYUDA.
+- Las versiones históricas/publicadas deben permanecer inmutables. El cuestionario definitivo debe publicarse como nuevas versiones.
+- Si una semántica de este archivo no puede representarse exactamente con el motor actual, REPÓRTALA antes de inventar un mapeo.
+
+FORMATO FIJO DE PREGUNTA:
+CODIGO
+ETAPA
+SECCION
+TEXTO
+AYUDA
+TIPO
+OBLIGATORIA
+ACTIVACION
+OPCIONES
+UNIDAD
+EVIDENCIA
+EVIDENCIA_OBLIGATORIA
+EVIDENCIA_INSTRUCCION
+AFECTA_EVALUACION
+
+======================================================================
+ETAPA A — PREVIABILIDAD DEL SITIO
+======================================================================
+
+NOMBRE FUNCIONAL DE PLANTILLA:
+inspeccion_previabilidad_sitio
+
+=== PREGUNTA PRE-001 ===
+
+CODIGO:
+acceso_vehiculo
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Cómo es el acceso del vehículo de trabajo hasta el sitio de instalación?
+
+AYUDA:
+Evalúa la vía por la que llegarían el personal, paneles, herramientas y materiales. Considera calles, terracería, callejones, portones, radios de giro y cualquier imposibilidad evidente de acceso.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+pavimentado
+terraceria
+callejon_estrecho
+sin_acceso
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el acceso principal y el trayecto disponible para el vehículo de trabajo.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-001 ===
+
+
+=== PREGUNTA PRE-002 ===
+
+CODIGO:
+ancho_callejon_ok
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿El ancho disponible en el callejón permite el paso de una camioneta de trabajo?
+
+AYUDA:
+Considera el ancho del vehículo y un espacio razonable para maniobrar sin golpear muros, postes, vehículos u otros obstáculos.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+acceso_vehiculo = callejon_estrecho
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-002 ===
+
+
+=== PREGUNTA PRE-003 ===
+
+CODIGO:
+obstaculos_aereos
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Existen cables, ramas, estructuras u otros obstáculos aéreos que puedan impedir o dificultar el paso?
+
+AYUDA:
+Registra obstáculos visibles que interfieran con el acceso por el callejón.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+acceso_vehiculo = callejon_estrecho
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si cuando obstaculos_aereos = true
+
+EVIDENCIA_INSTRUCCION:
+Si existen obstáculos, fotografiarlos mostrando su relación con el paso disponible.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-003 ===
+
+
+=== PREGUNTA PRE-004 ===
+
+CODIGO:
+espacio_descarga
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Existe una zona segura donde estacionar y descargar paneles, herramientas y materiales?
+
+AYUDA:
+Evalúa si la descarga puede realizarse sin generar una maniobra impracticable o insegura.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar la zona prevista para estacionamiento y descarga.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-004 ===
+
+
+=== PREGUNTA PRE-005 ===
+
+CODIGO:
+suelo_descarga
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Cómo es el suelo de la zona donde se realizará la descarga?
+
+AYUDA:
+Clasifica la superficie donde se estacionaría el vehículo y se manipularían los materiales.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+espacio_descarga = true
+
+OPCIONES:
+firme
+blando
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar la superficie de la zona de descarga.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-005 ===
+
+
+=== PREGUNTA PRE-006 ===
+
+CODIGO:
+metodo_elevacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Qué método se utilizaría para subir los paneles y materiales hasta el techo?
+
+AYUDA:
+Selecciona el método preliminar viable según las condiciones observables del sitio.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+escalera
+andamio
+grua
+elevador
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar la zona donde se realizaría la maniobra de elevación.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-006 ===
+
+
+=== PREGUNTA PRE-007 ===
+
+CODIGO:
+escalera_altura_ok
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿La escalera disponible alcanza de forma adecuada la altura necesaria para acceder al techo?
+
+AYUDA:
+Comprueba visualmente que la altura sea suficiente para el acceso previsto.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+metodo_elevacion = escalera
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-007 ===
+
+
+=== PREGUNTA PRE-008 ===
+
+CODIGO:
+escalera_ancho_ok
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿El espacio de acceso mediante escalera permite subir un panel sin obstrucciones importantes?
+
+AYUDA:
+Considera el ancho del panel y el espacio real disponible para la maniobra.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+metodo_elevacion = escalera
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-008 ===
+
+
+=== PREGUNTA PRE-009 ===
+
+CODIGO:
+escalera_buen_estado
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿La escalera que se utilizaría se encuentra en buen estado físico?
+
+AYUDA:
+Revisa que no presente daños evidentes incompatibles con su uso previsto.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+metodo_elevacion = escalera
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar la escalera completa y cualquier deterioro visible.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-009 ===
+
+
+=== PREGUNTA PRE-010 ===
+
+CODIGO:
+grua_espacio_ok
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Existe espacio suficiente para posicionar y operar una grúa?
+
+AYUDA:
+Evalúa si la grúa podría colocarse y maniobrar en el sitio previsto.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+metodo_elevacion = grua
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-010 ===
+
+
+=== PREGUNTA PRE-011 ===
+
+CODIGO:
+grua_lineas_tension
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Existen líneas de alta tensión u otros elementos aéreos que interfieran con la operación de la grúa?
+
+AYUDA:
+Identifica interferencias visibles próximas al área de maniobra.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+metodo_elevacion = grua
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si cuando grua_lineas_tension = true
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar las líneas u obstáculos mostrando su relación con la zona de operación.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-011 ===
+
+
+=== PREGUNTA PRE-012 ===
+
+CODIGO:
+grua_permiso_municipal
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Se requiere permiso municipal para operar la grúa en este sitio?
+
+AYUDA:
+Registra si la maniobra está sujeta a una autorización municipal conocida.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+metodo_elevacion = grua
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-012 ===
+
+
+=== PREGUNTA PRE-013 ===
+
+CODIGO:
+riesgos_entorno
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿Qué riesgos u obstáculos están presentes alrededor del área de trabajo? Selecciona todos los que correspondan.
+
+AYUDA:
+Esta pregunta registra la existencia del riesgo. Las preguntas hijas solicitan únicamente el detalle accionable y no vuelven a preguntar si el riesgo existe.
+
+TIPO:
+opcion_multiple
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+perros
+lineas_tension
+riesgo_social
+arboles
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-013 ===
+
+
+=== PREGUNTA PRE-014 ===
+
+CODIGO:
+perros_cliente_asegura
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+¿El cliente puede mantener asegurados o alejados de la zona de trabajo a los perros durante los trabajos?
+
+AYUDA:
+La existencia de perros ya fue indicada en riesgos_entorno. Aquí únicamente se registra si pueden mantenerse controlados.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+riesgos_entorno contiene perros
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-014 ===
+
+
+=== PREGUNTA PRE-015 ===
+
+CODIGO:
+lineas_tension_distancia
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+Describe la ubicación y distancia aproximada de las líneas de tensión respecto al área de trabajo.
+
+AYUDA:
+Describe únicamente lo observable. Esta información no sustituye una evaluación eléctrica o de CFE.
+
+TIPO:
+texto
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+riesgos_entorno contiene lineas_tension
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar las líneas mostrando su posición relativa respecto al área de trabajo.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-015 ===
+
+
+=== PREGUNTA PRE-016 ===
+
+CODIGO:
+riesgo_social_medidas
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+Describe las medidas de seguridad o coordinación previstas debido al riesgo social identificado.
+
+AYUDA:
+Registra medidas operativas previstas para proteger al personal y los materiales.
+
+TIPO:
+texto
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+riesgos_entorno contiene riesgo_social
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-016 ===
+
+
+=== PREGUNTA PRE-017 ===
+
+CODIGO:
+arboles_cantidad
+
+ETAPA:
+previabilidad
+
+SECCION:
+entorno_acceso_logistica
+
+TEXTO:
+Indica cuántos árboles interfieren y dónde están ubicados respecto al área propuesta de instalación.
+
+AYUDA:
+Describe cantidad, ubicación y forma de interferencia observable.
+
+TIPO:
+texto
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+riesgos_entorno contiene arboles
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar los árboles mostrando su relación con el área propuesta de instalación.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-017 ===
+
+
+=== PREGUNTA PRE-018 ===
+
+CODIGO:
+material_techo
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Cuál es el material principal de la cubierta donde se pretende instalar el sistema fotovoltaico?
+
+AYUDA:
+Selecciona el material predominante del área propuesta. Esta respuesta determina qué preguntas específicas se muestran.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+losa_concreto
+lamina_galvanizada
+teja
+panel_sandwich
+asbesto
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar una vista general de la cubierta y del área propuesta para instalación.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-018 ===
+
+
+=== PREGUNTA PRE-019 ===
+
+CODIGO:
+losa_impermeabilizacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La losa cuenta actualmente con impermeabilización?
+
+AYUDA:
+Registra la existencia observable o informada de impermeabilización en el área propuesta.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = losa_concreto
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-019 ===
+
+
+=== PREGUNTA PRE-020 ===
+
+CODIGO:
+losa_anclaje_sin_romper
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Se puede realizar el anclaje previsto sin comprometer la impermeabilización existente?
+
+AYUDA:
+Registra únicamente la viabilidad preliminar observable. La solución final de montaje corresponde a Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = losa_concreto
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-020 ===
+
+
+=== PREGUNTA PRE-021 ===
+
+CODIGO:
+losa_espesor
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Registra el espesor observado o medido de la losa.
+
+AYUDA:
+Captura el valor disponible sin convertirlo por sí solo en un criterio universal de aceptación.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = losa_concreto
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+cm
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-021 ===
+
+
+=== PREGUNTA PRE-022 ===
+
+CODIGO:
+lamina_calibre
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Qué calibre de lámina está reportado o identificado?
+
+AYUDA:
+Registra el calibre como dato de la cubierta. No debe utilizarse por sí solo como criterio universal automático.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = lamina_galvanizada
+
+OPCIONES:
+calibre_22
+calibre_24
+calibre_26
+calibre_30
+otro
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-022 ===
+
+
+=== PREGUNTA PRE-023 ===
+
+CODIGO:
+lamina_espesor_mm
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Si puede medirse, registra el espesor real de la lámina.
+
+AYUDA:
+Conserva esta medición como dato técnico. No usar 0.7 mm ni ningún otro umbral universal sin aprobación técnica explícita.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+no
+
+ACTIVACION:
+material_techo = lamina_galvanizada
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+mm
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-023 ===
+
+
+=== PREGUNTA PRE-024 ===
+
+CODIGO:
+lamina_soporte
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Sobre qué tipo de elemento está fijada principalmente la lámina?
+
+AYUDA:
+Selecciona el soporte observable predominante.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = lamina_galvanizada
+
+OPCIONES:
+polin
+madera
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-024 ===
+
+
+=== PREGUNTA PRE-025 ===
+
+CODIGO:
+lamina_antiguedad
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Según la información disponible, ¿la lámina tiene menos de 10 años de antigüedad?
+
+AYUDA:
+Utiliza información proporcionada por el cliente o documentación disponible. No inventes una antigüedad si se desconoce.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = lamina_galvanizada
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-025 ===
+
+
+=== PREGUNTA PRE-026 ===
+
+CODIGO:
+lamina_oxidada
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La lámina presenta oxidación, perforaciones o deterioro visible?
+
+AYUDA:
+Revisa especialmente el área propuesta y las zonas de fijación observables.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = lamina_galvanizada
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el estado general de la lámina y cualquier zona oxidada, perforada o deteriorada.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-026 ===
+
+
+=== PREGUNTA PRE-027 ===
+
+CODIGO:
+lamina_polin_estado
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Los polines o soportes observables se encuentran en buen estado?
+
+AYUDA:
+Evalúa únicamente el estado observable. Esta respuesta no equivale a un dictamen estructural.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = lamina_galvanizada
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-027 ===
+
+
+=== PREGUNTA PRE-028 ===
+
+CODIGO:
+teja_tipo
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿De qué material es principalmente la teja?
+
+AYUDA:
+Selecciona el material predominante del área propuesta.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = teja
+
+OPCIONES:
+arcilla
+concreto
+plastica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-028 ===
+
+
+=== PREGUNTA PRE-029 ===
+
+CODIGO:
+teja_estado
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Las tejas del área propuesta se encuentran en buen estado, sin roturas o deterioro importante visible?
+
+AYUDA:
+Revisa el estado observable del área donde se pretende trabajar.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = teja
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el estado general y cualquier pieza rota, desplazada o deteriorada.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-029 ===
+
+
+=== PREGUNTA PRE-030 ===
+
+CODIGO:
+teja_ganchos_especiales
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La cubierta permite utilizar un sistema de montaje con ganchos especiales para teja?
+
+AYUDA:
+Registra únicamente viabilidad preliminar. La selección final del sistema de montaje corresponde a Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = teja
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-030 ===
+
+
+=== PREGUNTA PRE-031 ===
+
+CODIGO:
+teja_estructura
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Cuál es la estructura de soporte observable bajo la teja?
+
+AYUDA:
+Selecciona el material estructural observable predominante.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = teja
+
+OPCIONES:
+madera
+metal
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-031 ===
+
+
+=== PREGUNTA PRE-032 ===
+
+CODIGO:
+panel_espesor
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Registra el espesor observado o medido del panel sándwich.
+
+AYUDA:
+Captura la medición disponible sin inferir por sí sola aptitud estructural.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = panel_sandwich
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+mm
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-032 ===
+
+
+=== PREGUNTA PRE-033 ===
+
+CODIGO:
+panel_aislamiento
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Qué tipo de aislamiento utiliza el panel sándwich?
+
+AYUDA:
+Selecciona el material de aislamiento identificado.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = panel_sandwich
+
+OPCIONES:
+poliuretano
+poliestireno
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-033 ===
+
+
+=== PREGUNTA PRE-034 ===
+
+CODIGO:
+panel_estado
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Los paneles del área de instalación se encuentran en buen estado físico?
+
+AYUDA:
+Observa delaminación, daños, deformaciones u otros deterioros visibles.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = panel_sandwich
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el estado general y cualquier deterioro del panel.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-034 ===
+
+
+=== PREGUNTA PRE-035 ===
+
+CODIGO:
+asbesto_confirmado
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La cubierta identificada corresponde efectivamente a asbesto-cemento?
+
+AYUDA:
+Confirma únicamente dentro del alcance seguro de una inspección visual o documental. No manipular, romper, perforar ni alterar el material para verificarlo.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_techo = asbesto
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar la cubierta identificada sin manipular el material.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-035 ===
+
+
+=== PREGUNTA PRE-036 ===
+
+CODIGO:
+goteras
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Se observan o reportan goteras, filtraciones o ingreso de agua a través del techo?
+
+AYUDA:
+Considera tanto evidencia visible como información proporcionada por el cliente.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si cuando goteras = true
+
+EVIDENCIA_INSTRUCCION:
+Si existe evidencia visible, fotografiar la zona afectada; si solo existe reporte del cliente, fotografiar la zona señalada cuando sea posible.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-036 ===
+
+
+=== PREGUNTA PRE-037 ===
+
+CODIGO:
+gotera_area_instalacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La filtración se encuentra dentro o afecta directamente el área propuesta para instalar paneles?
+
+AYUDA:
+Relaciona la zona de filtración con el área prevista de instalación.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+goteras = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-037 ===
+
+
+=== PREGUNTA PRE-038 ===
+
+CODIGO:
+gotera_activa
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La filtración está activa actualmente o corresponde a un daño histórico?
+
+AYUDA:
+Distingue entre un problema presente y una filtración reportada como histórica.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+goteras = true
+
+OPCIONES:
+activa
+historica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-038 ===
+
+
+=== PREGUNTA PRE-039 ===
+
+CODIGO:
+gotera_cliente_repara
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿El cliente está dispuesto a reparar la filtración antes de la instalación?
+
+AYUDA:
+Registra el compromiso preliminar del cliente cuando existe una filtración.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+goteras = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-039 ===
+
+
+=== PREGUNTA PRE-040 ===
+
+CODIGO:
+material_oxidado
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Se observa material oxidado, corroído, quebradizo o deteriorado en la cubierta o sus soportes visibles?
+
+AYUDA:
+Revisa condiciones visibles que puedan afectar el montaje o requerir evaluación adicional.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si cuando material_oxidado = true
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar las áreas deterioradas y su relación con el área propuesta de instalación.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-040 ===
+
+
+=== PREGUNTA PRE-041 ===
+
+CODIGO:
+oxidacion_tipo
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿El deterioro observado parece superficial o afecta elementos estructurales?
+
+AYUDA:
+Clasifica únicamente según lo observable. La condición estructural definitiva puede requerir validación especializada.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_oxidado = true
+
+OPCIONES:
+superficial
+estructural
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-041 ===
+
+
+=== PREGUNTA PRE-042 ===
+
+CODIGO:
+oxidacion_area_anclaje
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿El deterioro coincide con zonas donde sería necesario realizar anclajes o fijaciones?
+
+AYUDA:
+Relaciona visualmente el deterioro con las posibles zonas de fijación.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+material_oxidado = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-042 ===
+
+
+=== PREGUNTA PRE-043 ===
+
+CODIGO:
+pendiente_techo
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Cómo se clasifica la pendiente del área de techo propuesta?
+
+AYUDA:
+Selecciona la categoría que mejor represente la geometría observable.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+plano
+baja
+media
+alta
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-043 ===
+
+
+=== PREGUNTA PRE-044 ===
+
+CODIGO:
+pendiente_estructura_especial
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La pendiente observada requeriría un sistema de montaje o medidas especiales?
+
+AYUDA:
+Registra la necesidad preliminar. La solución técnica definitiva corresponde a Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+pendiente_techo = alta
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-044 ===
+
+
+=== PREGUNTA PRE-045 ===
+
+CODIGO:
+orientacion_techo
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Cuál es la orientación predominante del área disponible del techo?
+
+AYUDA:
+Registra la orientación del área candidata para apoyar el dimensionamiento posterior.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+norte
+sur
+este
+oeste
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el área disponible conservando suficiente referencia para interpretar su orientación.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-045 ===
+
+
+=== PREGUNTA PRE-046 ===
+
+CODIGO:
+sombras
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Existen elementos que produzcan sombra sobre el área prevista para los paneles?
+
+AYUDA:
+Considera árboles, tinacos, chimeneas, edificios vecinos u otros obstáculos.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el área prevista y las fuentes de sombra observables.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-046 ===
+
+
+=== PREGUNTA PRE-047 ===
+
+CODIGO:
+sombra_tipo
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Qué elementos generan la sombra? Selecciona todos los que correspondan.
+
+AYUDA:
+Identifica las fuentes de sombra observadas.
+
+TIPO:
+opcion_multiple
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+sombras = true
+
+OPCIONES:
+tinaco
+chimenea
+arbol
+edificio_vecino
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-047 ===
+
+
+=== PREGUNTA PRE-048 ===
+
+CODIGO:
+sombra_horario_pico
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Según lo observable durante la inspección, ¿la sombra afecta el área durante horas relevantes de producción solar?
+
+AYUDA:
+Esta respuesta es una observación preliminar y no sustituye un estudio solar detallado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+sombras = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-048 ===
+
+
+=== PREGUNTA PRE-049 ===
+
+CODIGO:
+sombra_permanente
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La causa de la sombra es permanente o estacional?
+
+AYUDA:
+Clasifica la persistencia esperada de la fuente de sombra.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+sombras = true
+
+OPCIONES:
+permanente
+estacional
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-049 ===
+
+
+=== PREGUNTA PRE-050 ===
+
+CODIGO:
+sombra_mitigable
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿La causa de la sombra puede mitigarse mediante poda, reubicación u otra acción razonable?
+
+AYUDA:
+Registra si existe una acción preliminar que podría disminuir la interferencia.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+sombras = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-050 ===
+
+
+=== PREGUNTA PRE-051 ===
+
+CODIGO:
+area_util
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Registra el área útil realmente disponible para instalar módulos, descontando obstáculos y zonas no utilizables.
+
+AYUDA:
+Captura el área aprovechable preliminar del sitio.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+m2
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-051 ===
+
+
+=== PREGUNTA PRE-052 ===
+
+CODIGO:
+area_util_suficiente
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿El área útil disponible parece suficiente para la potencia preliminar prevista?
+
+AYUDA:
+Se trata de una evaluación preliminar. El dimensionamiento definitivo corresponde a Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-052 ===
+
+
+=== PREGUNTA PRE-053 ===
+
+CODIGO:
+area_ampliable
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Si el área actual es insuficiente, ¿existe otra superficie disponible que pueda incorporarse al diseño?
+
+AYUDA:
+Registra si el alcance físico podría ampliarse razonablemente.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+area_util_suficiente = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-053 ===
+
+
+=== PREGUNTA PRE-054 ===
+
+CODIGO:
+requiere_dictamen_estructural
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+Por las características observadas del inmueble, ¿se requiere revisión o dictamen estructural especializado antes de aprobar el sitio?
+
+AYUDA:
+Esta pregunta registra la necesidad de validación especializada. El inspector no debe emitir por sí mismo un dictamen estructural.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-054 ===
+
+
+=== PREGUNTA PRE-055 ===
+
+CODIGO:
+dictamen_existe
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿Ya existe un dictamen estructural vigente para el inmueble o área de instalación?
+
+AYUDA:
+Registra si hay un documento técnico disponible para revisión.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+requiere_dictamen_estructural = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si cuando dictamen_existe = true
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar el dictamen estructural existente.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-055 ===
+
+
+=== PREGUNTA PRE-056 ===
+
+CODIGO:
+dictamen_favorable
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿El dictamen estructural existente resulta favorable para la instalación propuesta?
+
+AYUDA:
+Responder según el contenido del documento y no según apreciación personal del inspector.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+requiere_dictamen_estructural = true AND dictamen_existe = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-056 ===
+
+
+=== PREGUNTA PRE-057 ===
+
+CODIGO:
+dictamen_perito_certificado
+
+ETAPA:
+previabilidad
+
+SECCION:
+estructura_condiciones_techo
+
+TEXTO:
+¿El dictamen fue emitido por un profesional o perito competente?
+
+AYUDA:
+Registra la condición documental disponible del emisor del dictamen.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+requiere_dictamen_estructural = true AND dictamen_existe = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-057 ===
+
+
+=== PREGUNTA PRE-058 ===
+
+CODIGO:
+espacio_breaker
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿El centro de carga tiene espacio disponible para instalar un interruptor de dos polos?
+
+AYUDA:
+Registra únicamente la condición observable del centro de carga actual.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar claramente el centro de carga y los espacios disponibles.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-058 ===
+
+
+=== PREGUNTA PRE-059 ===
+
+CODIGO:
+subpanel_posible
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+Si no existe espacio disponible, ¿es posible considerar un subpanel adicional?
+
+AYUDA:
+Registra la viabilidad preliminar observable. La solución final debe confirmarse en Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+espacio_breaker = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-059 ===
+
+
+=== PREGUNTA PRE-060 ===
+
+CODIGO:
+subpanel_espacio_fisico
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Existe espacio físico cercano y adecuado donde podría instalarse un subpanel?
+
+AYUDA:
+Evalúa disponibilidad física observable sin diseñar la solución definitiva.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+espacio_breaker = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-060 ===
+
+
+=== PREGUNTA PRE-061 ===
+
+CODIGO:
+cableado_soporta_carga
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+A partir de lo observable, ¿el cableado existente parece capaz de admitir una carga adicional sin deterioro evidente?
+
+AYUDA:
+Es una apreciación preliminar de campo. No sustituye cálculo eléctrico ni validación especializada.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+espacio_breaker = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-061 ===
+
+
+=== PREGUNTA PRE-062 ===
+
+CODIGO:
+capacidad_servicio
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Qué configuración de servicio eléctrico tiene actualmente el inmueble?
+
+AYUDA:
+Selecciona la configuración observable o documentada del servicio existente.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+110v
+220v_monofasico
+220v_bifasico
+220v_trifasico
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar medidor, centro de carga o elemento que documente la configuración observada.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-062 ===
+
+
+=== PREGUNTA PRE-063 ===
+
+CODIGO:
+capacidad_contratada_suficiente
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+De forma preliminar, ¿la capacidad contratada parece suficiente para el proyecto previsto?
+
+AYUDA:
+Registra una apreciación preliminar basada en la información disponible. No sustituye validación de Ingeniería o CFE.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-063 ===
+
+
+=== PREGUNTA PRE-064 ===
+
+CODIGO:
+cableado_buen_estado
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿El cableado visible se encuentra aparentemente en buen estado, sin daño o aislamiento deteriorado evidente?
+
+AYUDA:
+Evalúa únicamente partes visibles y accesibles de forma segura.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el estado observable del cableado relevante.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-064 ===
+
+
+=== PREGUNTA PRE-065 ===
+
+CODIGO:
+cableado_material
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+Si se identificaron problemas, ¿cuál es el material observable de los conductores?
+
+AYUDA:
+Selecciona el material identificado del cableado observado.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cableado_buen_estado = false
+
+OPCIONES:
+cobre
+aluminio
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-065 ===
+
+
+=== PREGUNTA PRE-066 ===
+
+CODIGO:
+cableado_empalmes
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Se observan empalmes visibles, expuestos o aparentemente deficientes?
+
+AYUDA:
+Registra únicamente condiciones visibles.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cableado_buen_estado = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-066 ===
+
+
+=== PREGUNTA PRE-067 ===
+
+CODIGO:
+cableado_antiguedad
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+Según la información disponible, ¿el cableado tiene menos de 20 años?
+
+AYUDA:
+Utiliza información disponible del inmueble. No inventes la antigüedad.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cableado_buen_estado = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-067 ===
+
+
+=== PREGUNTA PRE-068 ===
+
+CODIGO:
+varilla_tierra
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Se identifica una varilla o electrodo de puesta a tierra en el inmueble?
+
+AYUDA:
+Registra existencia observable. Las mediciones eléctricas definitivas pertenecen a Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el electrodo o punto de puesta a tierra identificado.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-068 ===
+
+
+=== PREGUNTA PRE-069 ===
+
+CODIGO:
+varilla_conectada
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿El electrodo de puesta a tierra se encuentra conectado al sistema eléctrico o centro de carga?
+
+AYUDA:
+Registra la conexión observable sin realizar intervenciones inseguras.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+varilla_tierra = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-069 ===
+
+
+=== PREGUNTA PRE-070 ===
+
+CODIGO:
+varilla_medicion_posible
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Existe acceso suficiente para realizar posteriormente una medición de resistencia de puesta a tierra?
+
+AYUDA:
+Registra accesibilidad para la medición que corresponda en la etapa técnica.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+varilla_tierra = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-070 ===
+
+
+=== PREGUNTA PRE-071 ===
+
+CODIGO:
+inversor_ubicacion_preliminar
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Qué ubicación preliminar se propone para colocar el inversor?
+
+AYUDA:
+Selecciona el área que, durante la inspección del sitio, parece más viable para ubicar el inversor. Esta selección es únicamente preliminar y no sustituye la validación final de Ingeniería.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+no
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+pared_exterior
+cuarto_electrico
+cochera
+azotea
+area_tecnica_interior
+estructura_independiente
+otro
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si cuando se responda
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar la ubicación candidata del inversor.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-071 ===
+
+
+=== PREGUNTA PRE-072 ===
+
+CODIGO:
+ruta_canalizacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿Qué tipo de ruta preliminar sería necesaria para llevar la canalización entre los equipos?
+
+AYUDA:
+Selecciona la alternativa observable más probable para documentar el sitio.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+canaleta_existente
+romper_pared
+tuberia_nueva
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+foto
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Fotografiar el recorrido preliminar o las zonas por donde pasaría la canalización.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-072 ===
+
+
+=== PREGUNTA PRE-073 ===
+
+CODIGO:
+ruta_interfiere_estructura
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+¿La ruta preliminar de canalización interfiere con elementos estructurales observables?
+
+AYUDA:
+Registra interferencias visibles que deban considerarse posteriormente.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-073 ===
+
+
+=== PREGUNTA PRE-074 ===
+
+CODIGO:
+ruta_permiso_condominio
+
+ETAPA:
+previabilidad
+
+SECCION:
+infraestructura_electrica_observable
+
+TEXTO:
+Si la ruta requiere intervenir muros, ¿se necesita autorización del condominio o administración?
+
+AYUDA:
+Registra cualquier autorización conocida necesaria para la intervención.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+ruta_canalizacion = romper_pared
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-074 ===
+
+
+=== PREGUNTA PRE-075 ===
+
+CODIGO:
+cliente_propietario
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿La persona solicitante es propietaria del inmueble donde se realizará la instalación?
+
+AYUDA:
+Registra la relación declarada o documentada del solicitante con el inmueble.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-075 ===
+
+
+=== PREGUNTA PRE-076 ===
+
+CODIGO:
+carta_autorizacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+Si el solicitante no es propietario, ¿existe autorización expresa del propietario para realizar la instalación?
+
+AYUDA:
+Registra la existencia de autorización del propietario.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cliente_propietario = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si cuando carta_autorizacion = true
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar la carta o autorización del propietario.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-076 ===
+
+
+=== PREGUNTA PRE-077 ===
+
+CODIGO:
+carta_firmada_con_id
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿La autorización está firmada y acompañada de identificación del propietario?
+
+AYUDA:
+Registra si la autorización cuenta con los elementos documentales indicados.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cliente_propietario = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-077 ===
+
+
+=== PREGUNTA PRE-078 ===
+
+CODIGO:
+cfe_al_corriente
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿El suministro asociado al inmueble se encuentra al corriente con CFE?
+
+AYUDA:
+Responde con base en la documentación disponible.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar evidencia documental disponible del suministro o recibo.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-078 ===
+
+
+=== PREGUNTA PRE-079 ===
+
+CODIGO:
+recibo_a_nombre_solicitante
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿El recibo de CFE está a nombre del solicitante?
+
+AYUDA:
+Compara el titular del recibo con el solicitante registrado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cfe_al_corriente = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-079 ===
+
+
+=== PREGUNTA PRE-080 ===
+
+CODIGO:
+recibo_menor_3_meses
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿El recibo de CFE presentado tiene una antigüedad menor a tres meses?
+
+AYUDA:
+Verifica la fecha del documento presentado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cfe_al_corriente = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-080 ===
+
+
+=== PREGUNTA PRE-081 ===
+
+CODIGO:
+tarifa_cfe
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿Qué tarifa aparece actualmente en el recibo de CFE?
+
+AYUDA:
+Selecciona la tarifa indicada por la documentación disponible.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+dac
+domestica
+comercial
+industrial
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar el recibo o documento donde aparece la tarifa.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-081 ===
+
+
+=== PREGUNTA PRE-082 ===
+
+CODIGO:
+es_tarifa_dac
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿El suministro se encuentra actualmente en tarifa DAC?
+
+AYUDA:
+Registra este dato para análisis informativo y comercial.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-082 ===
+
+
+=== PREGUNTA PRE-083 ===
+
+CODIGO:
+restricciones_municipales
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿Se conocen restricciones municipales, del condominio o de la administración que puedan afectar la instalación?
+
+AYUDA:
+Registra la existencia de restricciones conocidas que requieran revisión legal o administrativa.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-083 ===
+
+
+=== PREGUNTA PRE-084 ===
+
+CODIGO:
+zona_protegida_inah
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿El inmueble se encuentra en una zona protegida o sujeta a restricciones relacionadas con INAH?
+
+AYUDA:
+Registra la condición conocida del inmueble o zona.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+restricciones_municipales = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-084 ===
+
+
+=== PREGUNTA PRE-085 ===
+
+CODIGO:
+restriccion_hoa
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿Existe reglamento de condominio o administración que limite modificaciones exteriores o la instalación de paneles?
+
+AYUDA:
+Registra restricciones conocidas de la administración o condominio.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+restricciones_municipales = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-085 ===
+
+
+=== PREGUNTA PRE-086 ===
+
+CODIGO:
+licencia_construccion
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿La intervención prevista requiere licencia, aviso de obra u otra autorización municipal?
+
+AYUDA:
+Registra la necesidad conocida o preliminar de autorización.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+restricciones_municipales = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-086 ===
+
+
+=== PREGUNTA PRE-087 ===
+
+CODIGO:
+ampliacion_futura
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿El cliente prevé aumentar significativamente su consumo eléctrico en el futuro?
+
+AYUDA:
+Registra cambios de consumo previstos que puedan afectar el diseño posterior.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-087 ===
+
+
+=== PREGUNTA PRE-088 ===
+
+CODIGO:
+ampliacion_corto_plazo
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿Ese aumento de consumo está previsto dentro de los próximos 12 meses?
+
+AYUDA:
+Determina si la ampliación prevista es de corto plazo.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+ampliacion_futura = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-088 ===
+
+
+=== PREGUNTA PRE-089 ===
+
+CODIGO:
+dimensionar_ampliacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+situacion_legal_cliente
+
+TEXTO:
+¿Debe considerarse ese aumento previsto al definir posteriormente el tamaño del sistema?
+
+AYUDA:
+Registra si la ampliación futura debe incorporarse como consideración del diseño.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+ampliacion_futura = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-089 ===
+
+
+=== PREGUNTA PRE-090 ===
+
+CODIGO:
+potencia_kw
+
+ETAPA:
+previabilidad
+
+SECCION:
+previabilidad_sistema_red
+
+TEXTO:
+Registra la potencia preliminar estimada del sistema fotovoltaico.
+
+AYUDA:
+Captura la estimación preliminar. El diseño final se confirma en Ingeniería.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+kW
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-090 ===
+
+
+=== PREGUNTA PRE-091 ===
+
+CODIGO:
+transformador_capacidad
+
+ETAPA:
+previabilidad
+
+SECCION:
+previabilidad_sistema_red
+
+TEXTO:
+Según la información disponible, ¿se conoce si el transformador o red de CFE tiene capacidad para el proyecto?
+
+AYUDA:
+Registra únicamente la condición conocida o preliminar de la red.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+si
+no
+se_desconoce
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA PRE-091 ===
+
+
+=== PREGUNTA PRE-092 ===
+
+CODIGO:
+opinion_tecnica_cfe
+
+ETAPA:
+previabilidad
+
+SECCION:
+previabilidad_sistema_red
+
+TEXTO:
+Si la capacidad de red es desconocida, ¿se ha solicitado una opinión o revisión técnica a CFE?
+
+AYUDA:
+Registra si existe gestión o documentación para aclarar la capacidad disponible.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+transformador_capacidad = se_desconoce
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si cuando opinion_tecnica_cfe = true
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar solicitud, respuesta u otro documento disponible relacionado con la consulta técnica.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-092 ===
+
+
+=== PREGUNTA PRE-093 ===
+
+CODIGO:
+observaciones_generales
+
+ETAPA:
+previabilidad
+
+SECCION:
+observaciones_documentacion_sitio
+
+TEXTO:
+Registra cualquier observación adicional del sitio que pueda afectar la instalación y que no haya quedado cubierta en las preguntas anteriores.
+
+AYUDA:
+Utiliza este campo para información relevante no contemplada por las demás preguntas.
+
+TIPO:
+texto
+
+OBLIGATORIA:
+no
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-093 ===
+
+
+=== PREGUNTA PRE-094 ===
+
+CODIGO:
+croquis_ubicacion
+
+ETAPA:
+previabilidad
+
+SECCION:
+observaciones_documentacion_sitio
+
+TEXTO:
+¿Se adjuntó el croquis de ubicación del inmueble y del área propuesta de instalación?
+
+AYUDA:
+Confirma que el expediente contiene un croquis suficiente para identificar el sitio y el área de trabajo.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar el croquis de ubicación.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-094 ===
+
+
+=== PREGUNTA PRE-095 ===
+
+CODIGO:
+identificacion_solicitante
+
+ETAPA:
+previabilidad
+
+SECCION:
+observaciones_documentacion_sitio
+
+TEXTO:
+¿Se adjuntó identificación del solicitante?
+
+AYUDA:
+Confirma disponibilidad del documento dentro del expediente del proyecto.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar identificación del solicitante.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-095 ===
+
+
+=== PREGUNTA PRE-096 ===
+
+CODIGO:
+recibo_cfe_documento
+
+ETAPA:
+previabilidad
+
+SECCION:
+observaciones_documentacion_sitio
+
+TEXTO:
+¿Se adjuntó un recibo reciente de CFE correspondiente al inmueble?
+
+AYUDA:
+Confirma disponibilidad del documento de suministro dentro del expediente.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar recibo reciente de CFE.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-096 ===
+
+
+=== PREGUNTA PRE-097 ===
+
+CODIGO:
+autorizacion_propietario_documento
+
+ETAPA:
+previabilidad
+
+SECCION:
+observaciones_documentacion_sitio
+
+TEXTO:
+Si el solicitante no es propietario, ¿se adjuntó la autorización correspondiente del propietario?
+
+AYUDA:
+Confirma que el expediente contiene la autorización documental cuando aplica.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cliente_propietario = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar autorización del propietario.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA PRE-097 ===
+
+
+
+======================================================================
+ETAPA B — VALIDACIÓN DE INGENIERÍA
+======================================================================
+
+NOMBRE FUNCIONAL DE PLANTILLA:
+validacion_ingenieria_v1
+
+Esta etapa comienza únicamente cuando la Previabilidad vigente permite avanzar.
+Los criterios técnicos no universales deben ser validados por el responsable competente antes de convertirse en umbrales automáticos de producción.
+
+=== PREGUNTA ING-001 ===
+
+CODIGO:
+potencia_kw
+
+ETAPA:
+ingenieria
+
+SECCION:
+diseno_final_red
+
+TEXTO:
+Registra la potencia final del sistema fotovoltaico.
+
+AYUDA:
+Captura la potencia final definida por Ingeniería para el diseño validado.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+kW
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-001 ===
+
+
+=== PREGUNTA ING-002 ===
+
+CODIGO:
+transformador_capacidad_confirmada
+
+ETAPA:
+ingenieria
+
+SECCION:
+diseno_final_red
+
+TEXTO:
+¿La capacidad de red o transformador está confirmada como aceptable para el proyecto?
+
+AYUDA:
+Registra el resultado confirmado disponible para la red asociada al proyecto.
+
+TIPO:
+opcion_unica
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+si
+no
+se_desconoce
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar documento, respuesta o evidencia técnica que respalde el estado registrado.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-002 ===
+
+
+=== PREGUNTA ING-003 ===
+
+CODIGO:
+inversor_certificado_ul
+
+ETAPA:
+ingenieria
+
+SECCION:
+inversor
+
+TEXTO:
+¿El inversor cuenta con la certificación requerida indicada en la especificación (UL 1741 SB e IEEE 1547)?
+
+AYUDA:
+Responder con base en la documentación técnica del equipo seleccionado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar certificado o documentación técnica del inversor.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-003 ===
+
+
+=== PREGUNTA ING-004 ===
+
+CODIGO:
+inversor_certificado_vigente
+
+ETAPA:
+ingenieria
+
+SECCION:
+inversor
+
+TEXTO:
+¿El certificado del inversor se encuentra vigente?
+
+AYUDA:
+Verifica la vigencia según la documentación aportada.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+inversor_certificado_ul = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar evidencia documental de vigencia cuando corresponda.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-004 ===
+
+
+=== PREGUNTA ING-005 ===
+
+CODIGO:
+inversor_modelo
+
+ETAPA:
+ingenieria
+
+SECCION:
+inversor
+
+TEXTO:
+Registra la marca y modelo del inversor seleccionado.
+
+AYUDA:
+Utiliza la identificación exacta del equipo del diseño final.
+
+TIPO:
+texto
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar ficha técnica o documento donde se identifique el modelo.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-005 ===
+
+
+=== PREGUNTA ING-006 ===
+
+CODIGO:
+inversor_eficiencia
+
+ETAPA:
+ingenieria
+
+SECCION:
+inversor
+
+TEXTO:
+Registra la eficiencia nominal declarada del inversor.
+
+AYUDA:
+Captura el valor de la ficha técnica. No inferir ni estimar sin documentación.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+%
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar ficha técnica donde aparezca la eficiencia.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-006 ===
+
+
+=== PREGUNTA ING-007 ===
+
+CODIGO:
+modulos_certificado_nmx
+
+ETAPA:
+ingenieria
+
+SECCION:
+modulos
+
+TEXTO:
+¿Los módulos cuentan con certificación NMX-J-618-ANCE?
+
+AYUDA:
+Responder con base en certificados o documentación técnica del modelo seleccionado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar certificado o documentación de los módulos.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-007 ===
+
+
+=== PREGUNTA ING-008 ===
+
+CODIGO:
+modulos_certificado_iec
+
+ETAPA:
+ingenieria
+
+SECCION:
+modulos
+
+TEXTO:
+Cuando NMX no aplica o está ausente, ¿los módulos cuentan con IEC 61215 o equivalente?
+
+AYUDA:
+Responder con base en documentación técnica disponible.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+modulos_certificado_nmx = false
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar certificación IEC o equivalente cuando corresponda.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-008 ===
+
+
+=== PREGUNTA ING-009 ===
+
+CODIGO:
+cableado_certificado_600v
+
+ETAPA:
+ingenieria
+
+SECCION:
+cableado_protecciones
+
+TEXTO:
+¿El cableado seleccionado cuenta con certificación para 600 V y protección UV según el diseño?
+
+AYUDA:
+Verifica las características declaradas del cableado seleccionado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar ficha o certificado del cableado.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-009 ===
+
+
+=== PREGUNTA ING-010 ===
+
+CODIGO:
+cableado_especifico_fv
+
+ETAPA:
+ingenieria
+
+SECCION:
+cableado_protecciones
+
+TEXTO:
+¿El cableado seleccionado es específico para aplicaciones fotovoltaicas?
+
+AYUDA:
+Responder con base en la documentación del producto.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+cableado_certificado_600v = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar documentación técnica que identifique el uso previsto del cableado.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-010 ===
+
+
+=== PREGUNTA ING-011 ===
+
+CODIGO:
+proteccion_arco
+
+ETAPA:
+ingenieria
+
+SECCION:
+cableado_protecciones
+
+TEXTO:
+¿El diseño incorpora protección de falla por arco cuando corresponda?
+
+AYUDA:
+Esta respuesta no produce rechazo automático por sí sola. La aplicabilidad debe validarse técnicamente cuando la regla correspondiente se active.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar parte del diseño o especificación donde se documente la protección o su tratamiento.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-011 ===
+
+
+=== PREGUNTA ING-012 ===
+
+CODIGO:
+proteccion_arco_certificada
+
+ETAPA:
+ingenieria
+
+SECCION:
+cableado_protecciones
+
+TEXTO:
+Si el diseño incorpora protección de falla por arco, ¿el dispositivo especificado cuenta con certificación aplicable?
+
+AYUDA:
+Responder con base en documentación del dispositivo seleccionado.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+proteccion_arco = true
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar certificado o ficha técnica del dispositivo.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-012 ===
+
+
+=== PREGUNTA ING-013 ===
+
+CODIGO:
+tension_cc_sistema
+
+ETAPA:
+ingenieria
+
+SECCION:
+diseno_electrico_puesta_tierra
+
+TEXTO:
+Registra la tensión máxima de corriente continua del diseño.
+
+AYUDA:
+Captura el valor final calculado o documentado por Ingeniería.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+V
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar memoria, cálculo o documento del diseño donde se respalde la tensión indicada.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-013 ===
+
+
+=== PREGUNTA ING-014 ===
+
+CODIGO:
+resistencia_tierra
+
+ETAPA:
+ingenieria
+
+SECCION:
+diseno_electrico_puesta_tierra
+
+TEXTO:
+Registra la resistencia medida o proyectada del sistema de puesta a tierra.
+
+AYUDA:
+Captura el valor documentado en el diseño o medición correspondiente.
+
+TIPO:
+numero
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+ohm
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar medición, memoria o documento que respalde el valor.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-014 ===
+
+
+=== PREGUNTA ING-015 ===
+
+CODIGO:
+mejora_tierra_posible
+
+ETAPA:
+ingenieria
+
+SECCION:
+diseno_electrico_puesta_tierra
+
+TEXTO:
+Si la resistencia supera el criterio aplicable, ¿puede corregirse mediante una mejora del sistema de puesta a tierra?
+
+AYUDA:
+Registra la viabilidad técnica de corrección definida por Ingeniería.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+resistencia_tierra IS NOT NULL
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-015 ===
+
+
+=== PREGUNTA ING-016 ===
+
+CODIGO:
+memoria_calculo
+
+ETAPA:
+ingenieria
+
+SECCION:
+documentacion_ingenieria
+
+TEXTO:
+¿La memoria de cálculo del proyecto está completa y aprobada?
+
+AYUDA:
+Confirma el estado del documento técnico final.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar la memoria de cálculo aprobada.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-016 ===
+
+
+=== PREGUNTA ING-017 ===
+
+CODIGO:
+diagrama_unifilar
+
+ETAPA:
+ingenieria
+
+SECCION:
+documentacion_ingenieria
+
+TEXTO:
+¿El diagrama unifilar del proyecto está completo y aprobado?
+
+AYUDA:
+Confirma el estado del diagrama correspondiente al diseño final.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar el diagrama unifilar aprobado.
+
+AFECTA_EVALUACION:
+si
+
+=== FIN PREGUNTA ING-017 ===
+
+
+=== PREGUNTA ING-018 ===
+
+CODIGO:
+fichas_tecnicas
+
+ETAPA:
+ingenieria
+
+SECCION:
+documentacion_ingenieria
+
+TEXTO:
+¿Se adjuntaron las fichas técnicas finales de los equipos y componentes seleccionados?
+
+AYUDA:
+Confirma que el expediente contiene la documentación técnica final.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar las fichas técnicas finales.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-018 ===
+
+
+=== PREGUNTA ING-019 ===
+
+CODIGO:
+certificado_inversor_documento
+
+ETAPA:
+ingenieria
+
+SECCION:
+documentacion_ingenieria
+
+TEXTO:
+¿Se adjuntó el certificado del inversor seleccionado?
+
+AYUDA:
+Confirma la presencia del documento en el expediente.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar certificado del inversor.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-019 ===
+
+
+=== PREGUNTA ING-020 ===
+
+CODIGO:
+certificado_modulos_documento
+
+ETAPA:
+ingenieria
+
+SECCION:
+documentacion_ingenieria
+
+TEXTO:
+¿Se adjuntaron los certificados de los módulos seleccionados?
+
+AYUDA:
+Confirma la presencia de los documentos en el expediente.
+
+TIPO:
+booleano
+
+OBLIGATORIA:
+si
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+true
+false
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+documento
+
+EVIDENCIA_OBLIGATORIA:
+si
+
+EVIDENCIA_INSTRUCCION:
+Adjuntar certificados de módulos.
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-020 ===
+
+
+=== PREGUNTA ING-021 ===
+
+CODIGO:
+observaciones_ingenieria
+
+ETAPA:
+ingenieria
+
+SECCION:
+documentacion_ingenieria
+
+TEXTO:
+Registra observaciones adicionales de Ingeniería que deban conservarse en la revisión.
+
+AYUDA:
+Utiliza este campo para consideraciones técnicas no capturadas en las preguntas anteriores.
+
+TIPO:
+texto
+
+OBLIGATORIA:
+no
+
+ACTIVACION:
+siempre
+
+OPCIONES:
+no_aplica
+
+UNIDAD:
+no_aplica
+
+EVIDENCIA:
+ninguna
+
+EVIDENCIA_OBLIGATORIA:
+no
+
+EVIDENCIA_INSTRUCCION:
+no_aplica
+
+AFECTA_EVALUACION:
+no
+
+=== FIN PREGUNTA ING-021 ===
+
+
+
+======================================================================
+REGLAS FUNCIONALES
+======================================================================
+
+IMPORTANTE:
+- Estas reglas están separadas de las preguntas deliberadamente.
+- No cambies su severidad para acomodarlas al motor.
+- Si el motor actual no soporta observacion o informativa, repórtalo como gap.
+- No conviertas observacion o informativa en no_apto.
+- Los efectos "bloqueante" aquí se expresan como no_apto porque así están definidos en la especificación.
+- Las reglas de requiere_especialista deben convertirse en validacion_especializada del tipo indicado.
+- Los criterios marcados como sujetos a validación técnica NO deben elevarse a bloqueo automático.
+
+-----------------------------
+REGLAS DE PREVIABILIDAD
+-----------------------------
+
+=== REGLA PRE-R001 ===
+
+CODIGO:
+regla_sin_acceso
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+acceso_vehiculo = sin_acceso
+
+MENSAJE:
+Sin acceso para vehículo de trabajo
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA PRE-R001 ===
+
+
+=== REGLA PRE-R002 ===
+
+CODIGO:
+regla_sin_espacio_descarga
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+espacio_descarga = false
+
+MENSAJE:
+Sin espacio seguro para descarga
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA PRE-R002 ===
+
+
+=== REGLA PRE-R003 ===
+
+CODIGO:
+regla_sin_metodo_elevacion
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+metodo_elevacion IS NULL
+
+MENSAJE:
+Sin método seguro de elevación
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA PRE-R003 ===
+
+
+=== REGLA PRE-R004 ===
+
+CODIGO:
+regla_asbesto
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+material_techo = asbesto
+
+MENSAJE:
+Techo de asbesto
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Remoción especializada antes de una nueva revisión
+
+=== FIN REGLA PRE-R004 ===
+
+
+=== REGLA PRE-R005 ===
+
+CODIGO:
+regla_area_insuficiente
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+area_util_suficiente = false AND area_ampliable = false
+
+MENSAJE:
+Área insuficiente
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Redimensionar o rechazar el alcance
+
+=== FIN REGLA PRE-R005 ===
+
+
+=== REGLA PRE-R006 ===
+
+CODIGO:
+regla_sin_propietario_sin_carta
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+cliente_propietario = false AND carta_autorizacion = false
+
+MENSAJE:
+Sin autorización del propietario
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Obtener autorización
+
+=== FIN REGLA PRE-R006 ===
+
+
+=== REGLA PRE-R007 ===
+
+CODIGO:
+regla_adeudo_cfe
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+cfe_al_corriente = false
+
+MENSAJE:
+Adeudo CFE
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Regularizar adeudo
+
+=== FIN REGLA PRE-R007 ===
+
+
+=== REGLA PRE-R008 ===
+
+CODIGO:
+regla_estructura_dudosa
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+requiere_dictamen_estructural = true AND dictamen_existe = false
+
+MENSAJE:
+Estructura sin dictamen
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+estructural
+
+=== FIN REGLA PRE-R008 ===
+
+
+=== REGLA PRE-R009 ===
+
+CODIGO:
+regla_dictamen_desfavorable
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+dictamen_favorable = false
+
+MENSAJE:
+Dictamen estructural desfavorable
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+estructural
+
+=== FIN REGLA PRE-R009 ===
+
+
+=== REGLA PRE-R010 ===
+
+CODIGO:
+regla_lamina_requiere_evaluacion
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+material_techo = lamina_galvanizada AND (lamina_oxidada = true OR lamina_soporte = madera OR lamina_antiguedad = false)
+
+MENSAJE:
+Lámina requiere evaluación
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+estructural
+
+=== FIN REGLA PRE-R010 ===
+
+
+=== REGLA PRE-R011 ===
+
+CODIGO:
+regla_oxidacion_estructural
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+oxidacion_tipo = estructural
+
+MENSAJE:
+Oxidación estructural
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+estructural
+
+=== FIN REGLA PRE-R011 ===
+
+
+=== REGLA PRE-R012 ===
+
+CODIGO:
+regla_lineas_alta_tension
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+lineas_tension_distancia IS NOT NULL
+
+MENSAJE:
+Líneas de alta tensión cercanas
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+cfe
+
+=== FIN REGLA PRE-R012 ===
+
+
+=== REGLA PRE-R013 ===
+
+CODIGO:
+regla_transformador_sin_capacidad
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+transformador_capacidad = no
+
+MENSAJE:
+Transformador sin capacidad
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+cfe
+
+=== FIN REGLA PRE-R013 ===
+
+
+=== REGLA PRE-R014 ===
+
+CODIGO:
+regla_transformador_desconocido
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+transformador_capacidad = se_desconoce
+
+MENSAJE:
+Capacidad de red desconocida
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+cfe
+
+=== FIN REGLA PRE-R014 ===
+
+
+=== REGLA PRE-R015 ===
+
+CODIGO:
+regla_potencia_mayor_limite
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+potencia_kw >= 700
+
+MENSAJE:
+Potencia >= 0.7 MW; fuera de generación exenta
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+legal
+
+=== FIN REGLA PRE-R015 ===
+
+
+=== REGLA PRE-R016 ===
+
+CODIGO:
+regla_permiso_dudoso
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+restricciones_municipales = true AND licencia_construccion = true
+
+MENSAJE:
+Posible permiso municipal
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+legal
+
+=== FIN REGLA PRE-R016 ===
+
+
+=== REGLA PRE-R017 ===
+
+CODIGO:
+regla_zona_inah
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+zona_protegida_inah = true
+
+MENSAJE:
+Zona protegida/INAH
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+legal
+
+=== FIN REGLA PRE-R017 ===
+
+
+=== REGLA PRE-R018 ===
+
+CODIGO:
+regla_electrico_dudoso
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+cableado_buen_estado = false AND cableado_material = aluminio
+
+MENSAJE:
+Cableado posiblemente inadecuado
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+electrico
+
+=== FIN REGLA PRE-R018 ===
+
+
+=== REGLA PRE-R019 ===
+
+CODIGO:
+regla_callejon_estrecho
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+ancho_callejon_ok = false
+
+MENSAJE:
+Callejón estrecho
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Cotizar transporte alternativo
+
+=== FIN REGLA PRE-R019 ===
+
+
+=== REGLA PRE-R020 ===
+
+CODIGO:
+regla_obstaculos_aereos
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+obstaculos_aereos = true
+
+MENSAJE:
+Obstáculos aéreos
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Ruta alterna / coordinación
+
+=== FIN REGLA PRE-R020 ===
+
+
+=== REGLA PRE-R021 ===
+
+CODIGO:
+regla_escalera_insegura
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+escalera_altura_ok = false OR escalera_buen_estado = false
+
+MENSAJE:
+Escalera no segura
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Usar grúa o andamio
+
+=== FIN REGLA PRE-R021 ===
+
+
+=== REGLA PRE-R022 ===
+
+CODIGO:
+regla_escalera_ancho_insuficiente
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+escalera_ancho_ok = false
+
+MENSAJE:
+Escalera no permite panel
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Usar grúa o andamio
+
+=== FIN REGLA PRE-R022 ===
+
+
+=== REGLA PRE-R023 ===
+
+CODIGO:
+regla_perros_agresivos
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+perros_cliente_asegura = false
+
+MENSAJE:
+Perros no controlados
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Coordinar con cliente
+
+=== FIN REGLA PRE-R023 ===
+
+
+=== REGLA PRE-R024 ===
+
+CODIGO:
+regla_zona_riesgo_social
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+riesgos_entorno contiene riesgo_social
+
+MENSAJE:
+Zona de riesgo social
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Medidas de seguridad
+
+=== FIN REGLA PRE-R024 ===
+
+
+=== REGLA PRE-R025 ===
+
+CODIGO:
+regla_arboles_estorbo
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+riesgos_entorno contiene arboles
+
+MENSAJE:
+Árboles interfieren
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Cotizar poda
+
+=== FIN REGLA PRE-R025 ===
+
+
+=== REGLA PRE-R026 ===
+
+CODIGO:
+regla_gotera_area
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+gotera_area_instalacion = true
+
+MENSAJE:
+Gotera en área de instalación
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Impermeabilizar
+
+=== FIN REGLA PRE-R026 ===
+
+
+=== REGLA PRE-R027 ===
+
+CODIGO:
+regla_gotera_historica
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+gotera_activa = historica
+
+MENSAJE:
+Humedad/gotera histórica
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Impermeabilización preventiva
+
+=== FIN REGLA PRE-R027 ===
+
+
+=== REGLA PRE-R028 ===
+
+CODIGO:
+regla_material_oxidado_superficial
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+oxidacion_tipo = superficial
+
+MENSAJE:
+Oxidación superficial
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Tratamiento anticorrosivo
+
+=== FIN REGLA PRE-R028 ===
+
+
+=== REGLA PRE-R029 ===
+
+CODIGO:
+regla_lamina_oxidada
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+lamina_oxidada = true
+
+MENSAJE:
+Lámina oxidada
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Reparar/reemplazar según validación
+
+=== FIN REGLA PRE-R029 ===
+
+
+=== REGLA PRE-R030 ===
+
+CODIGO:
+regla_teja_rota
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+teja_estado = false
+
+MENSAJE:
+Teja en mal estado
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Reemplazar piezas
+
+=== FIN REGLA PRE-R030 ===
+
+
+=== REGLA PRE-R031 ===
+
+CODIGO:
+regla_panel_delaminado
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+panel_estado = false
+
+MENSAJE:
+Panel sándwich delaminado
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Reemplazar panel
+
+=== FIN REGLA PRE-R031 ===
+
+
+=== REGLA PRE-R032 ===
+
+CODIGO:
+regla_panel_poliestireno
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+panel_aislamiento = poliestireno
+
+MENSAJE:
+Panel de poliestireno
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Definir anclaje compatible
+
+=== FIN REGLA PRE-R032 ===
+
+
+=== REGLA PRE-R033 ===
+
+CODIGO:
+regla_pendiente_alta
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+pendiente_techo = alta
+
+MENSAJE:
+Pendiente alta
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Cotizar montaje especial
+
+=== FIN REGLA PRE-R033 ===
+
+
+=== REGLA PRE-R034 ===
+
+CODIGO:
+regla_sombra_permanente
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+sombra_permanente = permanente AND sombra_horario_pico = true
+
+MENSAJE:
+Sombra permanente en horario pico
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Poda/reubicación
+
+=== FIN REGLA PRE-R034 ===
+
+
+=== REGLA PRE-R035 ===
+
+CODIGO:
+regla_sin_subpanel
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+espacio_breaker = false AND subpanel_posible = true
+
+MENSAJE:
+Sin espacio para breaker
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Instalar subpanel
+
+=== FIN REGLA PRE-R035 ===
+
+
+=== REGLA PRE-R036 ===
+
+CODIGO:
+regla_cableado_obsoleto
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+cableado_antiguedad = false OR cableado_empalmes = true
+
+MENSAJE:
+Cableado obsoleto/empalmes
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Actualizar cableado
+
+=== FIN REGLA PRE-R036 ===
+
+
+=== REGLA PRE-R037 ===
+
+CODIGO:
+regla_sin_varilla_tierra
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+varilla_tierra = false
+
+MENSAJE:
+Sin varilla de tierra
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Planificar sistema de puesta a tierra en Ingeniería
+
+=== FIN REGLA PRE-R037 ===
+
+
+=== REGLA PRE-R038 ===
+
+CODIGO:
+regla_romper_pared
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+ruta_canalizacion = romper_pared
+
+MENSAJE:
+Requiere romper pared
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Cotizar resane/pintura
+
+=== FIN REGLA PRE-R038 ===
+
+
+=== REGLA PRE-R039 ===
+
+CODIGO:
+regla_recibo_no_titular
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+recibo_a_nombre_solicitante = false
+
+MENSAJE:
+Recibo no titular
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Actualizar titular
+
+=== FIN REGLA PRE-R039 ===
+
+
+=== REGLA PRE-R040 ===
+
+CODIGO:
+regla_recibo_antiguo
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+recibo_menor_3_meses = false
+
+MENSAJE:
+Recibo antiguo
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Obtener recibo reciente
+
+=== FIN REGLA PRE-R040 ===
+
+
+=== REGLA PRE-R041 ===
+
+CODIGO:
+regla_restriccion_hoa
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+restriccion_hoa = true
+
+MENSAJE:
+Restricción de condominio
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Obtener autorización
+
+=== FIN REGLA PRE-R041 ===
+
+
+=== REGLA PRE-R042 ===
+
+CODIGO:
+regla_dimensionar_ampliacion
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+ampliacion_corto_plazo = true
+
+MENSAJE:
+Ampliación de consumo prevista
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Considerar en Ingeniería
+
+=== FIN REGLA PRE-R042 ===
+
+
+=== REGLA PRE-R043 ===
+
+CODIGO:
+info_tarifa_dac
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+informativa
+
+CONDICION:
+es_tarifa_dac = true
+
+MENSAJE:
+Tarifa DAC: potencial de ahorro mayor
+
+EFECTO_FUNCIONAL:
+informativa
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA PRE-R043 ===
+
+
+=== REGLA PRE-R044 ===
+
+CODIGO:
+info_orientacion
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+informativa
+
+CONDICION:
+orientacion_techo IS NOT NULL
+
+MENSAJE:
+Registrar orientación para dimensionamiento
+
+EFECTO_FUNCIONAL:
+informativa
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA PRE-R044 ===
+
+
+=== REGLA PRE-R045 ===
+
+CODIGO:
+info_capacidad_servicio
+
+ETAPA:
+previabilidad
+
+SEVERIDAD_FUNCIONAL:
+informativa
+
+CONDICION:
+capacidad_servicio IS NOT NULL
+
+MENSAJE:
+Registrar capacidad para Ingeniería
+
+EFECTO_FUNCIONAL:
+informativa
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA PRE-R045 ===
+
+
+
+-----------------------------
+REGLAS DE INGENIERÍA
+-----------------------------
+
+=== REGLA ING-R001 ===
+
+CODIGO:
+regla_inversor_sin_certificacion
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+inversor_certificado_ul = false
+
+MENSAJE:
+Inversor sin certificación requerida
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Seleccionar inversor certificado
+
+=== FIN REGLA ING-R001 ===
+
+
+=== REGLA ING-R002 ===
+
+CODIGO:
+regla_cableado_sin_certificacion
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+cableado_certificado_600v = false
+
+MENSAJE:
+Cableado sin certificación requerida
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Seleccionar cableado certificado
+
+=== FIN REGLA ING-R002 ===
+
+
+=== REGLA ING-R003 ===
+
+CODIGO:
+regla_proteccion_arco_faltante
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+proteccion_arco = false AND tension_cc_sistema >= 80
+
+MENSAJE:
+Falta protección de arco en condición donde puede aplicar
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+electrico
+
+=== FIN REGLA ING-R003 ===
+
+
+=== REGLA ING-R004 ===
+
+CODIGO:
+regla_transformador_ingenieria_no
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+transformador_capacidad_confirmada = no
+
+MENSAJE:
+Capacidad de red no disponible
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+cfe
+
+=== FIN REGLA ING-R004 ===
+
+
+=== REGLA ING-R005 ===
+
+CODIGO:
+regla_transformador_ingenieria_desconocido
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+transformador_capacidad_confirmada = se_desconoce
+
+MENSAJE:
+Capacidad de red no confirmada
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+cfe
+
+=== FIN REGLA ING-R005 ===
+
+
+=== REGLA ING-R006 ===
+
+CODIGO:
+regla_potencia_ingenieria_limite
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+potencia_kw >= 700
+
+MENSAJE:
+Sistema fuera de generación exenta
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+legal
+
+=== FIN REGLA ING-R006 ===
+
+
+=== REGLA ING-R007 ===
+
+CODIGO:
+regla_inversor_eficiencia_baja
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+inversor_eficiencia < 95
+
+MENSAJE:
+Eficiencia nominal menor a 95%
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Revisar selección; criterio sujeto a validación técnica
+
+=== FIN REGLA ING-R007 ===
+
+
+=== REGLA ING-R008 ===
+
+CODIGO:
+regla_modulos_sin_certificacion
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+modulos_certificado_nmx = false AND modulos_certificado_iec = false
+
+MENSAJE:
+Módulos sin certificación declarada
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Seleccionar módulos certificados
+
+=== FIN REGLA ING-R008 ===
+
+
+=== REGLA ING-R009 ===
+
+CODIGO:
+regla_tierra_inadecuada
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+observacion
+
+CONDICION:
+resistencia_tierra > 25 AND mejora_tierra_posible = true
+
+MENSAJE:
+Resistencia de tierra > 25 ohm
+
+EFECTO_FUNCIONAL:
+observacion
+
+ACCION_O_TIPO:
+Mejorar sistema de tierra
+
+=== FIN REGLA ING-R009 ===
+
+
+=== REGLA ING-R010 ===
+
+CODIGO:
+regla_tierra_sin_mejora
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+requiere_especialista
+
+CONDICION:
+resistencia_tierra > 25 AND mejora_tierra_posible = false
+
+MENSAJE:
+Resistencia de tierra alta sin corrección definida
+
+EFECTO_FUNCIONAL:
+validacion_especializada
+
+ACCION_O_TIPO:
+electrico
+
+=== FIN REGLA ING-R010 ===
+
+
+=== REGLA ING-R011 ===
+
+CODIGO:
+regla_memoria_ausente
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+memoria_calculo = false
+
+MENSAJE:
+Memoria de cálculo no aprobada
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Completar Ingeniería
+
+=== FIN REGLA ING-R011 ===
+
+
+=== REGLA ING-R012 ===
+
+CODIGO:
+regla_unifilar_ausente
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+bloqueante
+
+CONDICION:
+diagrama_unifilar = false
+
+MENSAJE:
+Diagrama unifilar no aprobado
+
+EFECTO_FUNCIONAL:
+no_apto
+
+ACCION_O_TIPO:
+Completar Ingeniería
+
+=== FIN REGLA ING-R012 ===
+
+
+=== REGLA ING-R013 ===
+
+CODIGO:
+info_modelo_inversor
+
+ETAPA:
+ingenieria
+
+SEVERIDAD_FUNCIONAL:
+informativa
+
+CONDICION:
+inversor_modelo IS NOT NULL
+
+MENSAJE:
+Registrar equipo final seleccionado
+
+EFECTO_FUNCIONAL:
+informativa
+
+ACCION_O_TIPO:
+no_aplica
+
+=== FIN REGLA ING-R013 ===
+
+
+
+======================================================================
+GAPS DE CONTENIDO QUE NO DEBEN INVENTARSE
+======================================================================
+
+1. inversor_ubicacion_preliminar — RESUELTO
+   Catálogo aprobado:
+   - pared_exterior
+   - cuarto_electrico
+   - cochera
+   - azotea
+   - area_tecnica_interior
+   - estructura_independiente
+   - otro
+   La pregunta es opcional, no afecta la evaluación y requiere foto únicamente cuando se responda.
+   No derivar reglas automáticas de ninguna de estas opciones.
+
+2. observacion / informativa
+   La especificación funcional contiene reglas con estas severidades.
+   Si el motor actual solo soporta no_apto, validacion_especializada y accion_requerida:
+   - identificar qué observaciones pueden representarse como acciones no bloqueantes sin cambiar significado;
+   - identificar cuáles requieren ampliar el motor;
+   - NO convertirlas en no_apto;
+   - presentar el mapeo propuesto antes de implementarlo.
+
+3. inversor_eficiencia < 95
+   La propia especificación marca este criterio como sujeto a validación técnica.
+   No convertirlo en rechazo ni tratarlo como umbral universal aprobado sin confirmación.
+
+4. puesta a tierra
+   Mantener las reglas tal como están documentadas en esta versión.
+   No extender el umbral de 25 ohm a situaciones o tipos de electrodo no contemplados por la especificación sin validación técnica.
+
+======================================================================
+DECISIÓN APROBADA SOBRE AFECTA_EVALUACION
+======================================================================
+
+AFECTA_EVALUACION es descriptivo y se deriva de las reglas reales de la versión de plantilla.
+No se almacena como segunda fuente autoritativa.
+
+Las siguientes preguntas quedan explícitamente con AFECTA_EVALUACION = no porque no son
+referenciadas directamente por ninguna regla, aunque algunas controlen ACTIVACION de preguntas hijas:
+
+- grua_lineas_tension
+- riesgo_social_medidas
+- arboles_cantidad
+- lamina_calibre
+- asbesto_confirmado
+- goteras
+- material_oxidado
+- sombras
+
+ACTIVACION por sí sola no significa que una pregunta afecte la evaluación.
+
+======================================================================
+PLAN QUE EL AGENTE DEBE DEVOLVER ANTES DE IMPLEMENTAR
+======================================================================
+
+Después de leer el archivo completo, devuelve únicamente un plan de compatibilidad que incluya:
+
+1. Cambios de esquema necesarios.
+2. Cómo representarás UNIDAD.
+3. Cómo representarás EVIDENCIA.
+4. Cómo representarás EVIDENCIA_OBLIGATORIA.
+5. Cómo representarás EVIDENCIA_INSTRUCCION.
+6. Cómo representarás observacion e informativa sin alterar semántica.
+7. Cómo crearás nuevas versiones de plantilla sin modificar históricas.
+8. Cómo migrarás los seeds provisionales sin romper revisiones existentes.
+9. Qué preguntas/reglas no puede representar actualmente el motor.
+10. Qué pruebas nuevas o actualizadas serán necesarias.
+11. Confirmación explícita de que NO tocarás master y trabajarás únicamente en feat/modulo-viabilidad.
+
+NO IMPLEMENTES HASTA QUE EL USUARIO APRUEBE ESE PLAN.
+
+======================================================================
+FIN DEL CUESTIONARIO FUNCIONAL DEFINITIVO
+======================================================================

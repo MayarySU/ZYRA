@@ -449,6 +449,10 @@ export async function cleanupByPrefix(
       const emAux = await client.query("delete from empleados where correo like $1", ["E2E-%"]);
       result.empleados += emAux.rowCount ?? 0;
 
+      // Empresas auxiliares creadas por las pruebas (p. ej. fail-closed de
+      // viabilidad sin plantilla). Se borran al final, sin referencias.
+      await client.query("delete from empresas where nombre like $1", ["E2E-%"]);
+
       await client.query("commit");
     } catch (e) {
       await client.query("rollback");

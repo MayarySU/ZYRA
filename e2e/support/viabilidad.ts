@@ -124,22 +124,26 @@ export async function rpcError(
 export async function plantillaActiva(
   admin: SupabaseClient,
   empresaId: number,
-  servicioId: number,
+  servicioId: number | null,
   etapa: Etapa
 ): Promise<number> {
   const { data, error } = await admin
     .from("viabilidad_plantillas")
-    .select("id_plantilla_viabilidad")
+    .select("id_plantilla_viabilidad, servicio_id, version")
     .eq("empresa_id", empresaId)
-    .eq("servicio_id", servicioId)
     .eq("tipo_etapa", etapa)
-    .eq("estado", "activa")
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("estado", "activa");
   if (error) throw new Error(error.message);
-  if (!data) throw new Error(`No hay plantilla activa de ${etapa} para el servicio ${servicioId}`);
-  return data.id_plantilla_viabilidad as number;
+  const rows = data ?? [];
+  const especifica = rows.find((r) => (r.servicio_id ?? null) === servicioId);
+  const global = rows.find((r) => (r.servicio_id ?? null) === null);
+  const elegida = especifica ?? global;
+  if (!elegida) {
+    throw new Error(
+      `No hay plantilla activa de ${etapa} para el servicio ${servicioId} ni global`
+    );
+  }
+  return elegida.id_plantilla_viabilidad as number;
 }
 
 export interface PreguntaFixture {
@@ -147,6 +151,7 @@ export interface PreguntaFixture {
   codigo: string;
   tipo: string;
   obligatoria: boolean;
+  evidenciaTipo: string | null;
 }
 
 export async function preguntasDePlantilla(
@@ -162,7 +167,7 @@ export async function preguntasDePlantilla(
   if (ids.length === 0) return [];
   const { data, error } = await admin
     .from("viabilidad_preguntas")
-    .select("id_pregunta_viabilidad, codigo, tipo_respuesta, obligatoria, activa")
+    .select("id_pregunta_viabilidad, codigo, tipo_respuesta, obligatoria, activa, evidencia_tipo")
     .in("seccion_id", ids);
   if (error) throw new Error(error.message);
   return (data ?? [])
@@ -172,6 +177,7 @@ export async function preguntasDePlantilla(
       codigo: p.codigo as string,
       tipo: p.tipo_respuesta as string,
       obligatoria: p.obligatoria as boolean,
+      evidenciaTipo: (p.evidencia_tipo as string | null) ?? null,
     }));
 }
 
@@ -215,36 +221,101 @@ export async function responder(
   if (error) throw new Error(`guardar_respuesta_viabilidad: ${error.message}`);
 }
 
-/** Respuestas por defecto (resultado "apto") para la plantilla de Previabilidad. */
+/**
+ * Respuestas por defecto (resultado "apto") para el cuestionario definitivo.
+ * Es un superconjunto de códigos de Previabilidad e Ingeniería; `responderTodo`
+ * solo aplica los que existen en la plantilla de la revisión.
+ */
 export const RESPUESTAS_BASE: Record<string, unknown> = {
-  tipo_inmueble: "residencial",
-  area_techo_m2: 120,
-  tipo_techo: "losa_concreto",
-  area_terreno_m2: 200,
-  consumo_mensual_kwh: 900,
-  potencia_sistema_kw: 500,
-  requiere_interconexion_cfe: false,
-  tipo_proteccion_dc: "fusibles_dc",
-  acceso_mantenimiento: true,
-  notas: "E2E viabilidad",
+  // ── Previabilidad ──
+  acceso_vehiculo: "pavimentado",
+  espacio_descarga: true,
+  suelo_descarga: "firme",
+  metodo_elevacion: "elevador",
+  riesgos_entorno: ["perros"],
+  perros_cliente_asegura: true,
+  material_techo: "losa_concreto",
+  losa_impermeabilizacion: true,
+  losa_anclaje_sin_romper: true,
+  losa_espesor: 15,
+  goteras: false,
+  material_oxidado: false,
+  pendiente_techo: "plano",
+  orientacion_techo: "sur",
+  sombras: false,
+  area_util: 100,
+  area_util_suficiente: true,
+  requiere_dictamen_estructural: false,
+  espacio_breaker: true,
+  capacidad_servicio: "220v_trifasico",
+  capacidad_contratada_suficiente: true,
+  cableado_buen_estado: true,
+  varilla_tierra: true,
+  varilla_conectada: true,
+  varilla_medicion_posible: true,
+  ruta_canalizacion: "canaleta_existente",
+  ruta_interfiere_estructura: false,
+  cliente_propietario: true,
+  cfe_al_corriente: true,
+  recibo_a_nombre_solicitante: true,
+  recibo_menor_3_meses: true,
+  tarifa_cfe: "domestica",
+  es_tarifa_dac: false,
+  restricciones_municipales: false,
+  ampliacion_futura: false,
+  potencia_kw: 100,
+  transformador_capacidad: "si",
+  croquis_ubicacion: true,
+  identificacion_solicitante: true,
+  recibo_cfe_documento: true,
+  // ── Ingeniería ──
+  transformador_capacidad_confirmada: "si",
+  inversor_certificado_ul: true,
+  inversor_certificado_vigente: true,
+  inversor_modelo: "INV-1000",
+  inversor_eficiencia: 97,
+  modulos_certificado_nmx: true,
+  cableado_certificado_600v: true,
+  cableado_especifico_fv: true,
+  proteccion_arco: true,
+  proteccion_arco_certificada: true,
+  tension_cc_sistema: 48,
+  resistencia_tierra: 10,
+  mejora_tierra_posible: true,
+  memoria_calculo: true,
+  diagrama_unifilar: true,
+  fichas_tecnicas: true,
+  certificado_inversor_documento: true,
+  certificado_modulos_documento: true,
 };
 
 /**
- * Responde el cuestionario completo. Para las preguntas tipo `evidencia` NO crea
- * respuesta (debe adjuntarse evidencia real), salvo que se indique un override.
+ * Responde el cuestionario completo con el baseline "apto" (+ overrides) y, por
+ * defecto, adjunta una evidencia a cada pregunta respondida que la requiera
+ * (`evidencia_tipo` no nulo). Pasa `{ evidencias: false }` para omitirlas.
  */
 export async function responderTodo(
   admin: SupabaseClient,
   revisionId: number,
-  overrides: Record<string, unknown> = {}
+  overrides: Record<string, unknown> = {},
+  opts: { evidencias?: boolean } = {}
 ): Promise<void> {
+  const adjuntar = opts.evidencias !== false;
   const plantillaId = await revisionPlantilla(admin, revisionId);
   const preguntas = await preguntasDePlantilla(admin, plantillaId);
   const vals: Record<string, unknown> = { ...RESPUESTAS_BASE, ...overrides };
+  const respondidas: PreguntaFixture[] = [];
   for (const p of preguntas) {
     if (p.tipo === "evidencia" && !(p.codigo in overrides)) continue;
     if (!(p.codigo in vals)) continue;
     await responder(admin, revisionId, p.id, vals[p.codigo]);
+    respondidas.push(p);
+  }
+  if (adjuntar) {
+    for (const p of respondidas) {
+      if (!p.evidenciaTipo) continue;
+      await adjuntarEvidencia(admin, revisionId, { preguntaId: p.id });
+    }
   }
 }
 
@@ -269,6 +340,24 @@ export async function adjuntarEvidencia(
   });
   if (error) throw new Error(`registrar_evidencia_viabilidad: ${error.message}`);
   return data as { id_evidencia: string; object_key: string };
+}
+
+/**
+ * Adjunta una evidencia a cada pregunta de la plantilla que la declare
+ * (`evidencia_tipo` no nulo). Se usa para completar el baseline tras
+ * responder con `{ evidencias: false }`.
+ */
+export async function adjuntarEvidenciasRequeridas(
+  admin: SupabaseClient,
+  revisionId: number,
+  omitir: string[] = []
+): Promise<void> {
+  const plantillaId = await revisionPlantilla(admin, revisionId);
+  const preguntas = await preguntasDePlantilla(admin, plantillaId);
+  for (const p of preguntas) {
+    if (!p.evidenciaTipo || omitir.includes(p.codigo)) continue;
+    await adjuntarEvidencia(admin, revisionId, { preguntaId: p.id });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────

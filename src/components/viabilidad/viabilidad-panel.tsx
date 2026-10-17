@@ -53,10 +53,14 @@ export function ViabilidadPanel({ proyecto }: { proyecto: ProyectoVista }) {
   const hayRevisiones = revisiones.length > 0;
   const dirty = prev !== reqPrev || ing !== reqIng;
 
-  const plantillaActiva = (etapa: TipoEtapaViabilidad) =>
-    plantillas.find(
-      (p) => p.estado === "activa" && p.tipo_etapa === etapa && (p.servicio_id ?? null) === servicioId
-    ) ?? null;
+  const plantillaActiva = (etapa: TipoEtapaViabilidad) => {
+    const activas = plantillas.filter(
+      (p) => p.estado === "activa" && p.tipo_etapa === etapa
+    );
+    const especifica = activas.find((p) => (p.servicio_id ?? null) === servicioId);
+    if (especifica) return especifica;
+    return activas.find((p) => (p.servicio_id ?? null) === null) ?? null;
+  };
 
   const revisionesDeEtapa = (etapa: TipoEtapaViabilidad) =>
     revisiones.filter((r) => r.tipo_etapa === etapa);

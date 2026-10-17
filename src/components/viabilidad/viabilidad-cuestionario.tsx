@@ -15,6 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/hooks/queries/keys";
 import { useToast } from "@/hooks/use-toast";
 import {
+  evidenciaRequerida,
   preguntaVisible,
   preguntaRequerida,
   respuestaActiva,
@@ -172,6 +173,15 @@ export function ViabilidadCuestionario({
 
   const valorOrigen = (id: number) => respuestasMap.get(id)?.valor;
 
+  const valorPorCodigo = (codigo: string): unknown => {
+    for (const s of plantilla.viabilidad_secciones ?? []) {
+      for (const p of s.viabilidad_preguntas ?? []) {
+        if (p.codigo === codigo) return valorOrigen(p.id_pregunta_viabilidad);
+      }
+    }
+    return undefined;
+  };
+
   const guardarRespuesta = (preguntaId: number, valor: unknown) => {
     const version = respuestasMap.get(preguntaId)?.version ?? null;
     guardar.mutate(
@@ -243,18 +253,24 @@ export function ViabilidadCuestionario({
                   const tipo = p.tipo_respuesta as TipoRespuestaViabilidad;
                   const respuesta = respuestasMap.get(p.id_pregunta_viabilidad);
 
+                  const respaldaEvidencia = tipo === "evidencia" || !!p.evidencia_tipo;
+                  const requiereEvidencia =
+                    tipo !== "evidencia" && evidenciaRequerida(p, valorPorCodigo);
+
                   const evidenciasDelServidor = (revision.viabilidad_evidencias ?? []).filter(
                     (e) => e.respuesta_id === respuesta?.id_respuesta_viabilidad
                   );
                   const pendientesPregunta = pendientes.filter(
                     (pe) => pe.preguntaId === p.id_pregunta_viabilidad
                   );
+                  const tieneEvidencia =
+                    evidenciasDelServidor.length + pendientesPregunta.length > 0;
 
                   return (
                     <div key={p.id_pregunta_viabilidad} className="space-y-2">
                       <div className="flex items-start gap-2">
-                        {tipo === "evidencia" ? (
-                          evidenciasDelServidor.length + pendientesPregunta.length > 0 ? (
+                        {respaldaEvidencia ? (
+                          tieneEvidencia ? (
                             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
                           ) : (
                             <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -267,6 +283,9 @@ export function ViabilidadCuestionario({
                         <div className="flex-1">
                           <Label className="text-sm font-medium text-foreground">
                             {p.texto}
+                            {p.unidad && (
+                              <span className="ml-1 text-muted-foreground">({p.unidad})</span>
+                            )}
                             {requerida && <span className="ml-1 text-destructive">*</span>}
                           </Label>
                           {p.ayuda && (
@@ -278,10 +297,23 @@ export function ViabilidadCuestionario({
                             {tv.question_required}
                           </Badge>
                         )}
+                        {requiereEvidencia && !tieneEvidencia && (
+                          <Badge variant="outline" className="shrink-0 text-[10px] text-destructive">
+                            {tv.evidence_required_short}
+                          </Badge>
+                        )}
                       </div>
 
-                      <div className="pl-6">
-                        {tipo === "evidencia" ? (
+                      <div className="space-y-2 pl-6">
+                        {tipo !== "evidencia" && (
+                          <PreguntaInput
+                            pregunta={p}
+                            valorActual={valor}
+                            disabled={!canEdit}
+                            onCommit={(v) => guardarRespuesta(p.id_pregunta_viabilidad, v)}
+                          />
+                        )}
+                        {respaldaEvidencia && (
                           <EvidenciaPanel
                             revisionId={revision.id_revision_viabilidad}
                             proyectoId={revision.proyecto_id}
@@ -290,13 +322,6 @@ export function ViabilidadCuestionario({
                             pendientes={pendientesPregunta}
                             canAttach={canEdit}
                             isAdmin={isAdmin}
-                          />
-                        ) : (
-                          <PreguntaInput
-                            pregunta={p}
-                            valorActual={valor}
-                            disabled={!canEdit}
-                            onCommit={(v) => guardarRespuesta(p.id_pregunta_viabilidad, v)}
                           />
                         )}
                       </div>

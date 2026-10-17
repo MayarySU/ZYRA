@@ -791,14 +791,14 @@ isOneToOne: false
                   ]
                 },"viabilidad_preguntas": {
                   Row: {
-                    "activa": boolean,"ayuda": string | null,"codigo": string,"creado_en": string,"id_pregunta_viabilidad": number,"obligatoria": boolean,"orden": number,"regla_evaluacion": Json | null,"seccion_id": number,"texto": string,"tipo_respuesta": string
+                    "activa": boolean,"ayuda": string | null,"codigo": string,"creado_en": string,"evidencia_instruccion": string | null,"evidencia_obligatoria": boolean,"evidencia_obligatoria_condicion": Json | null,"evidencia_tipo": string | null,"id_pregunta_viabilidad": number,"obligatoria": boolean,"orden": number,"regla_evaluacion": Json | null,"seccion_id": number,"texto": string,"tipo_respuesta": string,"unidad": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "activa"?: boolean,"ayuda"?: string | null,"codigo": string,"creado_en"?: string,"id_pregunta_viabilidad"?: number,"obligatoria"?: boolean,"orden"?: number,"regla_evaluacion"?: Json | null,"seccion_id": number,"texto": string,"tipo_respuesta": string
+                    "activa"?: boolean,"ayuda"?: string | null,"codigo": string,"creado_en"?: string,"evidencia_instruccion"?: string | null,"evidencia_obligatoria"?: boolean,"evidencia_obligatoria_condicion"?: Json | null,"evidencia_tipo"?: string | null,"id_pregunta_viabilidad"?: number,"obligatoria"?: boolean,"orden"?: number,"regla_evaluacion"?: Json | null,"seccion_id": number,"texto": string,"tipo_respuesta": string,"unidad"?: string | null
                   }
                   Update: {
-                    "activa"?: boolean,"ayuda"?: string | null,"codigo"?: string,"creado_en"?: string,"id_pregunta_viabilidad"?: number,"obligatoria"?: boolean,"orden"?: number,"regla_evaluacion"?: Json | null,"seccion_id"?: number,"texto"?: string,"tipo_respuesta"?: string
+                    "activa"?: boolean,"ayuda"?: string | null,"codigo"?: string,"creado_en"?: string,"evidencia_instruccion"?: string | null,"evidencia_obligatoria"?: boolean,"evidencia_obligatoria_condicion"?: Json | null,"evidencia_tipo"?: string | null,"id_pregunta_viabilidad"?: number,"obligatoria"?: boolean,"orden"?: number,"regla_evaluacion"?: Json | null,"seccion_id"?: number,"texto"?: string,"tipo_respuesta"?: string,"unidad"?: string | null
                   }
                   Relationships: [
                     {
@@ -807,6 +807,26 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "viabilidad_secciones"
       referencedColumns: ["id_seccion_viabilidad"]
+    }
+                  ]
+                },"viabilidad_reglas": {
+                  Row: {
+                    "accion_o_tipo": string | null,"codigo": string,"creado_en": string,"cuando": NonNullable<Json>,"efecto_funcional": string,"etiqueta": string | null,"id_regla_viabilidad": number,"mensaje": string | null,"orden": number,"plantilla_id": number,"severidad_funcional": string,"validacion_tipo": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accion_o_tipo"?: string | null,"codigo": string,"creado_en"?: string,"cuando": NonNullable<Json>,"efecto_funcional": string,"etiqueta"?: string | null,"id_regla_viabilidad"?: number,"mensaje"?: string | null,"orden"?: number,"plantilla_id": number,"severidad_funcional": string,"validacion_tipo"?: string | null
+                  }
+                  Update: {
+                    "accion_o_tipo"?: string | null,"codigo"?: string,"creado_en"?: string,"cuando"?: NonNullable<Json>,"efecto_funcional"?: string,"etiqueta"?: string | null,"id_regla_viabilidad"?: number,"mensaje"?: string | null,"orden"?: number,"plantilla_id"?: number,"severidad_funcional"?: string,"validacion_tipo"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "viabilidad_reglas_plantilla_id_fkey"
+      columns: ["plantilla_id"]
+isOneToOne: false
+      referencedRelation: "viabilidad_plantillas"
+      referencedColumns: ["id_plantilla_viabilidad"]
     }
                   ]
                 },"viabilidad_respuestas": {
@@ -1058,8 +1078,17 @@ isOneToOne: false
 "_viabilidad_dependencias_ciclicas":
 { Args: { "p_plantilla_id": number }; Returns: boolean
                            },
+"_viabilidad_evidencia_obligatoria":
+{ Args: { "p_pregunta_id": number,"p_revision_id": number }; Returns: boolean
+                           },
 "_viabilidad_exigir_previabilidad":
 { Args: { "p_proyecto_id": number }; Returns: undefined
+                           },
+"_viabilidad_expr_cumple":
+{ Args: { "p_expr": Json,"p_revision_id": number }; Returns: boolean
+                           },
+"_viabilidad_expr_error":
+{ Args: { "p_codigos": (string)[],"p_expr": Json }; Returns: string
                            },
 "_viabilidad_intentar_cerrar":
 { Args: { "p_revision_id": number }; Returns: string
@@ -1084,6 +1113,9 @@ isOneToOne: false
                            },
 "_viabilidad_senales":
 { Args: { "p_revision_id": number }; Returns: Json
+                           },
+"_viabilidad_validar_evidencias":
+{ Args: { "p_revision_id": number }; Returns: undefined
                            },
 "_viabilidad_validar_obligatorias":
 { Args: { "p_revision_id": number }; Returns: undefined
@@ -1177,6 +1209,9 @@ isOneToOne: false
                            },
 "resolver_validacion_viabilidad":
 { Args: { "p_estado": string,"p_observaciones"?: string,"p_operation_id"?: string,"p_validacion_id": number }; Returns: Json
+                           },
+"sembrar_cuestionario_viabilidad_definitivo":
+{ Args: { "p_empresa_nombre"?: string }; Returns: Json
                            },
 "validar_checklist":
 { Args: { "p_checklist_id": number,"p_operation_id"?: string }; Returns: Json

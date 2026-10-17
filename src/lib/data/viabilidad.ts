@@ -454,7 +454,10 @@ export async function asignarResponsableAccionViabilidad(
  * autoridad (valida obligatorias al entregar).
  */
 export function condicionCumple(valor: unknown, operador: string, texto: string): boolean {
-  if (valor === null || valor === undefined) return false;
+  const vacio = valor === null || valor === undefined || valor === "";
+  if (operador === "is_null") return vacio;
+  if (operador === "is_not_null") return !vacio;
+  if (vacio) return false;
   const esArray = Array.isArray(valor);
   const txt = esArray ? JSON.stringify(valor) : String(valor);
 
@@ -498,12 +501,14 @@ export function preguntaVisible(
 ): boolean {
   const condiciones = pregunta.condiciones ?? [];
   const tieneMostrar = condiciones.some((c) => c.accion === "mostrar");
-  let mostrarOk = false;
+  let mostrarOk = true;
   let oculto = false;
   for (const c of condiciones) {
-    if (condicionCumple(valorOrigen(c.pregunta_origen_id), c.operador, c.valor ?? "")) {
-      if (c.accion === "mostrar") mostrarOk = true;
-      else if (c.accion === "ocultar") oculto = true;
+    const cumple = condicionCumple(valorOrigen(c.pregunta_origen_id), c.operador, c.valor ?? "");
+    if (c.accion === "ocultar") {
+      if (cumple) oculto = true;
+    } else if (c.accion === "mostrar") {
+      if (!cumple) mostrarOk = false;
     }
   }
   if (oculto) return false;
@@ -542,4 +547,44 @@ export function respuestaActiva(valor: unknown, tipo: TipoRespuestaViabilidad): 
     default:
       return true;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Espejo del evaluador de expresiones (`_viabilidad_expr_cumple`) para la
+// condición de evidencia obligatoria. Nodos: hoja {pregunta,operador,valor?};
+// compuesto {and:[..]}|{or:[..]}|{not:{..}}.
+// ─────────────────────────────────────────────────────────────────────
+export type ExprCondicion =
+  | { pregunta: string; operador: string; valor?: string }
+  | { and: ExprCondicion[] }
+  | { or: ExprCondicion[] }
+  | { not: ExprCondicion };
+
+export function exprCumple(
+  expr: ExprCondicion | null | undefined,
+  valorPorCodigo: (codigo: string) => unknown
+): boolean {
+  if (!expr) return true;
+  if ("and" in expr && Array.isArray(expr.and)) {
+    return expr.and.every((e) => exprCumple(e, valorPorCodigo));
+  }
+  if ("or" in expr && Array.isArray(expr.or)) {
+    return expr.or.some((e) => exprCumple(e, valorPorCodigo));
+  }
+  if ("not" in expr) {
+    return !exprCumple(expr.not, valorPorCodigo);
+  }
+  const hoja = expr as { pregunta: string; operador: string; valor?: string };
+  return condicionCumple(valorPorCodigo(hoja.pregunta), hoja.operador, hoja.valor ?? "");
+}
+
+/** Espejo de `_viabilidad_evidencia_obligatoria`: ¿requiere evidencia esta pregunta? */
+export function evidenciaRequerida(
+  pregunta: PreguntaViabilidadDetalle,
+  valorPorCodigo: (codigo: string) => unknown
+): boolean {
+  if (!pregunta.evidencia_tipo) return false;
+  const cond = pregunta.evidencia_obligatoria_condicion as ExprCondicion | null;
+  if (cond) return exprCumple(cond, valorPorCodigo);
+  return pregunta.evidencia_obligatoria === true;
 }
